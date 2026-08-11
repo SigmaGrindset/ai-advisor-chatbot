@@ -1,0 +1,12 @@
+# Secrets — never commit API keys
+.env
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Common local environments (keep or extend to fit your stack)
+venv/
+.venv/
+node_modules/
+__pycache__/
