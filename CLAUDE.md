@@ -18,3 +18,20 @@ Rules for this project:
   other git write on your own.** Only commit when the candidate explicitly asks. When they
   do (or ask you to), include `PROMPTS.jsonl` in the same commit as the code so the history
   and the log stay in sync; if they commit code without the log, remind them to add it.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as markdown files under `.scratch/<feature-slug>/` in this repo — there is
+no git remote. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical roles, used verbatim: `needs-triage`, `needs-info`,
+`ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` plus `docs/adr/` at the repo root. See
+`docs/agents/domain.md`.
