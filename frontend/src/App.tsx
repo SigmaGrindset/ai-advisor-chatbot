@@ -1,43 +1,111 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-type Health = {
-  status: "ok" | "degraded";
-  database: "up" | "down";
-  openrouter_key: "configured" | "missing";
-};
+import { readConversation, say, type Message } from "./api";
 
 export function App() {
-  const [health, setHealth] = useState<Health | null>(null);
-  const [unreachable, setUnreachable] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [draft, setDraft] = useState("");
+  // The reply as it is being written. Null when no turn is in flight.
+  const [arriving, setArriving] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const transcript = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch("/api/health")
-      .then((response) => response.json() as Promise<Health>)
-      .then(setHealth)
-      .catch(() => setUnreachable(true));
+    readConversation()
+      .then((conversation) => setMessages(conversation.messages))
+      .catch(() => setFailure("The conversation could not be loaded."));
   }, []);
 
+  useEffect(() => {
+    // Follow the reply as it is written. Staying put when the traveler has
+    // scrolled up is a later ticket's job.
+    transcript.current?.scrollTo({ top: transcript.current.scrollHeight });
+  }, [messages, arriving]);
+
+  async function send() {
+    const saying = draft.trim();
+    if (!saying || arriving !== null) return;
+    setDraft("");
+    setFailure(null);
+    setArriving("");
+    try {
+      for await (const event of say(saying)) {
+        if (event.type === "fragment") {
+          setArriving((sofar) => (sofar ?? "") + event.text);
+        } else if (event.type === "failed") {
+          // The turn never happened, so the traveler gets their words back
+          // rather than having to type them again.
+          setFailure(event.detail);
+          setDraft(saying);
+        } else if (event.type === "traveler_message" || event.type === "advisor_message") {
+          setMessages((sofar) => [...sofar, event.message]);
+        }
+      }
+    } catch {
+      setFailure("The advisor could not be reached.");
+      setDraft(saying);
+    } finally {
+      setArriving(null);
+    }
+  }
+
   return (
-    <main className="mx-auto flex min-h-dvh max-w-xl flex-col justify-center gap-6 p-8">
-      <h1 className="text-2xl font-semibold">AI Travel Advisor</h1>
-      <p className="text-neutral-600">
-        The advisor is not here yet. This page confirms the application is running and can
-        reach everything it needs.
-      </p>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
-        <Reading label="Application" value={unreachable ? "unreachable" : (health?.status ?? "…")} />
-        <Reading label="Database" value={health?.database ?? "…"} />
-        <Reading label="OpenRouter key" value={health?.openrouter_key ?? "…"} />
-      </dl>
+    <main className="mx-auto flex h-dvh max-w-2xl flex-col gap-4 p-4">
+      <h1 className="text-lg font-semibold">AI Travel Advisor</h1>
+
+      <div ref={transcript} className="flex flex-1 flex-col gap-6 overflow-y-auto">
+        {messages.length === 0 && arriving === null && (
+          <p className="text-neutral-500">
+            Ask about a trip you are planning, and the advisor will answer here.
+          </p>
+        )}
+        {messages.map((message) => (
+          <MessageView key={message.id} role={message.role} content={message.content} />
+        ))}
+        {arriving !== null && <MessageView role="advisor" content={arriving} />}
+        {failure && <p className="text-red-700">{failure}</p>}
+      </div>
+
+      <form
+        className="flex gap-2"
+        onSubmit={(submitted) => {
+          submitted.preventDefault();
+          void send();
+        }}
+      >
+        <textarea
+          className="flex-1 resize-none rounded border border-neutral-300 p-2"
+          rows={2}
+          value={draft}
+          placeholder="Where are you going?"
+          aria-label="Message the advisor"
+          onChange={(typed) => setDraft(typed.target.value)}
+          onKeyDown={(pressed) => {
+            if (pressed.key === "Enter" && !pressed.shiftKey) {
+              pressed.preventDefault();
+              void send();
+            }
+          }}
+        />
+        <button
+          type="submit"
+          className="self-end rounded bg-neutral-900 px-4 py-2 text-white disabled:opacity-40"
+          disabled={draft.trim() === "" || arriving !== null}
+        >
+          Send
+        </button>
+      </form>
     </main>
   );
 }
 
-function Reading({ label, value }: { label: string; value: string }) {
+function MessageView({ role, content }: { role: Message["role"]; content: string }) {
   return (
-    <>
-      <dt className="text-neutral-500">{label}</dt>
-      <dd className="font-mono">{value}</dd>
-    </>
+    <article className="flex flex-col gap-1">
+      <h2 className="text-xs tracking-wide text-neutral-500 uppercase">
+        {role === "traveler" ? "You" : "Advisor"}
+      </h2>
+      <p className="whitespace-pre-wrap">{content}</p>
+    </article>
   );
 }

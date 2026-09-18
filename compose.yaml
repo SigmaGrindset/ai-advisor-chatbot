@@ -27,6 +27,10 @@ services:
       # Supplied by the evaluator, through a .env file next to this one or the
       # surrounding environment. A missing key does not prevent startup.
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      # Optional, and passed through only when actually set, so that leaving
+      # them out leaves the application's own defaults in place.
+      CONVERSATION_MODEL:
+      UTILITY_MODEL:
     ports:
       - "${APP_PORT:-8000}:8000"
     healthcheck:

@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://travel:travel@localhost:5432/travel_advisor"
     openrouter_api_key: str | None = None
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    #: The model the traveler actually talks to.
+    conversation_model: str = "anthropic/claude-sonnet-5"
+    #: The cheaper model behind the work the traveler does not see — Conversation
+    #: titles, Compaction summaries, and the nested web search.
+    utility_model: str = "anthropic/claude-haiku-4.5"
     static_dir: Path = _CHECKOUT_ROOT / "frontend" / "dist"
 
 
