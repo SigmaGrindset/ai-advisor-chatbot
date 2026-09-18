@@ -26,8 +26,10 @@ from sqlalchemy.ext.asyncio import (
 from app.config import Settings
 from app.db import apply_schema, get_session
 from app.main import create_app
+from app.models import Base
 from app.outbound import get_http_client
 
+from . import talking
 from .canned_transport import CannedTransport, Responder
 
 TEST_DATABASE_URL = os.environ.get(
@@ -60,6 +62,11 @@ async def _create_database_if_absent(database_url: str) -> None:
 async def engine() -> AsyncIterator[AsyncEngine]:
     await _create_database_if_absent(TEST_DATABASE_URL)
     engine = create_async_engine(TEST_DATABASE_URL)
+    # Dropped first, because the application's own schema step creates what is
+    # missing and never alters what is there. Tests keep nothing between runs, so
+    # starting from nothing is what keeps this database honest about the model.
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.drop_all)
     await apply_schema(engine)
     yield engine
     await engine.dispose()
@@ -146,3 +153,9 @@ async def api_for(
 @pytest.fixture
 async def api(api_for: ApiFactory, settings: Settings) -> httpx2.AsyncClient:
     return await api_for(settings)
+
+
+@pytest.fixture
+async def conversation(api: httpx2.AsyncClient) -> str:
+    """A started Conversation, for tests about what happens inside one."""
+    return await talking.start(api)

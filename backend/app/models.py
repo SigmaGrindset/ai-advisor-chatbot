@@ -44,8 +44,14 @@ class Conversation(Base):
     traveler_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("traveler.id", ondelete="cascade"), nullable=False
     )
+    #: Named after its first exchange, so it is recognisable in the list. Null
+    #: until there has been an exchange to name it after.
+    title: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: clock_timestamp() for the same reason Message uses it: now() is the
+    #: transaction timestamp, so Conversations started inside one transaction
+    #: would share a timestamp and lose their order.
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.clock_timestamp(), nullable=False
     )
 
 

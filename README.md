@@ -17,6 +17,11 @@ there is no migration step. The application starts without an OpenRouter key and
 reports the key as missing at `/api/health`; the advisor cannot answer until one is
 supplied.
 
+The schema step creates what is missing and never alters what is already there. A
+fresh checkout is therefore always correct, but a database left over from an earlier
+commit is not brought up to date — recreate it with `docker compose down -v` after
+pulling a schema change.
+
 If ports 8000 or 5432 are taken, set `APP_PORT` or `DB_PORT` in `.env`.
 
 ### Running the tests
@@ -30,7 +35,8 @@ python -m venv .venv
 cd backend && ../.venv/bin/python -m pytest    # Windows: ../.venv/Scripts/python
 ```
 
-They use their own `travel_advisor_test` database, created on first run. Point them
+They use their own `travel_advisor_test` database, created on first run and rebuilt
+from the model on every run, so a schema change never leaves it stale. Point them
 elsewhere with `TEST_DATABASE_URL`.
 
 ## 2. Architecture overview
