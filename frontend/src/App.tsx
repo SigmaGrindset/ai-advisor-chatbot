@@ -113,6 +113,7 @@ export function App() {
         <ConversationPane
           conversation={current}
           arriving={turn.arriving}
+          consulting={turn.consulting}
           trouble={turn.trouble}
           stopped={turn.stopped}
           failure={failure}

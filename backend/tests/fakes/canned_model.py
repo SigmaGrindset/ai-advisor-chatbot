@@ -10,7 +10,7 @@ unstreamed one is the utility model's work, and gets a plain completion.
 """
 
 import json
-from collections.abc import AsyncIterator, Iterable, Mapping
+from collections.abc import AsyncIterator, Iterable, Mapping, Sequence
 from typing import Any
 
 import httpx2
@@ -36,6 +36,43 @@ def content(text: str) -> bytes:
 def finish() -> bytes:
     """The chunk that says the model has stopped."""
     return event(_chunk({}, finish_reason="stop"))
+
+
+def wants_tools() -> bytes:
+    """The chunk that says the model has stopped to wait on the tools it asked for."""
+    return event(_chunk({}, finish_reason="tool_calls"))
+
+
+def calling(name: str, *arguments: str, call_id: str = "call-1", at: int = 0) -> list[bytes]:
+    """The chunks in which a model asks for one tool call.
+
+    The arguments arrive in pieces because that is how a stream delivers them:
+    the name and the identifier once, in the chunk that opens the call, and the
+    JSON a fragment at a time in the bare chunks that follow it. `at` is the
+    provider's own index for the call, which is the only thing those later
+    fragments carry.
+    """
+    opening, *rest = arguments or ("",)
+    return [
+        event(
+            _chunk(
+                {
+                    "tool_calls": [
+                        {
+                            "index": at,
+                            "id": call_id,
+                            "type": "function",
+                            "function": {"name": name, "arguments": opening},
+                        }
+                    ]
+                }
+            )
+        ),
+        *(
+            event(_chunk({"tool_calls": [{"index": at, "function": {"arguments": piece}}]}))
+            for piece in rest
+        ),
+    ]
 
 
 def usage(cost: float) -> bytes:
@@ -107,28 +144,33 @@ class CannedModel:
     def __init__(
         self,
         *events: bytes,
+        then: Sequence[Sequence[bytes]] = (),
         split_every: int | None = None,
         utility: Responder | None = None,
     ) -> None:
         self.requests: list[httpx2.Request] = []
-        self._body = b"".join((*events, DONE))
-        # How the body arrives on the wire. A real stream is cut wherever the
+        # One body per step of the turn: a turn that calls a tool streams once,
+        # waits for the result, and streams again. A step past the last of them
+        # gets the last one again, so a model that will not stop asking is a
+        # test about MAX_STEPS rather than an IndexError.
+        self._bodies = [b"".join((*events, DONE)), *(b"".join((*more, DONE)) for more in then)]
+        # How a body arrives on the wire. A real stream is cut wherever the
         # network cuts it, so a test about reassembly asks for pieces that fall in
         # the middle of lines.
         self._split_every = split_every
         self._utility = utility or answering("A canned title")
+        self._streamed = 0
 
     def __call__(self, request: httpx2.Request) -> httpx2.Response:
         self.requests.append(request)
         if not _is_streamed(request):
             return self._utility(request)
+        body = self._bodies[min(self._streamed, len(self._bodies) - 1)]
+        self._streamed += 1
         headers = {"content-type": "text/event-stream"}
         if self._split_every is None:
-            return httpx2.Response(200, content=self._body, headers=headers)
-        pieces = [
-            self._body[at : at + self._split_every]
-            for at in range(0, len(self._body), self._split_every)
-        ]
+            return httpx2.Response(200, content=body, headers=headers)
+        pieces = [body[at : at + self._split_every] for at in range(0, len(body), self._split_every)]
         return httpx2.Response(200, content=_yield(pieces), headers=headers)
 
     @property

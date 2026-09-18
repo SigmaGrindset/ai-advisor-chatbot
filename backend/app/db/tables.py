@@ -6,8 +6,8 @@ from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Numeric, Text, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import DateTime, Enum, ForeignKey, Numeric, Text, func, text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -75,6 +75,12 @@ class Message(Base):
         Enum(MessageRole, name="message_role", values_callable=_values), nullable=False
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    #: Where anything fetched during this turn came from — one entry per
+    #: Live-data Tool answer, in the order they were fetched. Empty on a
+    #: traveler Message and on an advisor Message that looked nothing up.
+    citations: Mapped[list[dict[str, str]]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
+    )
     #: What OpenRouter charged for the turn that produced this Message, from its own
     #: figures rather than a later poll of the account. Null on a traveler Message,
     #: and on an advisor Message whose provider reported no cost.

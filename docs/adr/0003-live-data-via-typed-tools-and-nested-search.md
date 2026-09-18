@@ -1,5 +1,8 @@
 # Live data via typed keyless tools, with web search as a nested call
 
+> **Amended by ADR-0008.** REST Countries stopped being keyless during ticket 07;
+> country facts come from the World Bank instead. Everything else below stands.
+
 The advisor fetches real-world facts through four Live-data Tools: weather (Open-Meteo),
 exchange rates (Frankfurter), country facts (REST Countries), and a general web search.
 The first three are keyless HTTP APIs with typed arguments. The fourth is implemented as a

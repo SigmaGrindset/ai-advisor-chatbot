@@ -17,8 +17,9 @@ from openai import APIError, AsyncOpenAI
 from openai.types.chat import ChatCompletionMessageParam
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..advisor.loop import ReplyFragment, run_turn
+from ..advisor.loop import Consulted, Consulting, ReplyFragment, run_turn
 from ..advisor.titles import name_conversation
+from ..advisor.tools import LiveDataTools
 from ..config import Settings
 from ..db.conversations import record_message, retitle_conversation
 from ..db.tables import Conversation, Message, MessageRole
@@ -47,10 +48,11 @@ class Failed:
     detail: str
 
 
-#: Everything a turn can produce. A fragment is the loop's own event, passed
-#: along rather than copied into a twin of itself: the piece of text that
-#: arrives is the same fact whichever layer is holding it.
-Happening = ReplyFragment | Recorded | Titled | Failed
+#: Everything a turn can produce. The loop's own events are passed along
+#: rather than copied into twins of themselves: the piece of text that arrives,
+#: and the lookup that is running while it does, are the same facts whichever
+#: layer is holding them.
+Happening = ReplyFragment | Consulting | Consulted | Recorded | Titled | Failed
 
 
 async def take_turn(
@@ -59,14 +61,15 @@ async def take_turn(
     traveler_message: Message,
     model: AsyncOpenAI,
     prompt: Sequence[ChatCompletionMessageParam],
+    tools: LiveDataTools,
     settings: Settings,
 ) -> AsyncIterator[Happening]:
     """Run the turn, recording what it produces as it produces it."""
     try:
         async for event in run_turn(
-            model, model_name=settings.conversation_model, prompt=prompt
+            model, model_name=settings.conversation_model, prompt=prompt, tools=tools
         ):
-            if isinstance(event, ReplyFragment):
+            if isinstance(event, (ReplyFragment, Consulting, Consulted)):
                 yield event
                 continue
 
@@ -76,6 +79,10 @@ async def take_turn(
                 role=MessageRole.ADVISOR,
                 content=event.content,
                 cost_usd=event.cost_usd,
+                # Kept with the Message rather than with the turn, because a
+                # Citation outlives the turn: it is still under the answer when
+                # the traveler comes back to read it tomorrow.
+                citations=[citation.recorded() for citation in event.citations],
             )
             yield Recorded(advisor_message)
 

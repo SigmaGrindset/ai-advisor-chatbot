@@ -19,8 +19,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..advisor.client import OpenRouterKeyMissing, create_model_client
-from ..advisor.loop import ReplyFragment
+from ..advisor.loop import Consulted, Consulting, ReplyFragment
 from ..advisor.prompt import compose_prompt
+from ..advisor.tools import LiveDataTools
 from ..config import Settings, get_settings
 from ..db.connection import get_session
 from ..db.conversations import (
@@ -39,6 +40,15 @@ from .sse import event
 router = APIRouter(tags=["conversations"])
 
 
+class CitationView(BaseModel):
+    """Where something in this Message was fetched from."""
+
+    #: The service's own name, as the traveler would recognise it.
+    service: str
+    about: str
+    url: str
+
+
 class MessageView(BaseModel):
     id: uuid.UUID
     role: MessageRole
@@ -46,6 +56,8 @@ class MessageView(BaseModel):
     created_at: datetime
     #: What the turn that produced this Message cost, in US dollars.
     cost_usd: float | None
+    #: Empty unless the turn went and looked something up.
+    citations: list[CitationView]
 
     @classmethod
     def of(cls, message: Message) -> "MessageView":
@@ -55,6 +67,7 @@ class MessageView(BaseModel):
             content=message.content,
             created_at=message.created_at,
             cost_usd=float(message.cost_usd) if message.cost_usd is not None else None,
+            citations=[CitationView.model_validate(cited) for cited in message.citations],
         )
 
 
@@ -159,7 +172,15 @@ async def say(
 
     prompt = compose_prompt(await messages_in(session, conversation))
     return StreamingResponse(
-        _turn_events(session, conversation, traveler_message, model, prompt, settings),
+        _turn_events(
+            session,
+            conversation,
+            traveler_message,
+            model,
+            prompt,
+            LiveDataTools(http_client),
+            settings,
+        ),
         media_type="text/event-stream",
         headers={"cache-control": "no-store", "x-accel-buffering": "no"},
     )
@@ -171,12 +192,13 @@ async def _turn_events(
     traveler_message: Message,
     model: AsyncOpenAI,
     prompt: list[ChatCompletionMessageParam],
+    tools: LiveDataTools,
     settings: Settings,
 ) -> AsyncIterator[bytes]:
     """The turn as the browser reads it."""
     yield _message_event("traveler_message", traveler_message)
     async for happening in take_turn(
-        session, conversation, traveler_message, model, prompt, settings
+        session, conversation, traveler_message, model, prompt, tools, settings
     ):
         yield _as_event(happening)
 
@@ -185,12 +207,16 @@ def _as_event(happening: Happening) -> bytes:
     """What happened, in the words the browser's stream reader knows.
 
     Exhaustive on purpose rather than falling through to a default: a turn that
-    grows a new kind of happening — a tool call in 07, a Trip Plan patch in 09 —
-    should fail the type check here rather than quietly reach the browser
-    wearing the last branch's name.
+    grows a new kind of happening — a Trip Plan patch in 09 — should fail the
+    type check here rather than quietly reach the browser wearing the last
+    branch's name.
     """
     if isinstance(happening, ReplyFragment):
         return event({"type": "fragment", "text": happening.text})
+    if isinstance(happening, Consulting):
+        return event({"type": "consulting", "activity": happening.activity})
+    if isinstance(happening, Consulted):
+        return event({"type": "consulted"})
     if isinstance(happening, Recorded):
         return _message_event("advisor_message", happening.message)
     if isinstance(happening, Titled):

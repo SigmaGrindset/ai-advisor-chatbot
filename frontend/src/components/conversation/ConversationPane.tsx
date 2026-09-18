@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowDown, MapPinned, PanelLeft, RotateCcw, TriangleAlert } from "lucide-react";
+import { ArrowDown, MapPinned, PanelLeft, Radar, RotateCcw, TriangleAlert } from "lucide-react";
 
 import { settled } from "./announcing";
-import type { Conversation, Message } from "../../api/types";
+import type { Citation, Conversation, Message } from "../../api/types";
+import { Citations } from "./Citations";
 import { Composer } from "./Composer";
 import { conversationName } from "./conversationName";
 import { icon, smallIcon } from "../../design/icons";
@@ -18,6 +19,7 @@ type Announcement = { at: number; text: string };
 export function ConversationPane({
   conversation,
   arriving,
+  consulting,
   trouble,
   stopped,
   failure,
@@ -34,6 +36,8 @@ export function ConversationPane({
   conversation: Conversation | null;
   /** The reply as it is being written, if one is arriving into this Conversation. */
   arriving: string | null;
+  /** What this turn is fetching right now, and null when it is fetching nothing. */
+  consulting: string | null;
   /** The last turn in this Conversation, if it failed. */
   trouble: Trouble | null;
   /**
@@ -100,7 +104,7 @@ export function ConversationPane({
     toFoot(transcript.current);
   }
 
-  const announcements = useAnnouncement({ replying, arriving, stopped, reply: last });
+  const announcements = useAnnouncement({ replying, arriving, consulting, stopped, reply: last });
 
   const untouched =
     said.length === 0 && arriving === null && trouble === null && stopped === null;
@@ -159,8 +163,18 @@ export function ConversationPane({
             )}
 
             {said.map((message) => (
-              <MessageView key={message.id} role={message.role} content={message.content} />
+              <MessageView
+                key={message.id}
+                role={message.role}
+                content={message.content}
+                citations={message.citations}
+              />
             ))}
+
+            {/* Above the reply it is holding up, so the pause reads as the
+                advisor going and looking rather than as a hang. It goes when
+                the lookup does, which is before the answer lands. */}
+            {consulting !== null && <Consulting activity={consulting} />}
 
             {arriving !== null && <MessageView role="advisor" content={arriving} writing />}
 
@@ -264,11 +278,13 @@ export function ConversationPane({
 function useAnnouncement({
   replying,
   arriving,
+  consulting,
   stopped,
   reply,
 }: {
   replying: boolean;
   arriving: string | null;
+  consulting: string | null;
   stopped: string | null;
   reply: Message | undefined;
 }): Announcement[] {
@@ -286,6 +302,12 @@ function useAnnouncement({
   // arriving does not start it again from the beginning.
   const announced = useRef(0);
   const began = useRef(false);
+
+  useEffect(() => {
+    // A traveler who cannot see the status line is owed the same account of
+    // why the answer is taking a moment as one who can.
+    if (consulting !== null) say(consulting);
+  }, [consulting]);
 
   useEffect(() => {
     if (!replying) return;
@@ -336,6 +358,16 @@ function useAnnouncement({
 /** How many announcements stay in the region behind the newest one. */
 const KEPT = 8;
 
+/** What the advisor is off fetching, for as long as it is fetching it. */
+function Consulting({ activity }: { activity: string }) {
+  return (
+    <p className="flex animate-pulse items-center gap-2 font-mono text-micro uppercase text-ink-subtle">
+      <Radar {...smallIcon} className="shrink-0" aria-hidden="true" />
+      {activity}…
+    </p>
+  );
+}
+
 /** The greeting and the openings, drawn. Why they exist is in `firstRun.ts`. */
 function FirstRun({ onStarter }: { onStarter: (prompt: string) => void }) {
   return (
@@ -363,11 +395,14 @@ function FirstRun({ onStarter }: { onStarter: (prompt: string) => void }) {
 function MessageView({
   role,
   content,
+  citations = [],
   writing = false,
   children,
 }: {
   role: Message["role"];
   content: string;
+  /** Where this Message's fetched claims came from. Empty when it fetched none. */
+  citations?: Citation[];
   /** True while this Message is still being written into the Conversation. */
   writing?: boolean;
   /** Anything belonging to this Message rather than to the transcript. */
@@ -391,6 +426,7 @@ function MessageView({
       ) : (
         <Prose text={content} writing={writing} />
       )}
+      <Citations citations={citations} />
       {children}
     </article>
   );

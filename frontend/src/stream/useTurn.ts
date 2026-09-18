@@ -37,6 +37,9 @@ type Arriving = { conversationId: string; text: string };
 /** A reply the traveler called off, and what had arrived by then. */
 type Stopped = { conversationId: string; text: string };
 
+/** A Live-data Tool running, and which Conversation it is running for. */
+type Consulting = { conversationId: string; activity: string };
+
 /** The turn, as the Conversation on screen has to show it. */
 export type Turn = {
   /** What the traveler has typed and not yet said. */
@@ -44,6 +47,12 @@ export type Turn = {
   setDraft: (draft: string) => void;
   /** The reply being written into the open Conversation, if one is. */
   arriving: string | null;
+  /**
+   * What is being fetched into the open Conversation right now, and null when
+   * nothing is. It names the lookup rather than the turn, so a pause reads as
+   * progress rather than as a hang.
+   */
+  consulting: string | null;
   /** The open Conversation's last turn, if it failed. */
   trouble: Trouble | null;
   /**
@@ -90,6 +99,7 @@ export function useTurn({
   const [arriving, setArriving] = useState<Arriving | null>(null);
   const [trouble, setTrouble] = useState<Trouble | null>(null);
   const [stopped, setStopped] = useState<Stopped | null>(null);
+  const [consulting, setConsulting] = useState<Consulting | null>(null);
   // The turn in flight, held so the stop control has something to pull on.
   const inFlight = useRef<AbortController | null>(null);
 
@@ -166,6 +176,11 @@ export function useTurn({
           written += event.text;
           const text = written;
           setArriving((sofar) => (sofar?.conversationId === conversationId ? { conversationId, text } : sofar));
+        } else if (event.type === "consulting") {
+          const activity = event.activity;
+          setConsulting({ conversationId, activity });
+        } else if (event.type === "consulted") {
+          setConsulting((sofar) => (sofar?.conversationId === conversationId ? null : sofar));
         } else if (event.type === "conversation_titled") {
           const title = event.title;
           onListed((sofar) =>
@@ -211,6 +226,9 @@ export function useTurn({
     } finally {
       inFlight.current = null;
       setArriving(null);
+      // Whatever the turn was fetching, it is not fetching it any more —
+      // including when it was stopped or dropped part-way through a lookup.
+      setConsulting(null);
     }
   }
 
@@ -230,6 +248,7 @@ export function useTurn({
     draft,
     setDraft,
     arriving: here(arriving)?.text ?? null,
+    consulting: here(consulting)?.activity ?? null,
     trouble: here(trouble),
     stopped: here(stopped)?.text ?? null,
     sending: arriving !== null,
