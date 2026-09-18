@@ -115,6 +115,9 @@ def static_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
     )
     (directory / "assets").mkdir()
     (directory / "assets" / "app.js").write_text("console.log('built bundle')", encoding="utf-8")
+    (directory / "manifest.webmanifest").write_text(
+        '{"name": "AI Travel Advisor"}', encoding="utf-8"
+    )
     return directory
 
 

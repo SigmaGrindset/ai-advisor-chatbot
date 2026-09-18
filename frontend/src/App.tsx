@@ -9,15 +9,21 @@ import {
   type Conversation,
   type ConversationSummary,
 } from "./api";
-import { ConversationList } from "./ConversationList";
+import { ConversationList, type RowActions } from "./ConversationList";
 import { ConversationPane, type Trouble } from "./ConversationPane";
+import { useLayout } from "./layout";
 import { RecordPane } from "./RecordPane";
+import { Sheet } from "./Sheet";
+import { useVisibleViewport } from "./viewport";
 
 /** A reply as it is being written, and which Conversation it belongs to. */
 type Arriving = { conversationId: string; text: string };
 
 /** A reply the traveler called off, and what had arrived by then. */
 type Stopped = { conversationId: string; text: string };
+
+/** The things a narrow layout folds into a sheet, by the sheet they go into. */
+type Folded = "conversations" | "record";
 
 export function App() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -28,10 +34,27 @@ export function App() {
   const [arriving, setArriving] = useState<Arriving | null>(null);
   const [trouble, setTrouble] = useState<Trouble | null>(null);
   const [stopped, setStopped] = useState<Stopped | null>(null);
-  const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
+  const [rowActions, setRowActions] = useState<RowActions | null>(null);
+  // Which sheet is out, and null when none is. One at a time: a sheet is
+  // modal, so a second one would open over the first with no way back to it.
+  const [sheet, setSheet] = useState<Folded | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   // The turn in flight, held so the stop control has something to pull on.
   const turn = useRef<AbortController | null>(null);
+  const layout = useLayout();
+
+  // The shell is sized from what the browser says it is showing rather than
+  // from `100dvh`, so a virtual keyboard cannot push the composer off the
+  // bottom of the screen.
+  useVisibleViewport();
+
+  useEffect(() => {
+    // A window widened until it has a pane for what is in the sheet does not
+    // need the sheet, and leaving it out would put a modal scrim over a
+    // layout that is showing the same thing behind it.
+    if (sheet === "conversations" && layout === "desktop") setSheet(null);
+    if (sheet === "record" && layout !== "phone") setSheet(null);
+  }, [layout, sheet]);
 
   useEffect(() => {
     // The most recently active Conversation is the one they were working in, so
@@ -46,7 +69,7 @@ export function App() {
 
   /** Everything that belongs to one Conversation's last turn, put down. */
   function clear() {
-    setConfirmingDelete(null);
+    setRowActions(null);
     setFailure(null);
     setTrouble(null);
     setStopped(null);
@@ -58,7 +81,11 @@ export function App() {
   }
 
   async function open(id: string) {
-    setConfirmingDelete(null);
+    setRowActions(null);
+    // Whichever way they reached the list, they have finished with it: a
+    // sheet left open over the Conversation they just asked for is a sheet
+    // they have to dismiss before they can read it.
+    setSheet(null);
     if (id === current?.id) return;
     clear();
     try {
@@ -69,7 +96,7 @@ export function App() {
   }
 
   async function remove(id: string) {
-    setConfirmingDelete(null);
+    setRowActions(null);
     setFailure(null);
     try {
       await deleteConversation(id);
@@ -212,26 +239,49 @@ export function App() {
   const here = <T extends { conversationId: string }>(it: T | null) =>
     it?.conversationId === current?.id ? it : null;
 
+  // Whether each of the two has a pane of its own at this width, asked once.
+  // Every place below reads one of these rather than the width again: the
+  // pane and the sheet are exact complements, and a pair that drifted would
+  // put the same component on the page twice or leave it off altogether.
+  const listed = layout === "desktop";
+  const recorded = layout !== "phone";
+
+  const list = (
+    <ConversationList
+      conversations={conversations}
+      currentId={current?.id ?? null}
+      actions={rowActions}
+      onStart={() => {
+        start();
+        setSheet(null);
+      }}
+      onOpen={(id) => void open(id)}
+      onActions={setRowActions}
+      onDelete={(id) => void remove(id)}
+    />
+  );
+
   return (
-    // Three panes at a laptop width: what the traveler has talked about, what
-    // they are talking about, and what the talking is producing.
+    // Three things, and which of them have a pane of their own is the width's
+    // decision: what the traveler has talked about, what they are talking
+    // about, and what the talking is producing. On a laptop all three stand
+    // side by side; on a tablet the list comes out as a sheet, because the
+    // record is continuous context and the list is occasional navigation
+    // (ADR-0006); on a phone the conversation has the screen and the other
+    // two are sheets.
     //
-    // Below the shell breakpoint it is the third pane that stands down, not
-    // the list. ADR-0006 has the list giving way first, and it will — but only
-    // once 06 has built the left sheet it gives way *to*. Dropping the list
-    // now would leave a narrow window with no way to reach any other
-    // Conversation, so the interim keeps navigation and defers the pane whose
-    // contents are still placeholders.
-    <div className="flex h-dvh overflow-hidden bg-canvas text-ink">
-      <ConversationList
-        conversations={conversations}
-        currentId={current?.id ?? null}
-        confirmingDelete={confirmingDelete}
-        onStart={start}
-        onOpen={(id) => void open(id)}
-        onConfirmDelete={setConfirmingDelete}
-        onDelete={(id) => void remove(id)}
-      />
+    // Each of them is mounted once, in whichever place this width puts it. A
+    // component rendered into both a pane and a sheet and hidden in one of
+    // them would be two of everything — two tab strips disagreeing about
+    // which tab is open, and two of every identifier on the page.
+    //
+    // Fixed rather than flowed, and sized from `--spacing-viewport`: a phone
+    // with its keyboard open is showing less of the page than any stylesheet
+    // can be told about, and `viewport.ts` is what knows how much.
+    <div className="fixed inset-x-0 top-0 flex h-viewport translate-y-viewport-top overflow-hidden bg-canvas pl-safe-left pr-safe-right text-ink">
+      {listed ? (
+        <div className="w-rail shrink-0 border-r border-line">{list}</div>
+      ) : null}
 
       <ConversationPane
         conversation={current}
@@ -245,12 +295,54 @@ export function App() {
         onSend={send}
         onStop={here(arriving) === null ? null : stop}
         onRetry={again}
+        onShowConversations={listed ? null : () => setSheet("conversations")}
+        onShowRecord={recorded ? null : () => setSheet("record")}
       />
 
-      <RecordPane />
+      {recorded ? (
+        <aside
+          className={`shrink-0 border-l border-line ${
+            layout === "desktop" ? "w-aside" : "w-aside-tight"
+          }`}
+        >
+          <RecordPane />
+        </aside>
+      ) : null}
+
+      <Sheet
+        open={sheet === "conversations"}
+        side="left"
+        label="Conversations"
+        onClose={() => setSheet(null)}
+      >
+        {listed ? null : list}
+      </Sheet>
+
+      <Sheet
+        open={sheet === "record"}
+        side="bottom"
+        label="Trip details"
+        stops={RECORD_SNAPS}
+        opensAt={RECORD_SNAPS[0]}
+        onClose={() => setSheet(null)}
+      >
+        {recorded ? null : <RecordPane />}
+      </Sheet>
     </div>
   );
 }
+
+/**
+ * Where the record sheet is allowed to rest on a phone, as fractions of the
+ * screen.
+ *
+ * Half and whole, and no peek. ADR-0006's peek state is meant to hold the
+ * destination and the dates in view while the traveler types, and there is no
+ * Trip Plan to put in it until 09 — a permanent strip saying what will one
+ * day be there would take a line of the transcript away for nothing. 09 adds
+ * the third number to this array and the sheet keeps working.
+ */
+const RECORD_SNAPS = [0.55, 1] as const;
 
 /** What to show on arrival: every Conversation, and the one last worked in. */
 async function resume(): Promise<[ConversationSummary[], Conversation | null]> {

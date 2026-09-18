@@ -14,6 +14,9 @@ import { icon } from "./design/icons";
  *
  * Both panels are empty here, and say in one line what will fill them. The
  * records themselves arrive with the Trip Plan and the Traveler Profile.
+ *
+ * It draws itself and nothing around itself. Where it goes is the shell's
+ * question: a pane on a laptop and a tablet, and a bottom sheet on a phone.
  */
 
 const TABS = [
@@ -50,7 +53,7 @@ export function RecordPane() {
   }
 
   return (
-    <aside className="hidden w-aside shrink-0 flex-col border-l border-line bg-surface shell:flex">
+    <div className="flex h-full min-h-0 w-full flex-col bg-surface">
       <div
         role="tablist"
         aria-label="Trip details"
@@ -99,11 +102,11 @@ export function RecordPane() {
         id={`${showing.id}-panel`}
         aria-labelledby={`${showing.id}-tab`}
         tabIndex={0}
-        className="flex flex-1 animate-panel flex-col gap-3 overflow-y-auto px-5 py-6"
+        className="flex min-h-0 flex-1 animate-panel flex-col gap-3 overflow-y-auto overscroll-contain px-5 py-6"
       >
         <h2 className="font-display text-heading font-semibold text-ink">{showing.heading}</h2>
         <p className="text-meta text-ink-muted">{showing.empty}</p>
       </div>
-    </aside>
+    </div>
   );
 }

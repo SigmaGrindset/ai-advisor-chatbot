@@ -50,3 +50,16 @@ async def test_a_path_climbing_out_of_the_build_directory_gets_the_application(
 
     assert response.status_code == 200
     assert 'id="root"' in response.text
+
+
+async def test_the_web_application_manifest_is_served_as_a_manifest(
+    api: httpx2.AsyncClient,
+) -> None:
+    # A browser only offers to install an application whose manifest arrives
+    # as one. Served as a generic download it is refused, and the criterion
+    # about pinning this to a home screen quietly fails on the device rather
+    # than here.
+    response = await api.get("/manifest.webmanifest")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/manifest+json")

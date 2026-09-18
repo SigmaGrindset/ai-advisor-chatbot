@@ -39,8 +39,7 @@ export function Composer({
     // The field is measured from its own content: shrunk to nothing first,
     // because `scrollHeight` of a field already tall enough only ever grows.
     // The height it is given is capped in CSS, which is where the field stops
-    // growing and starts scrolling. The cap is `dvh` rather than `vh` because
-    // a phone's virtual keyboard displaces a `vh`-sized composer (ADR-0007).
+    // growing and starts scrolling.
     const growing = field.current;
     if (growing === null) return;
     growing.style.height = "auto";
@@ -57,7 +56,13 @@ export function Composer({
     >
       <textarea
         ref={field}
-        className="max-h-[40dvh] resize-none rounded-panel bg-surface px-4 pt-3 pb-2 text-input text-ink outline-none placeholder:text-ink-subtle"
+        // Capped at a share of the shell rather than a share of the window.
+        // `dvh` is the window with the browser's chrome collapsed, and it does
+        // not shrink for a keyboard — so a field capped in `dvh` is free to
+        // grow to 40% of a screen it is only being shown half of, leaving the
+        // transcript above it with nothing (ADR-0007). `--spacing-viewport` is
+        // what the browser says it is actually showing.
+        className="max-h-[calc(var(--spacing-viewport)*0.4)] resize-none rounded-panel bg-surface px-4 pt-3 pb-2 text-input text-ink outline-none placeholder:text-ink-subtle"
         rows={1}
         value={draft}
         placeholder="Where are you going?"
@@ -72,7 +77,10 @@ export function Composer({
       />
 
       <div className="flex items-center justify-between gap-3 px-3 pb-3">
-        <p className="font-mono text-micro text-ink-subtle">
+        {/* A keyboard hint, shown where there is a keyboard to hint at. On a
+            phone it is two lines of advice about keys the traveler has not
+            got, taken out of a screen that has none to spare. */}
+        <p className="hidden font-mono text-micro text-ink-subtle sheet:block">
           Enter to send · Shift + Enter for a new line
         </p>
         {/* One control in one corner, which changes what it does rather than

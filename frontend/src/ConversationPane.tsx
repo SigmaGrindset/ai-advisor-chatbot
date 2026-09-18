@@ -1,11 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowDown, RotateCcw, TriangleAlert } from "lucide-react";
+import { ArrowDown, MapPinned, PanelLeft, RotateCcw, TriangleAlert } from "lucide-react";
 
 import { settled } from "./announcing";
 import type { Conversation, Message } from "./api";
 import { Composer } from "./Composer";
 import { conversationName } from "./conversationName";
-import { smallIcon } from "./design/icons";
+import { icon, smallIcon } from "./design/icons";
 import { atBottom, toFoot } from "./following";
 import { GREETING, STARTERS } from "./firstRun";
 import { spoken } from "./markdown";
@@ -29,6 +29,8 @@ export function ConversationPane({
   onSend,
   onStop,
   onRetry,
+  onShowConversations,
+  onShowRecord,
 }: {
   /** The Conversation being read, or null before the traveler has begun one. */
   conversation: Conversation | null;
@@ -51,6 +53,13 @@ export function ConversationPane({
   /** How to stop this Conversation's reply, and null when it has none. */
   onStop: (() => void) | null;
   onRetry: (trouble: Trouble) => void;
+  /**
+   * How to reach what this width has folded away, and null at a width that
+   * has folded nothing away. The controls are the shell's, drawn here because
+   * the header is the only thing on a phone with room for them.
+   */
+  onShowConversations: (() => void) | null;
+  onShowRecord: (() => void) | null;
 }) {
   const transcript = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
@@ -100,17 +109,44 @@ export function ConversationPane({
 
   return (
     <main className="flex min-w-0 flex-1 flex-col bg-canvas">
-      <header className="flex shrink-0 items-center border-b border-line px-6 py-4">
-        <h1 className="truncate font-display text-title font-semibold text-ink">
+      <header className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-3 sm:px-6 sm:py-4">
+        {onShowConversations !== null && (
+          <button
+            type="button"
+            aria-label="Conversations"
+            aria-haspopup="dialog"
+            className="shrink-0 rounded-control p-2 text-ink-muted transition-colors hover:bg-sunken hover:text-ink"
+            onClick={onShowConversations}
+          >
+            <PanelLeft {...icon} aria-hidden="true" />
+          </button>
+        )}
+
+        <h1 className="min-w-0 flex-1 truncate font-display text-title font-semibold text-ink">
           {conversationName(conversation?.title ?? null)}
         </h1>
+
+        {onShowRecord !== null && (
+          <button
+            type="button"
+            aria-label="Trip details"
+            aria-haspopup="dialog"
+            className="shrink-0 rounded-control p-2 text-ink-muted transition-colors hover:bg-sunken hover:text-ink"
+            onClick={onShowRecord}
+          >
+            <MapPinned {...icon} aria-hidden="true" />
+          </button>
+        )}
       </header>
 
       <div className="relative min-h-0 flex-1">
         <div
           ref={transcript}
           onScroll={(scrolled) => setFollowing(atBottom(scrolled.currentTarget))}
-          className="h-full overflow-y-auto px-6 py-8"
+          // Contained, so a flick past the end of the transcript does not
+          // carry on into whatever is behind it and does not rubber-band the
+          // page itself.
+          className="h-full overflow-y-auto overscroll-contain px-4 py-8 sm:px-6"
         >
           <div className="mx-auto flex max-w-reading flex-col gap-8">
             {untouched && (
@@ -189,7 +225,7 @@ export function ConversationPane({
         )}
       </div>
 
-      <div className="shrink-0 border-t border-line px-6 pt-4 pb-composer">
+      <div className="shrink-0 border-t border-line px-4 pt-4 pb-composer sm:px-6">
         <Composer
           field={field}
           draft={draft}

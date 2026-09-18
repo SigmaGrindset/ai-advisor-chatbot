@@ -18,6 +18,19 @@
     color-scheme: light;
   }
 
+  html {
+    /* The shell is the height of what the browser is showing and every scroll
+       inside it is contained, so the page itself has nothing to scroll.
+       Saying so stops a phone rubber-banding the whole application away from
+       under the traveler, and stops a flick at the foot of the transcript
+       turning into a pull-to-refresh. */
+    overscroll-behavior: none;
+    /* iOS inflates text of its own accord when a phone is turned on its side.
+       The composer is 16px because 16px is the size below which a focused
+       input is zoomed into; letting the browser rewrite that undoes it. */
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
     background-color: var(--color-canvas);
     color: var(--color-ink);
@@ -25,6 +38,19 @@
     font-size: var(--text-body);
     line-height: var(--text-body--line-height);
     -webkit-font-smoothing: antialiased;
+  }
+
+  /* Controls are given a thumb's worth of room wherever they are being
+     pressed by one, and left at their drawn size wherever they are being
+     clicked. Asked as a question about the pointer rather than about the
+     window, because a touchscreen laptop is not a phone and a phone held in
+     a desktop-width window is still a phone. `:where` so a component can
+     still say otherwise without fighting for specificity. */
+  @media (pointer: coarse) {
+    :where(button, [role="tab"], summary) {
+      min-width: var(--spacing-touch);
+      min-height: var(--spacing-touch);
+    }
   }
 
   /* One focus treatment, everywhere, and never removed. */
@@ -46,9 +72,11 @@
   }
 }
 
-/* Motion is the streaming caret, the changed-field highlight, panel
+/* Motion is the streaming caret, the changed-field highlight, sheet and panel
    transitions and hover and focus transitions — and none of them when the
-   traveler has asked for less. */
+   traveler has asked for less. A sheet still arrives and still leaves under
+   this preference; it simply does both at once, which is why the sheet reads
+   its own travel off the page rather than assuming how long it has. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
