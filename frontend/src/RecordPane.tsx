@@ -12,9 +12,8 @@ import { icon } from "./design/icons";
  * Traveler Profile shares the pane because it is the other durable thing the
  * conversation writes to.
  *
- * Both panels are placeholders here. The pane, its tabs and its geometry are
- * what this ticket owes; what fills them arrives with the Trip Plan and the
- * Traveler Profile.
+ * Both panels are empty here, and say in one line what will fill them. The
+ * records themselves arrive with the Trip Plan and the Traveler Profile.
  */
 
 const TABS = [
@@ -23,16 +22,15 @@ const TABS = [
     label: "Plan",
     glyph: <MapPinned {...icon} aria-hidden="true" />,
     heading: "Trip Plan",
-    placeholder:
-      "Destination, dates, party and budget collect here as the advisor learns them, alongside the itinerary and whatever the plan still needs decided.",
+    empty: "A trip takes shape here as you talk about one — destination, dates and what is still undecided.",
   },
   {
     id: "traveler",
     label: "Traveler",
     glyph: <UserRound {...icon} aria-hidden="true" />,
     heading: "Traveler Profile",
-    placeholder:
-      "What the advisor remembers about you across every Conversation is listed here, one fact at a time, each one yours to remove.",
+    empty:
+      "What the advisor learns about you is listed here, one fact at a time, and you can delete any of them.",
   },
 ] as const;
 
@@ -104,7 +102,7 @@ export function RecordPane() {
         className="flex flex-1 animate-panel flex-col gap-3 overflow-y-auto px-5 py-6"
       >
         <h2 className="font-display text-heading font-semibold text-ink">{showing.heading}</h2>
-        <p className="text-meta text-ink-muted">{showing.placeholder}</p>
+        <p className="text-meta text-ink-muted">{showing.empty}</p>
       </div>
     </aside>
   );

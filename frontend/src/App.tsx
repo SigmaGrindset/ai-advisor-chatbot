@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   deleteConversation,
@@ -10,11 +10,14 @@ import {
   type ConversationSummary,
 } from "./api";
 import { ConversationList } from "./ConversationList";
-import { ConversationPane } from "./ConversationPane";
+import { ConversationPane, type Trouble } from "./ConversationPane";
 import { RecordPane } from "./RecordPane";
 
 /** A reply as it is being written, and which Conversation it belongs to. */
 type Arriving = { conversationId: string; text: string };
+
+/** A reply the traveler called off, and what had arrived by then. */
+type Stopped = { conversationId: string; text: string };
 
 export function App() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -23,8 +26,12 @@ export function App() {
   const [current, setCurrent] = useState<Conversation | null>(null);
   const [draft, setDraft] = useState("");
   const [arriving, setArriving] = useState<Arriving | null>(null);
+  const [trouble, setTrouble] = useState<Trouble | null>(null);
+  const [stopped, setStopped] = useState<Stopped | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  // The turn in flight, held so the stop control has something to pull on.
+  const turn = useRef<AbortController | null>(null);
 
   useEffect(() => {
     // The most recently active Conversation is the one they were working in, so
@@ -37,16 +44,23 @@ export function App() {
       .catch(() => setFailure("Your conversations could not be loaded."));
   }, []);
 
-  function start() {
+  /** Everything that belongs to one Conversation's last turn, put down. */
+  function clear() {
     setConfirmingDelete(null);
     setFailure(null);
+    setTrouble(null);
+    setStopped(null);
+  }
+
+  function start() {
+    clear();
     setCurrent(null);
   }
 
   async function open(id: string) {
     setConfirmingDelete(null);
     if (id === current?.id) return;
-    setFailure(null);
+    clear();
     try {
       setCurrent(await readConversation(id));
     } catch {
@@ -62,6 +76,7 @@ export function App() {
       const remaining = conversations.filter((conversation) => conversation.id !== id);
       setConversations(remaining);
       if (id !== current?.id) return;
+      clear();
       // They deleted what they were reading, so something has to take its place:
       // the next one down, or a blank Conversation if that was the last of them.
       const next = remaining[0];
@@ -71,12 +86,41 @@ export function App() {
     }
   }
 
-  async function send() {
+  /** Send what is in the composer, and empty it. */
+  function send() {
     const saying = draft.trim();
-    if (!saying || arriving !== null) return;
+    if (saying === "" || arriving !== null) return;
     setDraft("");
-    setFailure(null);
-    setConfirmingDelete(null);
+    void ask(saying, () => setDraft(saying));
+  }
+
+  /**
+   * Ask a failed question again.
+   *
+   * It goes as a new turn, because that is all the API offers: the traveler's
+   * own Message was already recorded before the turn failed, so asking again
+   * records a second one. Ticket 14 owns what becomes of a traveler Message
+   * whose turn never answered.
+   */
+  function again(asking: Trouble) {
+    setTrouble(null);
+    void ask(asking.asked, () => setTrouble(asking));
+  }
+
+  /** Stop a reply that is still being written. */
+  function stop() {
+    turn.current?.abort();
+  }
+
+  /**
+   * One turn, from the words to the reply.
+   *
+   * `giveBack` says what to do with the words if the turn never starts, which
+   * is different depending on where they came from — the composer wants them
+   * back in the composer, a retry wants its error back where it was.
+   */
+  async function ask(asking: string, giveBack: () => void) {
+    clear();
 
     let conversationId: string;
     try {
@@ -84,22 +128,30 @@ export function App() {
       // needed to exist, so it is started by the first thing they say in it.
       conversationId = current?.id ?? (await begin());
     } catch {
+      // Nothing was recorded anywhere, so the words go back to the traveler
+      // rather than becoming a failed turn they have to retry.
       setFailure("A new conversation could not be started.");
-      setDraft(saying);
+      giveBack();
       return;
     }
 
+    const stopping = new AbortController();
+    turn.current = stopping;
     setArriving({ conversationId, text: "" });
     setConversations((sofar) => mostRecentFirst(sofar, conversationId));
+
+    // Kept alongside the state so that stopping mid-reply knows what had
+    // arrived: a state setter is not somewhere to read a value back out of.
+    let written = "";
+    // Whether the reply became a Message before the traveler stopped it.
+    let answered = false;
+
     try {
-      for await (const event of say(conversationId, saying)) {
+      for await (const event of say(conversationId, asking, stopping.signal)) {
         if (event.type === "fragment") {
-          const text = event.text;
-          setArriving((sofar) =>
-            sofar?.conversationId === conversationId
-              ? { conversationId, text: sofar.text + text }
-              : sofar,
-          );
+          written += event.text;
+          const text = written;
+          setArriving((sofar) => (sofar?.conversationId === conversationId ? { conversationId, text } : sofar));
         } else if (event.type === "conversation_titled") {
           const title = event.title;
           setConversations((sofar) =>
@@ -107,10 +159,9 @@ export function App() {
           );
           setCurrent((open) => (open?.id === conversationId ? { ...open, title } : open));
         } else if (event.type === "failed") {
-          // The turn never happened, so the traveler gets their words back
-          // rather than having to type them again.
-          setFailure(event.detail);
-          setDraft(saying);
+          // The question stays where they asked it, with the failure under it
+          // and a way to ask again.
+          setTrouble({ conversationId, asked: asking, detail: event.detail });
         } else {
           const message = event.message;
           setCurrent((open) =>
@@ -118,12 +169,33 @@ export function App() {
               ? { ...open, messages: [...open.messages, message] }
               : open,
           );
+          // The reply is a Message now, so it stops being one that is
+          // arriving. The turn is not over — the Conversation may still be
+          // being named — but leaving it arriving would draw the reply twice,
+          // and would offer to stop something that has already been kept.
+          if (event.type === "advisor_message") {
+            answered = true;
+            setArriving((sofar) => (sofar?.conversationId === conversationId ? null : sofar));
+          }
         }
       }
     } catch {
-      setFailure("The advisor could not be reached.");
-      setDraft(saying);
+      if (stopping.signal.aborted) {
+        // A reply the server had already kept is not a stopped one, whatever
+        // the traveler pressed afterwards: it is on the page as a Message.
+        // Otherwise the stop is recorded even when nothing had arrived to
+        // keep, because pressing a control and being told nothing is worse
+        // than being told there was nothing.
+        if (!answered) setStopped({ conversationId, text: written });
+      } else {
+        setTrouble({
+          conversationId,
+          asked: asking,
+          detail: "The advisor could not be reached.",
+        });
+      }
     } finally {
+      turn.current = null;
       setArriving(null);
     }
   }
@@ -136,7 +208,9 @@ export function App() {
     return started.id;
   }
 
-  const writing = arriving?.conversationId === current?.id ? arriving : null;
+  /** Only what belongs to the Conversation on screen is shown on it. */
+  const here = <T extends { conversationId: string }>(it: T | null) =>
+    it?.conversationId === current?.id ? it : null;
 
   return (
     // Three panes at a laptop width: what the traveler has talked about, what
@@ -161,12 +235,16 @@ export function App() {
 
       <ConversationPane
         conversation={current}
-        arriving={writing?.text ?? null}
+        arriving={here(arriving)?.text ?? null}
+        trouble={here(trouble)}
+        stopped={here(stopped)?.text ?? null}
         failure={failure}
         draft={draft}
         sending={arriving !== null}
         onDraft={setDraft}
-        onSend={() => void send()}
+        onSend={send}
+        onStop={here(arriving) === null ? null : stop}
+        onRetry={again}
       />
 
       <RecordPane />

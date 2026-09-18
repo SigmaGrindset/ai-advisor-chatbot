@@ -105,3 +105,18 @@ function lucideGlyphsIn(text: string): string[] {
     .map((name) => name.trim())
     .filter((name) => name.length > 0);
 }
+
+describe("what a component is allowed to put on the page", () => {
+  it("never hands a string to the browser as markup", () => {
+    // The advisor's replies are text from outside the application. Nothing is
+    // sanitised on the way in because nothing is ever markup: the renderer
+    // builds elements from a parsed tree that has no node for raw markup and
+    // none for an image, so there is no path from a reply to an element the
+    // reply chose. This holds the door shut.
+    for (const file of files) {
+      expect(file.text, `${file.name} sets markup from a string`).not.toMatch(
+        /dangerouslySetInnerHTML|\binnerHTML\b|insertAdjacentHTML|document\.write/,
+      );
+    }
+  });
+});

@@ -45,6 +45,14 @@ export function ConversationList({
       </div>
 
       <ul className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-4">
+        {conversations.length === 0 && (
+          // An empty list is the ordinary state of a first visit, so it says
+          // what will fill it rather than leaving the rail looking broken.
+          <li className="px-3 py-2 text-meta text-ink-subtle">
+            Conversations you start appear here.
+          </li>
+        )}
+
         {conversations.map((conversation) => {
           const named = conversationName(conversation.title);
           const open = conversation.id === currentId;

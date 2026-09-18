@@ -55,15 +55,23 @@ export async function deleteConversation(id: string): Promise<void> {
   refused(await fetch(`/api/conversations/${id}`, { method: "DELETE" }));
 }
 
-/** Say something to the advisor, and yield what comes back as it arrives. */
+/**
+ * Say something to the advisor, and yield what comes back as it arrives.
+ *
+ * Aborting the signal drops the connection, which is the only way to stop a
+ * reply: there is no second request that calls the first one off. The server
+ * sees the disconnect and abandons the turn.
+ */
 export async function* say(
   conversationId: string,
   content: string,
+  signal?: AbortSignal,
 ): AsyncGenerator<TurnEvent> {
   const response = await fetch(`/api/conversations/${conversationId}/messages`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ content }),
+    signal,
   });
 
   if (!response.ok || !response.body) {
