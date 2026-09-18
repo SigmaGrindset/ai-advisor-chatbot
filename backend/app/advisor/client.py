@@ -3,7 +3,7 @@
 import httpx2
 from openai import AsyncOpenAI
 
-from .config import Settings
+from ..config import Settings
 
 
 class OpenRouterKeyMissing(Exception):

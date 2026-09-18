@@ -9,10 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
 
-from .canned_model import answering, replying, unwell
-from .canned_transport import Responder
 from .conftest import ApiFactory
-from .talking import send, start, transcript
+from .fakes.canned_model import answering, replying, unwell
+from .fakes.canned_transport import Responder
+from .fakes.talking import send, start, transcript
 
 
 async def test_a_started_conversation_appears_in_the_list(api: httpx2.AsyncClient) -> None:

@@ -55,9 +55,12 @@ endpoint that reaches outward yet:
 
 - `tests/test_outbound_seam.py` builds the model client directly rather than going through
   a route. It is the only way to assert criterion 6 before ticket 02 exists.
-- `tests/test_harness_isolation.py` and `tests/test_schema_application.py` use the database
-  directly. Both test the harness and the startup path themselves, which have no HTTP
-  surface.
+- `tests/test_schema_application.py` uses the database directly. It tests the startup
+  path itself, which has no HTTP surface.
+
+`tests/test_harness_isolation.py`, which asserted the harness's own rollback guarantee,
+was removed later: it tested the fixtures rather than the application, and every test in
+the suite now leans on that guarantee well enough to fail if it breaks.
 
 Not done here, by design: the README's remaining six sections belong to ticket 15, and the
 structured in-interface error for a missing key belongs to ticket 14.

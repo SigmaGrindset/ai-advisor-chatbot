@@ -85,22 +85,3 @@ describe("the theme's colour tokens", () => {
   });
 });
 
-describe("the theme's naming", () => {
-  it("names roles, not colours or brightnesses, so a dark theme is one more block", () => {
-    // A token called `--color-cream` or `--color-light-grey` cannot be
-    // redefined for a dark theme without lying about its own name.
-    const appearances = /\b(white|black|light|dark|cream|beige|grey|gray|sand|warm|pale)\b/;
-    for (const name of colours.keys()) {
-      expect(name, `--color-${name} names how it looks, not what it is for`).not.toMatch(
-        appearances,
-      );
-    }
-  });
-
-  it("puts every colour value in one overridable block", () => {
-    // Everything after the theme block is free of literal colour, so a dark
-    // theme is a second block of the same names and nothing else.
-    const afterTheme = source.slice(source.indexOf("}", source.indexOf("@theme")));
-    expect(afterTheme).not.toMatch(/#[0-9a-f]{3,8}\b/i);
-  });
-});

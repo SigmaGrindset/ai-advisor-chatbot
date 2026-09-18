@@ -3,13 +3,13 @@
 import httpx2
 import pytest
 
+from app.advisor.instructions import DEFAULT_ADVISOR_INSTRUCTIONS
 from app.config import Settings
-from app.instructions import DEFAULT_ADVISOR_INSTRUCTIONS
 
-from .canned_model import KEEP_ALIVE, CannedModel, content, finish, replying
-from .canned_transport import Responder
 from .conftest import ApiFactory
-from .talking import send, start, transcript
+from .fakes.canned_model import KEEP_ALIVE, CannedModel, content, finish, replying
+from .fakes.canned_transport import Responder
+from .fakes.talking import send, start, transcript
 
 
 async def test_both_messages_are_still_there_after_a_reload(

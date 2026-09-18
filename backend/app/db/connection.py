@@ -7,7 +7,7 @@ from fastapi import Request
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
-from .models import SOLE_TRAVELER_ID, Base, Traveler
+from .tables import SOLE_TRAVELER_ID, Base, Traveler
 
 logger = logging.getLogger(__name__)
 

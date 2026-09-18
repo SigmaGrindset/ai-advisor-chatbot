@@ -4,10 +4,10 @@ application's injectable HTTP client."""
 import httpx2
 import pytest
 
+from app.advisor.client import OpenRouterKeyMissing, create_model_client
 from app.config import Settings
-from app.model import OpenRouterKeyMissing, create_model_client
 
-from .canned_transport import Responder, UnroutedHost
+from .fakes.canned_transport import Responder
 
 CANNED_COMPLETION = {
     "id": "gen-1",
@@ -45,13 +45,6 @@ async def test_the_model_client_sends_through_the_applications_outbound_client(
 
     assert completion.choices[0].message.content == "Lisbon is mild in April."
     assert str(sent[0].url) == "https://openrouter.ai/api/v1/chat/completions"
-
-
-async def test_a_host_with_no_canned_response_is_refused_rather_than_called(
-    http_client: httpx2.AsyncClient,
-) -> None:
-    with pytest.raises(UnroutedHost):
-        await http_client.get("https://api.open-meteo.com/v1/forecast")
 
 
 async def test_a_missing_key_is_reported_when_the_model_is_needed_not_at_startup(

@@ -24,13 +24,13 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.config import Settings
-from app.db import apply_schema, get_session
+from app.db.connection import apply_schema, get_session
+from app.db.tables import Base
 from app.main import create_app
-from app.models import Base
-from app.outbound import get_http_client
+from app.privacy.outbound import get_http_client
 
-from . import talking
-from .canned_transport import CannedTransport, Responder
+from .fakes import talking
+from .fakes.canned_transport import CannedTransport, Responder
 
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL",

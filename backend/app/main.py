@@ -9,9 +9,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from .api import conversations, health
 from .config import Settings
-from .db import apply_schema, create_engine
+from .db.connection import apply_schema, create_engine
 from .frontend import mount_frontend
-from .outbound import create_http_client
+from .privacy.outbound import create_http_client
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 

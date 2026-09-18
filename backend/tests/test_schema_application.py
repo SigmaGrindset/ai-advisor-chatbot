@@ -3,8 +3,8 @@
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from app.db import apply_schema
-from app.models import Traveler
+from app.db.connection import apply_schema
+from app.db.tables import Traveler
 
 
 async def test_applying_the_schema_to_a_database_that_has_it_changes_nothing(
