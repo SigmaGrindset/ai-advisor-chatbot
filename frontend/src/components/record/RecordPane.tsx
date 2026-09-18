@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { MapPinned, UserRound } from "lucide-react";
 
-import { icon } from "./design/icons";
+import { icon } from "../../design/icons";
 
 /**
  * The third pane: the two durable records a Conversation writes to.

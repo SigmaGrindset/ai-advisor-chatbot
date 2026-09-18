@@ -6,36 +6,8 @@
  * that are not `data:` lines, including keep-alive comments, are dropped.
  */
 
-export type MessageRole = "traveler" | "advisor";
-
-export type Message = {
-  id: string;
-  role: MessageRole;
-  content: string;
-  created_at: string;
-  cost_usd: number | null;
-};
-
-/** A Conversation as it appears in the list, without its transcript. */
-export type ConversationSummary = {
-  id: string;
-  /** Null until the first exchange has been named. */
-  title: string | null;
-  last_activity_at: string;
-};
-
-export type Conversation = {
-  id: string;
-  title: string | null;
-  messages: Message[];
-};
-
-export type TurnEvent =
-  | { type: "traveler_message"; message: Message }
-  | { type: "fragment"; text: string }
-  | { type: "advisor_message"; message: Message }
-  | { type: "conversation_titled"; title: string }
-  | { type: "failed"; detail: string };
+import type { TurnEvent } from "../stream/events";
+import type { Conversation, ConversationSummary } from "./types";
 
 export async function listConversations(): Promise<ConversationSummary[]> {
   return await expected<ConversationSummary[]>(await fetch("/api/conversations"));

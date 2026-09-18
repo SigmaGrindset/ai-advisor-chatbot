@@ -145,7 +145,7 @@
 
   /* ---- Motion --------------------------------------------------------- */
   /* Decelerating, never bouncing. Everything below is suppressed under a
-     reduced-motion preference — see index.css. */
+     reduced-motion preference — see base.css. */
   --ease-panel: cubic-bezier(0.2, 0, 0, 1);
   --animate-caret: caret 1.1s steps(1, end) infinite;
   --animate-panel: panel 180ms var(--ease-panel);

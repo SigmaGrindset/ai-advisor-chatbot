@@ -1,8 +1,8 @@
 import { Compass, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 
-import type { ConversationSummary } from "./api";
+import type { ConversationSummary } from "../../api/types";
 import { conversationName } from "./conversationName";
-import { icon, smallIcon } from "./design/icons";
+import { icon, smallIcon } from "../../design/icons";
 
 /**
  * The row whose actions are showing, and whether it has been asked to delete.

@@ -6,15 +6,14 @@ import {
   readConversation,
   say,
   startConversation,
-  type Conversation,
-  type ConversationSummary,
-} from "./api";
-import { ConversationList, type RowActions } from "./ConversationList";
-import { ConversationPane, type Trouble } from "./ConversationPane";
-import { useLayout } from "./layout";
-import { RecordPane } from "./RecordPane";
-import { Sheet } from "./Sheet";
-import { useVisibleViewport } from "./viewport";
+} from "./api/client";
+import type { Conversation, ConversationSummary } from "./api/types";
+import { ConversationList, type RowActions } from "./components/conversation/ConversationList";
+import { ConversationPane, type Trouble } from "./components/conversation/ConversationPane";
+import { RecordPane } from "./components/record/RecordPane";
+import { useLayout } from "./components/shell/layout";
+import { Sheet } from "./components/shell/Sheet";
+import { useVisibleViewport } from "./components/shell/viewport";
 
 /** A reply as it is being written, and which Conversation it belongs to. */
 type Arriving = { conversationId: string; text: string };

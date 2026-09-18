@@ -1,7 +1,7 @@
 import { useLayoutEffect, type RefObject } from "react";
 import { ArrowUp, Square } from "lucide-react";
 
-import { icon } from "./design/icons";
+import { icon } from "../../design/icons";
 
 /**
  * Where the traveler says something to the advisor.

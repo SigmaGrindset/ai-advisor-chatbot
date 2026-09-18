@@ -24,7 +24,7 @@ describe("which layout a width gets", () => {
 });
 
 describe("where the layout's widths are stated", () => {
-  const tokens = readFileSync(new URL("./tokens.css", import.meta.url), "utf8");
+  const tokens = readFileSync(new URL("../../design/tokens.css", import.meta.url), "utf8");
 
   /** A `--breakpoint-*` token, in the pixels a media query would use. */
   function breakpoint(name: string): number {

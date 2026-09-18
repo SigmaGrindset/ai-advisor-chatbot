@@ -2,10 +2,10 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowDown, MapPinned, PanelLeft, RotateCcw, TriangleAlert } from "lucide-react";
 
 import { settled } from "./announcing";
-import type { Conversation, Message } from "./api";
+import type { Conversation, Message } from "../../api/types";
 import { Composer } from "./Composer";
 import { conversationName } from "./conversationName";
-import { icon, smallIcon } from "./design/icons";
+import { icon, smallIcon } from "../../design/icons";
 import { atBottom, toFoot } from "./following";
 import { GREETING, STARTERS } from "./firstRun";
 import { spoken } from "./markdown";

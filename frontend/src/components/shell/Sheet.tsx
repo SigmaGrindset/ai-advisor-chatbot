@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 
-import { icon } from "./design/icons";
+import { icon } from "../../design/icons";
 import { useDrag } from "./dragging";
 import { resting } from "./snapping";
 
