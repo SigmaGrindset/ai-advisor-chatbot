@@ -1,0 +1,148 @@
+/*
+ * The design system, stated once.
+ *
+ * Every colour, spacing, radius, type size and easing the application uses is
+ * named here for what it is for, never for how it looks. Components reach for
+ * `bg-surface` and `text-ink-subtle`; none of them knows a hex value, and the
+ * framework's own palette is switched off below so none of them can.
+ *
+ * Because the names are roles, a dark theme is one more block of the same
+ * names with different values — nothing else in the codebase changes. That
+ * block is not written: dark mode is deliberately out of scope for now.
+ */
+
+/* `static` so every token below reaches the stylesheet, not only the ones a
+   component happens to use yet. A design system you cannot read off the page
+   is a document, not a system: the four meanings have to be inspectable —
+   and overridable — before the screens that spend them exist. */
+@theme static {
+  /* The framework's palette, type scale and radii are turned off so the only
+     vocabulary available to a component is the one below. */
+  --color-*: initial;
+  --text-*: initial;
+  --radius-*: initial;
+
+  /* ---- Surfaces ------------------------------------------------------- */
+  /* A warm monochrome base: paper rather than screen. */
+  --color-canvas: #faf8f5;
+  --color-surface: #ffffff;
+  --color-sunken: #f2efe9;
+
+  /* ---- Hairlines ------------------------------------------------------ */
+  --color-line: #e5e0d8;
+  --color-line-strong: #8f8578;
+
+  /* ---- Text ----------------------------------------------------------- */
+  --color-ink: #1f1b17;
+  --color-ink-muted: #56504a;
+  --color-ink-subtle: #6e675f;
+
+  /* ---- The accent ----------------------------------------------------- */
+  /* Muted clay. Interaction only: links, the send control, focus, selection. */
+  --color-accent: #9a5640;
+  --color-accent-strong: #7c4230;
+  --color-accent-tint: #f6ece7;
+  --color-accent-contrast: #fffcfa;
+  --color-focus: #7c4230;
+
+  /* ---- The four meanings ---------------------------------------------- */
+  /* Colour says exactly four things, and says nothing else anywhere. */
+  /* A Trip Plan field the advisor has just rewritten. */
+  --color-changed: #7a5a12;
+  --color-changed-tint: #faf0d9;
+  /* A claim backed by a Live-data Tool's answer. */
+  --color-verified: #3b6a4b;
+  --color-verified-tint: #e6f0e8;
+  /* An Open Question the Trip Plan still needs decided. */
+  --color-open: #3a5c85;
+  --color-open-tint: #e5edf6;
+  /* A turn that failed, or an answer that could not be given. */
+  --color-error: #a32d22;
+  --color-error-tint: #fbe9e6;
+
+  /* ---- Type ----------------------------------------------------------- */
+  /* Archivo carries headings and the traveler's own words back to them;
+     Geist Sans does the interface; Geist Mono does metadata and figures. */
+  --font-display: "Archivo Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "Cascadia Mono", monospace;
+
+  --text-display: 1.75rem;
+  --text-display--line-height: 2.125rem;
+  --text-display--letter-spacing: -0.02em;
+  --text-title: 1.125rem;
+  --text-title--line-height: 1.75rem;
+  --text-title--letter-spacing: -0.012em;
+  --text-heading: 0.9375rem;
+  --text-heading--line-height: 1.375rem;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.625rem;
+  /* Anything the traveler types into. Never below 16px: iOS zooms the page
+     when a focused input is smaller, and they have to pinch back out of a
+     layout that is now the wrong width (ADR-0007). */
+  --text-input: 1rem;
+  --text-input--line-height: 1.5rem;
+  --text-meta: 0.8125rem;
+  --text-meta--line-height: 1.125rem;
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 1rem;
+  --text-micro--letter-spacing: 0.06em;
+
+  /* ---- Rhythm --------------------------------------------------------- */
+  /* One step, from which the numeric spacing scale is derived. */
+  --spacing: 0.25rem;
+  /* The widths the shell is built out of: 240 / 400 for the two side panes,
+     leaving the conversation 640 at a 1280 window (ADR-0006), and a measure
+     the transcript never exceeds however wide the window gets. */
+  --spacing-rail: 15rem;
+  --spacing-aside: 25rem;
+  --container-reading: 40rem;
+  /* The composer sits against the bottom edge, so its own padding carries the
+     device's safe area: a phone's home indicator must not come down on the
+     send control (ADR-0007). */
+  --spacing-composer: calc(1.5rem + env(safe-area-inset-bottom));
+
+  /* ---- Breakpoints ---------------------------------------------------- */
+  /* Where the third pane can appear without squeezing the conversation
+     below its measure. Below it the shell is the conversation alone; the
+     narrow layouts proper are a later ticket's. */
+  --breakpoint-shell: 68.75rem;
+
+  /* ---- Radii ---------------------------------------------------------- */
+  --radius-chip: 999px;
+  --radius-control: 0.5rem;
+  --radius-panel: 0.75rem;
+
+  /* ---- Depth ---------------------------------------------------------- */
+  /* Hairlines do the separating. A shadow is for something that floats. */
+  --shadow-raised: 0 1px 2px color-mix(in oklab, var(--color-ink) 8%, transparent);
+
+  /* ---- Motion --------------------------------------------------------- */
+  /* Decelerating, never bouncing. Everything below is suppressed under a
+     reduced-motion preference — see index.css. */
+  --ease-panel: cubic-bezier(0.2, 0, 0, 1);
+  --animate-caret: caret 1.1s steps(1, end) infinite;
+  --animate-panel: panel 180ms var(--ease-panel);
+}
+
+@keyframes caret {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  50%,
+  95% {
+    opacity: 0;
+  }
+}
+
+@keyframes panel {
+  from {
+    opacity: 0;
+    transform: translateY(0.25rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

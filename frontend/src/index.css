@@ -1,13 +1,61 @@
 @import "tailwindcss";
 
-/* Dark mode is deliberately out of scope. Pin the page to the light scheme, and
-   paint the background explicitly, so a dark operating system preference does
-   not leave dark text on a dark canvas. */
-:root {
-  color-scheme: light;
+/* The typefaces are part of the build, not a request to a font service. The
+   traveler is told what leaves their machine; a CDN font would be an address
+   handed over on every page load that no such notice mentions. */
+@import "@fontsource-variable/archivo/wght.css";
+@import "@fontsource-variable/geist/wght.css";
+@import "@fontsource-variable/geist-mono/wght.css";
+
+@import "./tokens.css";
+
+@layer base {
+  /* Dark mode is deliberately out of scope. Pin the page to the light scheme
+     so a dark operating system preference does not leave dark text on a dark
+     canvas. The tokens are named for their role rather than their lightness,
+     so the theme that lifts this is one more block in tokens.css. */
+  :root {
+    color-scheme: light;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* One focus treatment, everywhere, and never removed. */
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--color-accent-tint);
+  }
+
+  /* Metadata and figures are set in the mono face, and figures that change in
+     place are set in tabular figures so a number cannot shift the layout
+     under the traveler while they are reading it. */
+  :where(time, code, kbd, samp) {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
 }
 
-body {
-  background-color: var(--color-white);
-  color: var(--color-neutral-900);
+/* Motion is the streaming caret, the changed-field highlight, panel
+   transitions and hover and focus transitions — and none of them when the
+   traveler has asked for less. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -1,7 +1,8 @@
-import type { ConversationSummary } from "./api";
+import { Compass, Plus, Trash2 } from "lucide-react";
 
-/** An unnamed Conversation still needs saying out loud in the list. */
-const UNNAMED = "New conversation";
+import type { ConversationSummary } from "./api";
+import { conversationName } from "./conversationName";
+import { icon, smallIcon } from "./design/icons";
 
 export function ConversationList({
   conversations,
@@ -25,63 +26,80 @@ export function ConversationList({
   return (
     <nav
       aria-label="Conversations"
-      className="flex w-64 shrink-0 flex-col gap-2 border-r border-neutral-200 p-4"
+      className="flex w-rail shrink-0 flex-col border-r border-line bg-sunken"
     >
-      <button
-        type="button"
-        className="rounded border border-neutral-300 px-3 py-2 text-sm font-medium"
-        onClick={onStart}
-      >
-        New conversation
-      </button>
+      <div className="flex flex-col gap-4 px-4 pt-5 pb-4">
+        <p className="flex items-center gap-2 font-display text-title font-semibold text-ink">
+          <Compass {...icon} className="shrink-0 text-accent" aria-hidden="true" />
+          Travel Advisor
+        </p>
 
-      <ul className="flex flex-col gap-1 overflow-y-auto">
-        {conversations.map((conversation) => (
-          <li key={conversation.id} className="flex items-center gap-1">
-            <button
-              type="button"
-              aria-current={conversation.id === currentId ? "true" : undefined}
-              className={`flex-1 truncate rounded px-2 py-1.5 text-left text-sm ${
-                conversation.id === currentId
-                  ? "bg-neutral-200 font-medium"
-                  : "hover:bg-neutral-100"
-              }`}
-              onClick={() => onOpen(conversation.id)}
-            >
-              {conversation.title ?? UNNAMED}
-            </button>
+        <button
+          type="button"
+          className="flex items-center justify-center gap-2 rounded-control border border-line-strong bg-surface px-3 py-2 text-meta font-medium text-ink shadow-raised transition-colors hover:bg-canvas"
+          onClick={onStart}
+        >
+          <Plus {...smallIcon} aria-hidden="true" />
+          New conversation
+        </button>
+      </div>
 
-            {confirmingDelete === conversation.id ? (
-              <span className="flex gap-1 text-xs">
-                <button
-                  type="button"
-                  className="rounded px-1.5 py-1 text-red-700 underline"
-                  onClick={() => onDelete(conversation.id)}
-                >
-                  Delete
-                </button>
-                <button
-                  type="button"
-                  className="rounded px-1.5 py-1 underline"
-                  onClick={() => onConfirmDelete(null)}
-                >
-                  Keep
-                </button>
-              </span>
-            ) : (
-              <button
-                type="button"
-                // A named control rather than a hidden gesture, so the action is
-                // discoverable and says what it will act on.
-                aria-label={`Delete ${conversation.title ?? UNNAMED}`}
-                className="rounded px-2 py-1 text-neutral-500 hover:text-neutral-900"
-                onClick={() => onConfirmDelete(conversation.id)}
+      <ul className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-4">
+        {conversations.map((conversation) => {
+          const named = conversationName(conversation.title);
+          const open = conversation.id === currentId;
+          return (
+            <li key={conversation.id}>
+              <div
+                className={`flex items-center gap-1 rounded-control pr-1 transition-colors ${
+                  open ? "bg-surface shadow-raised" : "hover:bg-canvas"
+                }`}
               >
-                ×
-              </button>
-            )}
-          </li>
-        ))}
+                <button
+                  type="button"
+                  aria-current={open ? "true" : undefined}
+                  className="min-w-0 flex-1 truncate rounded-control py-2 pl-3 text-left text-meta text-ink"
+                  onClick={() => onOpen(conversation.id)}
+                >
+                  <span className={open ? "font-medium" : undefined}>{named}</span>
+                </button>
+
+                {confirmingDelete === conversation.id ? (
+                  // Named controls rather than a hidden gesture, so the action
+                  // is discoverable and says what it will do.
+                  <span className="flex shrink-0 items-center gap-1 text-micro">
+                    <button
+                      type="button"
+                      className="rounded-control px-1.5 py-1 font-medium text-error underline decoration-1 underline-offset-2"
+                      onClick={() => onDelete(conversation.id)}
+                    >
+                      Delete
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-control px-1.5 py-1 text-ink-muted underline decoration-1 underline-offset-2"
+                      onClick={() => onConfirmDelete(null)}
+                    >
+                      Keep
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    // Permanently visible rather than revealed on hover: a
+                    // control whose only affordance is a pointer is a control
+                    // a touch screen cannot reach (ADR-0007).
+                    aria-label={`Delete ${named}`}
+                    className="shrink-0 rounded-control p-1.5 text-ink-subtle transition-colors hover:text-error"
+                    onClick={() => onConfirmDelete(conversation.id)}
+                  >
+                    <Trash2 {...smallIcon} aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+            </li>
+          );
+        })}
       </ul>
     </nav>
   );

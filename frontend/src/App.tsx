@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   deleteConversation,
@@ -8,9 +8,10 @@ import {
   startConversation,
   type Conversation,
   type ConversationSummary,
-  type Message,
 } from "./api";
 import { ConversationList } from "./ConversationList";
+import { ConversationPane } from "./ConversationPane";
+import { RecordPane } from "./RecordPane";
 
 /** A reply as it is being written, and which Conversation it belongs to. */
 type Arriving = { conversationId: string; text: string };
@@ -24,7 +25,6 @@ export function App() {
   const [arriving, setArriving] = useState<Arriving | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
-  const transcript = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // The most recently active Conversation is the one they were working in, so
@@ -36,12 +36,6 @@ export function App() {
       })
       .catch(() => setFailure("Your conversations could not be loaded."));
   }, []);
-
-  useEffect(() => {
-    // Follow the reply as it is written. Staying put when the traveler has
-    // scrolled up is a later ticket's job.
-    transcript.current?.scrollTo({ top: transcript.current.scrollHeight });
-  }, [current, arriving]);
 
   function start() {
     setConfirmingDelete(null);
@@ -145,7 +139,16 @@ export function App() {
   const writing = arriving?.conversationId === current?.id ? arriving : null;
 
   return (
-    <div className="flex h-dvh">
+    // Three panes at a laptop width: what the traveler has talked about, what
+    // they are talking about, and what the talking is producing.
+    //
+    // Below the shell breakpoint it is the third pane that stands down, not
+    // the list. ADR-0006 has the list giving way first, and it will — but only
+    // once 06 has built the left sheet it gives way *to*. Dropping the list
+    // now would leave a narrow window with no way to reach any other
+    // Conversation, so the interim keeps navigation and defers the pane whose
+    // contents are still placeholders.
+    <div className="flex h-dvh overflow-hidden bg-canvas text-ink">
       <ConversationList
         conversations={conversations}
         currentId={current?.id ?? null}
@@ -156,52 +159,17 @@ export function App() {
         onDelete={(id) => void remove(id)}
       />
 
-      <main className="mx-auto flex h-dvh w-full max-w-2xl flex-col gap-4 p-4">
-        <h1 className="text-lg font-semibold">{current?.title ?? "AI Travel Advisor"}</h1>
+      <ConversationPane
+        conversation={current}
+        arriving={writing?.text ?? null}
+        failure={failure}
+        draft={draft}
+        sending={arriving !== null}
+        onDraft={setDraft}
+        onSend={() => void send()}
+      />
 
-        <div ref={transcript} className="flex flex-1 flex-col gap-6 overflow-y-auto">
-          {(current?.messages.length ?? 0) === 0 && writing === null && (
-            <p className="text-neutral-500">
-              Ask about a trip you are planning, and the advisor will answer here.
-            </p>
-          )}
-          {current?.messages.map((message) => (
-            <MessageView key={message.id} role={message.role} content={message.content} />
-          ))}
-          {writing !== null && <MessageView role="advisor" content={writing.text} />}
-          {failure && <p className="text-red-700">{failure}</p>}
-        </div>
-
-        <form
-          className="flex gap-2"
-          onSubmit={(submitted) => {
-            submitted.preventDefault();
-            void send();
-          }}
-        >
-          <textarea
-            className="flex-1 resize-none rounded border border-neutral-300 p-2"
-            rows={2}
-            value={draft}
-            placeholder="Where are you going?"
-            aria-label="Message the advisor"
-            onChange={(typed) => setDraft(typed.target.value)}
-            onKeyDown={(pressed) => {
-              if (pressed.key === "Enter" && !pressed.shiftKey) {
-                pressed.preventDefault();
-                void send();
-              }
-            }}
-          />
-          <button
-            type="submit"
-            className="self-end rounded bg-neutral-900 px-4 py-2 text-white disabled:opacity-40"
-            disabled={draft.trim() === "" || arriving !== null}
-          >
-            Send
-          </button>
-        </form>
-      </main>
+      <RecordPane />
     </div>
   );
 }
@@ -222,15 +190,4 @@ function mostRecentFirst(
   const used = conversations.find((it) => it.id === conversationId);
   if (used === undefined) return conversations;
   return [used, ...conversations.filter((it) => it.id !== conversationId)];
-}
-
-function MessageView({ role, content }: { role: Message["role"]; content: string }) {
-  return (
-    <article className="flex flex-col gap-1">
-      <h2 className="text-xs tracking-wide text-neutral-500 uppercase">
-        {role === "traveler" ? "You" : "Advisor"}
-      </h2>
-      <p className="whitespace-pre-wrap">{content}</p>
-    </article>
-  );
 }
