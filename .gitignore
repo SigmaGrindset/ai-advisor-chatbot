@@ -10,3 +10,9 @@ venv/
 .venv/
 node_modules/
 __pycache__/
+
+# Build and tool output
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/

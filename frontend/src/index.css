@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+/* Dark mode is deliberately out of scope. Pin the page to the light scheme, and
+   paint the background explicitly, so a dark operating system preference does
+   not leave dark text on a dark canvas. */
+:root {
+  color-scheme: light;
+}
+
+body {
+  background-color: var(--color-white);
+  color: var(--color-neutral-900);
+}

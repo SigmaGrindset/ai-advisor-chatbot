@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: travel
+      POSTGRES_PASSWORD: travel
+      POSTGRES_DB: travel_advisor
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U travel -d travel_advisor"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  app:
+    build: .
+    depends_on:
+      db:
+        # Wait for Postgres to answer, rather than racing it and restarting.
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://travel:travel@db:5432/travel_advisor
+      # Supplied by the evaluator, through a .env file next to this one or the
+      # surrounding environment. A missing key does not prevent startup.
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+volumes:
+  pgdata:

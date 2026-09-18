@@ -5,8 +5,33 @@
 
 ## 1. Setup & run
 
-<!-- The exact command(s) to get the app running on a clean machine, plus any
-prerequisites. We will follow these literally. -->
+Prerequisite: Docker with Compose v2.
+
+```
+cp .env.example .env    # then put your OpenRouter key in it
+docker compose up
+```
+
+The application is on <http://localhost:8000>. The schema is applied at startup, so
+there is no migration step. The application starts without an OpenRouter key and
+reports the key as missing at `/api/health`; the advisor cannot answer until one is
+supplied.
+
+If ports 8000 or 5432 are taken, set `APP_PORT` or `DB_PORT` in `.env`.
+
+### Running the tests
+
+The tests need a real Postgres and a Python environment:
+
+```
+docker compose up -d db
+python -m venv .venv
+.venv/bin/pip install -e "./backend[dev]"      # Windows: .venv/Scripts/pip
+cd backend && ../.venv/bin/python -m pytest    # Windows: ../.venv/Scripts/python
+```
+
+They use their own `travel_advisor_test` database, created on first run. Point them
+elsewhere with `TEST_DATABASE_URL`.
 
 ## 2. Architecture overview
 

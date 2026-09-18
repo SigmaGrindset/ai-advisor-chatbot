@@ -1,0 +1,14 @@
+.git
+.scratch
+.claude
+.agents
+.venv
+venv
+**/node_modules
+**/dist
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+.env
+PROMPTS.jsonl
+docs
