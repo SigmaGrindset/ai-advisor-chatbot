@@ -10,12 +10,10 @@ import { atBottom, toFoot } from "./following";
 import { GREETING, STARTERS } from "./firstRun";
 import { spoken } from "./markdown";
 import { Prose } from "./Prose";
+import type { Trouble } from "../../stream/useTurn";
 
 /** One thing the live region has been given to read out, in its turn. */
 type Announcement = { at: number; text: string };
-
-/** A turn that did not answer, kept so the traveler can ask it again. */
-export type Trouble = { conversationId: string; asked: string; detail: string };
 
 export function ConversationPane({
   conversation,
