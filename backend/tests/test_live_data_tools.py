@@ -307,7 +307,12 @@ async def test_a_call_the_application_cannot_read_never_leaves_the_machine(
     ]
 
 
-async def test_the_model_is_offered_the_live_data_tools_and_nothing_that_writes(
+#: The four capabilities that fetch. Every step of every turn is offered these
+#: and only these once anything has been fetched into it (ADR-0004, ADR-0009).
+FETCHING = ["country_facts", "current_weather", "exchange_rate", "web_search"]
+
+
+async def test_every_live_data_argument_is_narrow_enough_to_carry_nothing_said(
     api: httpx2.AsyncClient, conversation: str, outbound_routes: dict[str, Responder]
 ) -> None:
     outbound_routes["openrouter.ai"] = model = CannedModel(content("Alfama first."), finish())
@@ -315,23 +320,41 @@ async def test_the_model_is_offered_the_live_data_tools_and_nothing_that_writes(
     await send(api, conversation, "Where should I start in Lisbon?")
 
     offered = {tool["function"]["name"]: tool["function"] for tool in model.sent["tools"]}
-    # Four capabilities, all of which fetch. Nothing on this list can write to
-    # the Traveler Profile or change the Trip Plan, which is what makes a tool
-    # result structurally unable to cause either (ADR-0004).
-    assert sorted(offered) == [
-        "country_facts",
-        "current_weather",
-        "exchange_rate",
-        "web_search",
-    ]
+    assert sorted(name for name in offered if name in FETCHING) == FETCHING
     # Strictly typed, closed, and bounded. The search query is the one argument
     # that is room for words, and it is the one the guard reads before it is
     # sent; nothing else can carry anything the traveler said (ADR-0004).
-    for described in offered.values():
-        arguments = described["parameters"]
+    for name in FETCHING:
+        arguments = offered[name]["parameters"]
         assert arguments["additionalProperties"] is False
         for argument in arguments["properties"].values():
             assert argument["type"] != "string" or "maxLength" in argument
+
+
+async def test_nothing_that_writes_is_offered_once_something_has_been_fetched(
+    api: httpx2.AsyncClient, conversation: str, outbound_routes: dict[str, Responder]
+) -> None:
+    """The rule that keeps ADR-0004's promise now that writing tools exist.
+
+    A step that has a tool result in front of it is offered the fetching
+    collection and nothing else, so by the time anything an outside service
+    said is in the model's context there is no tool on the table that could
+    change the traveler's plan. Before the first lookup, on the step composed
+    from nothing but the Conversation itself, the plan tools are there.
+    """
+    outbound_routes["openrouter.ai"] = model = _asking_weather(
+        '{"latitude": 38.72, "longitude": -9.14, "place": "Lisbon"}'
+    )
+    outbound_routes[OPEN_METEO] = Source(WEATHER)
+
+    await send(api, conversation, "What should I pack for Lisbon?")
+
+    first, second = (
+        sorted(tool["function"]["name"] for tool in turn["tools"]) for turn in model.turns
+    )
+    assert set(FETCHING) < set(first)
+    assert "set_destination" in first
+    assert second == FETCHING
 
 
 async def test_what_a_lookup_cost_is_still_the_whole_turn(

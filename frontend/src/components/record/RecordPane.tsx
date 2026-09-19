@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, type ReactNode } from "react";
 import { MapPinned, UserRound } from "lucide-react";
 
 import { icon } from "../../design/icons";
@@ -10,14 +10,17 @@ import { icon } from "../../design/icons";
  * view and changes as they talk, which is the only way the plan "taking shape
  * as they talk" happens on screen rather than in a claim (ADR-0006). The
  * Traveler Profile shares the pane because it is the other durable thing the
- * conversation writes to.
- *
- * Both panels are empty here, and say in one line what will fill them. The
- * records themselves arrive with the Trip Plan and the Traveler Profile.
+ * conversation writes to, and arrives with the Traveler Profile itself.
  *
  * It draws itself and nothing around itself. Where it goes is the shell's
  * question: a pane on a laptop and a tablet, and a bottom sheet on a phone.
+ * Which tab is open is not its own either, because the shell's peek strip
+ * opens this pane *at* the plan — so the answer has to be somewhere both can
+ * reach.
  */
+
+/** Which of the two records is showing. */
+export type RecordTab = "plan" | "traveler";
 
 const TABS = [
   {
@@ -25,30 +28,42 @@ const TABS = [
     label: "Plan",
     glyph: <MapPinned {...icon} aria-hidden="true" />,
     heading: "Trip Plan",
-    empty: "A trip takes shape here as you talk about one — destination, dates and what is still undecided.",
   },
   {
     id: "traveler",
     label: "Traveler",
     glyph: <UserRound {...icon} aria-hidden="true" />,
     heading: "Traveler Profile",
-    empty:
-      "What the advisor learns about you is listed here, one fact at a time, and you can delete any of them.",
   },
-] as const;
+] as const satisfies readonly { id: RecordTab; label: string; glyph: ReactNode; heading: string }[];
 
-type TabId = (typeof TABS)[number]["id"];
-
-export function RecordPane() {
-  const [open, setOpen] = useState<TabId>("plan");
-  const tabs = useRef(new Map<TabId, HTMLButtonElement>());
-  const showing = TABS.find((tab) => tab.id === open)!;
+export function RecordPane({
+  tab,
+  onTab,
+  unseen,
+  plan,
+}: {
+  tab: RecordTab;
+  onTab: (tab: RecordTab) => void;
+  /**
+   * Whether the Trip Plan has changed since the Plan tab was last showing.
+   *
+   * The tab is marked rather than switched to. A pane that changed tab under
+   * a traveler reading the other one would take away what they were reading
+   * to show them something they had not asked for.
+   */
+  unseen: boolean;
+  /** The Trip Plan, drawn. */
+  plan: ReactNode;
+}) {
+  const tabs = useRef(new Map<RecordTab, HTMLButtonElement>());
+  const showing = TABS.find((each) => each.id === tab)!;
 
   /** Left and right walk the tabs, as a tab list is expected to. */
-  function walk(from: TabId, step: number) {
-    const at = TABS.findIndex((tab) => tab.id === from);
+  function walk(from: RecordTab, step: number) {
+    const at = TABS.findIndex((each) => each.id === from);
     const next = TABS[(at + step + TABS.length) % TABS.length]!;
-    setOpen(next.id);
+    onTab(next.id);
     tabs.current.get(next.id)?.focus();
   }
 
@@ -59,36 +74,48 @@ export function RecordPane() {
         aria-label="Trip details"
         className="flex shrink-0 gap-1 border-b border-line px-3 pt-3"
       >
-        {TABS.map((tab) => {
-          const showingThis = tab.id === open;
+        {TABS.map((each) => {
+          const showingThis = each.id === tab;
+          const marked = each.id === "plan" && unseen && !showingThis;
           return (
             <button
-              key={tab.id}
+              key={each.id}
               type="button"
               role="tab"
-              id={`${tab.id}-tab`}
+              id={`${each.id}-tab`}
               aria-selected={showingThis}
-              aria-controls={`${tab.id}-panel`}
+              aria-controls={`${each.id}-panel`}
               tabIndex={showingThis ? 0 : -1}
               ref={(element) => {
-                if (element) tabs.current.set(tab.id, element);
-                else tabs.current.delete(tab.id);
+                if (element) tabs.current.set(each.id, element);
+                else tabs.current.delete(each.id);
               }}
               className={`-mb-px flex items-center gap-2 border-b-2 px-3 pt-1.5 pb-2.5 text-meta font-medium transition-colors ${
                 showingThis
                   ? "border-accent text-ink"
                   : "border-surface text-ink-muted hover:text-ink"
               }`}
-              onClick={() => setOpen(tab.id)}
+              onClick={() => onTab(each.id)}
               onKeyDown={(pressed) => {
-                if (pressed.key === "ArrowRight") walk(tab.id, 1);
-                else if (pressed.key === "ArrowLeft") walk(tab.id, -1);
+                if (pressed.key === "ArrowRight") walk(each.id, 1);
+                else if (pressed.key === "ArrowLeft") walk(each.id, -1);
                 else return;
                 pressed.preventDefault();
               }}
             >
-              {tab.glyph}
-              {tab.label}
+              {each.glyph}
+              {each.label}
+              {/* Said as well as drawn: a dot is not a thing a screen reader
+                  can report, and "changed" is the whole of what it means. */}
+              {marked && (
+                <>
+                  <span
+                    aria-hidden="true"
+                    className="size-1.5 rounded-chip bg-changed"
+                  />
+                  <span className="sr-only">changed</span>
+                </>
+              )}
             </button>
           );
         })}
@@ -102,10 +129,17 @@ export function RecordPane() {
         id={`${showing.id}-panel`}
         aria-labelledby={`${showing.id}-tab`}
         tabIndex={0}
-        className="flex min-h-0 flex-1 animate-panel flex-col gap-3 overflow-y-auto overscroll-contain px-5 py-6"
+        className="flex min-h-0 flex-1 animate-panel flex-col gap-4 overflow-y-auto overscroll-contain px-5 py-6"
       >
         <h2 className="font-display text-heading font-semibold text-ink">{showing.heading}</h2>
-        <p className="text-meta text-ink-muted">{showing.empty}</p>
+        {showing.id === "plan" ? (
+          plan
+        ) : (
+          <p className="text-meta text-ink-subtle">
+            What the advisor learns about you is listed here, one fact at a time, and you
+            can delete any of them.
+          </p>
+        )}
       </div>
     </div>
   );

@@ -41,7 +41,9 @@ _Avoid_: Journey, holiday, vacation, booking
 **Trip Plan**:
 The structured, durable record of a Trip — destination, dates, party, budget, its
 Itinerary Items and its Open Questions. A Trip has exactly one. The traveler can view and
-change it directly, and the advisor can change it as they talk.
+change it directly, and the advisor can change it as they talk. Its single-valued parts —
+destination, the two dates, party size, the two halves of the budget — are its **fields**,
+and that is the one place in this application where that word is the right one.
 _Avoid_: Itinerary (that is one part of it), schedule, document
 
 **Itinerary Item**:
@@ -62,7 +64,8 @@ them.
 _Avoid_: Memory, user data, context
 
 **Profile Fact**:
-One entry in the Traveler Profile. Individually viewable and individually deletable.
+One entry in the Traveler Profile. Individually viewable and individually deletable. Never
+a "field" — that word belongs to the Trip Plan.
 _Avoid_: Memory, attribute, field
 
 ### Behaviour and sources

@@ -26,7 +26,7 @@
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 
 import { say, startConversation } from "../api/client";
-import type { Conversation, ConversationSummary } from "../api/types";
+import type { Conversation, ConversationSummary, TripPlan } from "../api/types";
 
 /** A turn that did not answer, kept so the traveler can ask it again. */
 export type Trouble = { conversationId: string; asked: string; detail: string };
@@ -78,6 +78,8 @@ export function useTurn({
   onListed,
   onAsking,
   onFailure,
+  onBegan,
+  onPlanRevised,
 }: {
   /** The Conversation being read, or null before the traveler has begun one. */
   conversation: Conversation | null;
@@ -94,6 +96,19 @@ export function useTurn({
   onAsking: () => void;
   /** Something that went wrong around the Conversation rather than in a turn. */
   onFailure: (failure: string) => void;
+  /**
+   * A Conversation now exists that did not a moment ago, because the traveler
+   * said the first thing in it. It has no Trip Plan yet, and whoever is
+   * holding one has to know that.
+   */
+  onBegan: (conversationId: string) => void;
+  /**
+   * The advisor patched the Trip Plan mid-turn: the plan as it now stands,
+   * and what moved. Which Conversation it belongs to is passed on rather than
+   * resolved here, because what happens to a plan arriving into a Conversation
+   * the traveler has since left is the holder's question, not the turn's.
+   */
+  onPlanRevised: (conversationId: string, plan: TripPlan, changed: string[]) => void;
 }): Turn {
   const [draft, setDraft] = useState("");
   const [arriving, setArriving] = useState<Arriving | null>(null);
@@ -179,6 +194,8 @@ export function useTurn({
         } else if (event.type === "consulting") {
           const activity = event.activity;
           setConsulting({ conversationId, activity });
+        } else if (event.type === "plan_revised") {
+          onPlanRevised(conversationId, event.plan, event.changed);
         } else if (event.type === "consulted") {
           setConsulting((sofar) => (sofar?.conversationId === conversationId ? null : sofar));
         } else if (event.type === "conversation_titled") {
@@ -237,6 +254,7 @@ export function useTurn({
     const started = await startConversation();
     onListed((sofar) => [started, ...sofar]);
     onConversation({ id: started.id, title: started.title, messages: [] });
+    onBegan(started.id);
     return started.id;
   }
 

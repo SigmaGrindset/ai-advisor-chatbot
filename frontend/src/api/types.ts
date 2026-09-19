@@ -53,3 +53,65 @@ export type Conversation = {
   title: string | null;
   messages: Message[];
 };
+
+/**
+ * What reading a Conversation back gives: the Conversation, and the Trip Plan
+ * it is refining. The plan comes with the transcript rather than from a second
+ * request, because the two are opened together and shown together (ADR-0006).
+ */
+export type ConversationRead = Conversation & { plan: TripPlan | null };
+
+/** Roughly when in a day an Itinerary Item happens, which is as exact as a plan gets. */
+export type PartOfDay = "morning" | "afternoon" | "evening";
+
+/** One thing planned for a particular day of a Trip. */
+export type ItineraryItem = {
+  id: string;
+  /** Day 1 is the first day of the Trip, whenever that turns out to be. */
+  day: number;
+  /** Null for something planned for a day with no time in mind. */
+  part_of_day: PartOfDay | null;
+  description: string;
+};
+
+/** Something the Trip Plan still needs decided. */
+export type OpenQuestion = { id: string; question: string };
+
+/**
+ * The structured, durable record of a Trip. A Trip has exactly one, and
+ * several Conversations may refine it.
+ *
+ * Every field is nullable because a plan is born the moment the first thing
+ * about the trip is worth recording and knows nothing else yet. The dates are
+ * kept as the calendar days they are, `YYYY-MM-DD`, never as instants.
+ */
+export type TripPlan = {
+  trip_id: string;
+  destination: string | null;
+  starts_on: string | null;
+  ends_on: string | null;
+  party_size: number | null;
+  budget_amount: number | null;
+  /** ISO 4217, upper case. */
+  budget_currency: string | null;
+  items: ItineraryItem[];
+  questions: OpenQuestion[];
+};
+
+/** The fields of a Trip Plan that hold one value each, as both sides name them. */
+export const PLAN_FIELDS = [
+  "destination",
+  "starts_on",
+  "ends_on",
+  "party_size",
+  "budget_amount",
+  "budget_currency",
+] as const;
+
+export type PlanField = (typeof PLAN_FIELDS)[number];
+
+/**
+ * A change to those fields: only what it names is written, and a field named
+ * as null is one the traveler emptied rather than one they did not touch.
+ */
+export type PlanPatch = Partial<Pick<TripPlan, PlanField>>;

@@ -16,6 +16,12 @@ import { useVisibleViewport } from "./viewport";
 export type Folded = {
   conversations: (() => void) | null;
   record: (() => void) | null;
+  /**
+   * The peek state of the record on a phone, which belongs above the
+   * composer — so it is drawn where the composer is rather than where the
+   * sheet is. Null at a width that has the record on the page already.
+   */
+  peek: ReactNode;
 };
 
 /**
@@ -36,6 +42,7 @@ export function AppShell({
   list,
   conversation,
   record,
+  peek,
 }: {
   /**
    * The Conversation list. It is given the way to put the sheet away, because
@@ -48,6 +55,13 @@ export function AppShell({
   conversation: (folded: Folded) => ReactNode;
   /** What the talking is producing. */
   record: ReactNode;
+  /**
+   * The one line of it that stays in view on a phone. It is given the way to
+   * bring the rest of the record out, because that is the only thing it does
+   * — and it is drawn into the Conversation rather than here, for the same
+   * reason the sheet controls are.
+   */
+  peek: (show: () => void) => ReactNode;
 }) {
   // Which sheet is out, and null when none is. One at a time: a sheet is
   // modal, so a second one would open over the first with no way back to it.
@@ -89,6 +103,7 @@ export function AppShell({
       {conversation({
         conversations: listed ? null : () => setSheet("conversations"),
         record: recorded ? null : () => setSheet("record"),
+        peek: recorded ? null : peek(() => setSheet("record")),
       })}
 
       {recorded ? (
@@ -128,10 +143,11 @@ export function AppShell({
  * Where the record sheet is allowed to rest on a phone, as fractions of the
  * screen.
  *
- * Half and whole, and no peek. ADR-0006's peek state is meant to hold the
- * destination and the dates in view while the traveler types, and there is no
- * Trip Plan to put in it until 09 — a permanent strip saying what will one
- * day be there would take a line of the transcript away for nothing. 09 adds
- * the third number to this array and the sheet keeps working.
+ * Half and whole. ADR-0006's third state, the peek, is not a third number
+ * here: this sheet is a modal dialog, which is what gives it a focus trap and
+ * a working back gesture, and a modal sheet resting permanently over the
+ * composer would leave the traveler unable to type — which is the one thing
+ * the peek exists to let them do. The peek is `PlanPeek`, a strip above the
+ * composer, and dragging this sheet down lands back on it.
  */
 const RECORD_SNAPS = [0.55, 1] as const;

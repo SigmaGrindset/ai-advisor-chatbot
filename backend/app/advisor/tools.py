@@ -200,6 +200,10 @@ class LiveDataTools:
         self._model = model
         self._utility_model = utility_model
 
+    def offers(self, name: str) -> bool:
+        """Whether this call is one of ours rather than a plan tool's, or nobody's."""
+        return name in _BY_NAME
+
     def offered(self) -> list[ChatCompletionToolParam]:
         """What the model is told it can call."""
         return [tool.offered() for tool in CATALOGUE]
@@ -213,7 +217,7 @@ class LiveDataTools:
         """
         tool = _BY_NAME.get(name)
         if tool is None:
-            return _unreadable(f"There is no tool called {name!r}.")
+            return _unreadable(no_such_tool(name))
         try:
             given = json.loads(arguments or "{}")
         except json.JSONDecodeError:
@@ -615,6 +619,17 @@ def _untrusted(content: str) -> str:
     """
     inside = content.replace(UNTRUSTED_OPEN, "").replace(UNTRUSTED_CLOSE, "")
     return f"{UNTRUSTED_OPEN}\n{inside}\n{UNTRUSTED_CLOSE}"
+
+
+def no_such_tool(name: str) -> str:
+    """What the model is told when it asks for something not on the table.
+
+    One wording, because a tool that never existed and a tool that has been
+    withdrawn for the rest of the turn (ADR-0010) are the same answer: there
+    is no such thing to call. A model that could tell the two apart could tell
+    that the capability it wants is nearby.
+    """
+    return f"There is no tool called {name!r}."
 
 
 def _unreadable(complaint: str) -> Unusable:

@@ -31,6 +31,7 @@ export function ConversationPane({
   onRetry,
   onShowConversations,
   onShowRecord,
+  peek,
 }: {
   /** The Conversation being read, or null before the traveler has begun one. */
   conversation: Conversation | null;
@@ -62,6 +63,13 @@ export function ConversationPane({
    */
   onShowConversations: (() => void) | null;
   onShowRecord: (() => void) | null;
+  /**
+   * The peek state of the Trip Plan, which is the shell's and lives here
+   * because here is where the composer is — ADR-0006 asks for destination and
+   * dates to stay in view *above the composer* while the traveler types.
+   * Null at a width that has the plan on the page already.
+   */
+  peek: React.ReactNode;
 }) {
   const transcript = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
@@ -236,6 +244,8 @@ export function ConversationPane({
           </button>
         )}
       </div>
+
+      {peek}
 
       <div className="shrink-0 border-t border-line px-4 pt-4 pb-composer sm:px-6">
         <Composer

@@ -1,8 +1,9 @@
 # Handoff — orientation for the next agent
 
 **Repo:** `D:\Antonio\ai-advisor-chatbot` · branch `main` · **no git remote**
-**Current as of** ticket 08 (tickets 01–08 shipped; the advisor now calls Live-data
-Tools, searches the web through a guarded query, and leaves Citations behind).
+**Current as of** ticket 09 (tickets 01–09 shipped; the advisor now calls Live-data
+Tools, searches the web through a guarded query, leaves Citations behind, and keeps a Trip
+Plan that fills in beside the conversation as the traveler talks).
 
 This is the standing orientation for anyone picking up work here: how the application is
 put together, what binds the names you write, how this repo is worked in, and what is
@@ -17,14 +18,18 @@ known to bite on this machine. It is not a task — the task is a ticket.
   lists bind file, module and component names.** See §3.
 - `TASK.md` and `README.md` — what was asked for, and how to run it. README §2–7 are still
   placeholders and are part of the deliverable.
-- `docs/adr/0001`–`0009` — the decisions that are already made. 0004 (PII boundary) and
+- `docs/adr/0001`–`0011` — the decisions that are already made. 0004 (PII boundary) and
   0005 (hand-written tool loop) constrain the backend; 0008 amends 0003, because REST
   Countries stopped being keyless during 07; 0009 is the search query guard, and its last
-  paragraph is a rule **09 and 11 have to keep**; 0006 (trip plan as a persistent
-  pane) and 0007 (mobile as a first-class target) constrain the frontend.
+  paragraph became **0010**, the rule **11 still has to keep** when it builds the Traveler
+  Profile writes; 0002 (Trips own Trip Plans), 0006 (trip plan as a persistent pane) and
+  0007 (mobile as a first-class target) constrain the frontend, and 0011 amends 0006 over
+  what the peek on a phone actually is.
 - `docs/agents/` — the issue tracker, triage labels and domain-doc conventions.
 - `.scratch/ai-travel-advisor/spec.md` and `issues/01`–`15` — the work. Each ticket carries
-  a `**Status:**` line using the five canonical labels. 01–08 are done; 09–15 are unrun.
+  a `**Status:**` line using the five canonical labels — a finished ticket keeps its label
+  and records what happened in ticked boxes and a `## Comments` section, which is why the
+  done ones still say `ready-for-agent`. 01–09 are done; 10–15 are unrun.
 
 ---
 
@@ -40,8 +45,9 @@ Postgres holds everything; the schema is applied at startup, so there is no migr
 |---|---|---|
 | `api/` | routes and the SSE wire format | HTTP, and `services/` |
 | `services/turns.py` | one turn end to end: drives the loop, records what comes back, names the Conversation | the loop and the database, not the wire |
-| `advisor/` | `loop.py`, `tools.py`, `searching.py`, `prompt.py`, `client.py`, `instructions.py`, `titles.py` | the model and the keyless sources — no HTTP framework, no database, no browser |
-| `db/` | `tables.py`, `connection.py`, `conversations.py` | SQLAlchemy |
+| `services/plans.py` | applying one Trip Plan change, and reading the plan back for the prompt and the wire | the plan's shape and the database |
+| `advisor/` | `loop.py`, `tools.py`, `planning.py`, `searching.py`, `prompt.py`, `client.py`, `instructions.py`, `titles.py` | the model, the plan's shape and the keyless sources — no HTTP framework, no database, no browser |
+| `db/` | `tables.py`, `connection.py`, `conversations.py`, `trips.py` | SQLAlchemy |
 | `privacy/` | `outbound.py` (the single injectable HTTP client every outbound call leaves through) and `queries.py` (the guard on the one free-text thing that leaves) | nothing above it |
 | `config.py`, `frontend.py`, `main.py` | settings, static serving, composition | everything, by construction |
 
@@ -61,12 +67,22 @@ around them:
   application sends to a third party, so it is read for document-number shapes before the
   plan that would send it even exists (ADR-0009).
 - **The tool loop is ours** (`advisor/loop.py`, ADR-0005). It streams a step, accumulates
-  the tool-call fragments it was sent, dispatches them through `advisor/tools.py`, appends
-  the results and re-calls until the model stops asking. `MAX_STEPS` is the runaway guard.
+  the tool-call fragments it was sent, dispatches them through `advisor/tools.py` or
+  `advisor/planning.py`, appends the results and re-calls until the model stops asking.
+  `MAX_STEPS` is the runaway guard.
   A step is the last one when nothing accumulated, not when `finish_reason` says so —
-  providers disagree about that. Every tool result is wrapped in the untrusted-data
-  delimiters named in `advisor/instructions.py`; a lookup that fails becomes the result
-  rather than an exception, so the advisor explains it and the turn still completes.
+  providers disagree about that. Every *fetched* tool result is wrapped in the
+  untrusted-data delimiters named in `advisor/instructions.py`; a lookup that fails becomes
+  the result rather than an exception, so the advisor explains it and the turn still
+  completes. A plan tool's result is not wrapped: it is the application's own account of
+  its own write, not something anyone told it.
+- **Two tool catalogues, dispatched down two branches of that loop** — one fetches and
+  never writes, the other writes and never fetches. `loop.py::_offered` is where the Trip
+  Plan tools leave the table for the rest of a turn the moment anything has been fetched
+  into it, which is how ADR-0004's promise survives the existence of a writing tool
+  (ADR-0010). **Ticket 11's Traveler Profile writes join that second catalogue and inherit
+  that rule.** Two tests hold it: the injection test in `test_web_search.py`, and
+  `test_live_data_tools.py::test_nothing_that_writes_is_offered_once_something_has_been_fetched`.
 
 ### Frontend — `frontend/src/`
 
@@ -81,6 +97,9 @@ components/
   shell/            AppShell.tsx  Sheet.tsx  dragging.ts  layout.ts  snapping.ts  viewport.ts
   conversation/     ConversationPane  ConversationList  Composer  Prose  Citations
                     markdown.ts  announcing.ts  following.ts  firstRun.ts  conversationName.ts
+  plan/             PlanPanel  EditableField  PlanPeek
+                    holding.ts  merging.ts  fields.ts  dates.ts  highlighting.ts
+                    questionPrompt.ts
   record/           RecordPane.tsx
 design/             tokens.css  base.css  icons.ts  tripPastel.ts
 ```
@@ -99,9 +118,15 @@ design/             tokens.css  base.css  icons.ts  tripPastel.ts
   the backend type check rather than reaching the browser unnamed.
 - **`api/client.ts` reads SSE with a stream reader, not `EventSource`**, because a turn is a
   POST. Aborting the signal is the only way to stop a reply.
-- **Where deferred work lands:** `components/plan/` (ticket 09), `components/profile/`
-  (ticket 11), `routes/` (ticket 10 — there is no router in the project yet). Do not create
-  these folders before the ticket that fills them.
+- **`components/plan/holding.ts` holds the Trip Plan, and `merging.ts` is the rule it
+  applies.** Two writers reach one plan — the advisor mid-turn, the traveler by hand — and
+  what happens when they reach for the same field is a decision, so it is pure and tested
+  on its own. The field under edit keeps the traveler's value, the rest of the patch lands,
+  and what the advisor wanted is offered underneath as a suggestion. Which field is under
+  edit lives in a ref, because nothing on the page is drawn from it.
+- **Where deferred work lands:** `components/profile/` (ticket 11), `routes/` (ticket 10 —
+  there is no router in the project yet). Do not create these folders before the ticket
+  that fills them.
 
 ---
 
@@ -181,20 +206,27 @@ cd D:/Antonio/ai-advisor-chatbot/backend && D:/Antonio/ai-advisor-chatbot/.venv/
 cd D:/Antonio/ai-advisor-chatbot/backend && D:/Antonio/ai-advisor-chatbot/.venv/Scripts/python.exe -m mypy
 ```
 
-After ticket 08: **56 frontend tests in 7 files** (~1s), `tsc` silent, build clean; **64
-backend tests**, mypy clean over 40 files. Confirm those numbers *before* you start — if
+After ticket 09: **84 frontend tests in 11 files** (~1s), `tsc` silent, build clean; **75
+backend tests**, mypy clean over 45 files. Confirm those numbers *before* you start — if
 they do not match, something changed underneath you. Update this paragraph when a ticket
 legitimately moves them.
 
-The backend suite grew and the frontend's did not, twice running, which is the shape of
-both 07 and 08: the loop, the tools, the guard and the wire format are all testable through
-the API, and the status line and the Citation chips are `.tsx` that the Node-only frontend
-suite does not reach. They were checked by hand against real lookups and a real web search
-instead.
+09 is the first ticket since 06 to move the frontend suite, because it brought three
+modules with opinions in them: what happens when the advisor and the traveler write the
+same field, a plan field read as text and written back from it, and the calendar. What
+draws them is still `.tsx` the Node-only suite does not reach, and was checked by hand.
 
-**A dev server left running with `--reload` did not pick up ticket 08's new modules.** If
-you are verifying by hand and the advisor says it cannot do the thing you just built,
-restart it rather than believing it.
+**The schema is applied at startup and never altered**, so a database left over from an
+earlier ticket has none of 09's `trip`, `itinerary_item` or `open_question` tables and no
+`conversation.trip_id`. `docker compose down -v` before verifying by hand.
+
+**Check which process owns port 8000, not only that one is listening.** A dev server left
+over from ticket 08 was still serving old code on `[::1]:8000` while a freshly started one
+bound `127.0.0.1:8000`; `localhost` resolves to the IPv6 address first here, so curl and
+Vite's proxy both reached the stale one and the Trip Plan never appeared. Its `--reload`
+parent was already dead and its worker still held the socket. `netstat -ano | grep :8000`,
+then check the PID is the one you started. This is the deeper version of the note that used
+to live here: a `--reload` server does not pick up new modules either.
 
 ---
 
@@ -221,7 +253,10 @@ restart it rather than believing it.
 ## 7. Open questions — raise these, do not decide them alone
 
 - **`db/migrations/`.** Raw SQL plus numbered migrations, versus the current SQLAlchemy
-  `apply_schema()` at startup. Undecided.
+  `apply_schema()` at startup. Undecided, and 09 made it cost something: `create_all`
+  creates what is missing and alters nothing, so adding `conversation.trip_id` meant
+  `docker compose down -v`. Every later ticket that touches the schema pays the same
+  price, and the evaluator pays it too if they run an image from before the change.
 - **The unrouted-host assertion.** `backend/tests/fakes/canned_transport.py` still raises
   `UnroutedHost`, but nothing asserts it any more, and ADR-0004 puts the PII boundary
   precisely at egress to third parties. The user has been told. The original is in

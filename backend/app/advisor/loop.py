@@ -21,11 +21,13 @@ from openai.types.chat import (
     ChatCompletionMessageParam,
     ChatCompletionMessageToolCallParam,
     ChatCompletionToolMessageParam,
+    ChatCompletionToolParam,
 )
 from openai.types.chat.chat_completion_chunk import ChoiceDeltaToolCall
 from openai.types.completion_usage import CompletionUsage
 
-from .tools import Citation, LiveDataTools
+from . import planning
+from .tools import Citation, LiveDataTools, no_such_tool
 
 #: A turn that has asked for tools this many times is looping rather than working.
 MAX_STEPS = 8
@@ -52,6 +54,19 @@ class Consulted:
 
 
 @dataclass(frozen=True, slots=True)
+class Patched:
+    """The Trip Plan has just changed, and this is what moved.
+
+    Reported the moment it happens rather than at the end of the turn, because
+    the plan taking shape *while* the traveler talks is the whole of what the
+    pane beside the conversation is for (ADR-0006).
+    """
+
+    #: The parts that changed, named the way the interface names them.
+    changed: Sequence[str]
+
+
+@dataclass(frozen=True, slots=True)
 class TurnComplete:
     """The end of a turn: the whole reply, what it cost, and what backs it."""
 
@@ -60,7 +75,7 @@ class TurnComplete:
     citations: Sequence[Citation] = ()
 
 
-TurnEvent = ReplyFragment | Consulting | Consulted | TurnComplete
+TurnEvent = ReplyFragment | Consulting | Consulted | Patched | TurnComplete
 
 
 async def run_turn(
@@ -69,13 +84,17 @@ async def run_turn(
     model_name: str,
     prompt: Sequence[ChatCompletionMessageParam],
     tools: LiveDataTools,
+    plan: planning.Plan,
 ) -> AsyncIterator[TurnEvent]:
     """Drive one turn to completion, yielding the reply as the model writes it."""
     said: list[ChatCompletionMessageParam] = list(prompt)
     reply: list[str] = []
     citations: list[Citation] = []
     cost = _Spend()
-    offered = tools.offered()
+    # Whether anything from outside this application has entered the turn yet.
+    # It is what decides whether the plan tools are on the table — see
+    # `_offered` — so it is read at the top of every step and never unset.
+    fetched = False
 
     for _ in range(MAX_STEPS):
         asked = _ToolCalls()
@@ -84,7 +103,7 @@ async def run_turn(
             model=model_name,
             messages=said,
             stream=True,
-            tools=offered,
+            tools=_offered(tools, writing=not fetched),
             # OpenRouter's own accounting, returned on the final chunk. Asking for
             # it here is what makes the turn's cost knowable without polling the
             # provider's account endpoint afterwards.
@@ -110,25 +129,78 @@ async def run_turn(
             break
 
         said.append(_asking(spoken, wanted))
+        writing = not fetched
+        looked_up = False
         for call in wanted:
-            # Read before it is run, so the traveler learns what is being
-            # fetched while it is being fetched rather than afterwards.
-            lookup = tools.read(call.name, call.arguments)
-            yield Consulting(lookup.activity)
-            answer = await tools.run(lookup)
-            citations.extend(answer.citations)
-            # A lookup somebody charged for — the nested search — is part of
-            # what this turn cost, and goes on the same running total as the
-            # steps around it.
-            cost.add(answer.usage)
+            # Two catalogues, dispatched apart rather than through one table.
+            # One of them fetches and never writes; the other writes and never
+            # fetches, and the branch is where that stops being a claim about
+            # the tools and becomes a fact about the loop (ADR-0004).
+            #
+            # `writing` is read here as well as at the top of the step, so a
+            # plan tool that has left the table falls past this branch rather
+            # than quietly running.
+            if writing and planning.offers(call.name):
+                patched = await planning.change(plan, call.name, call.arguments)
+                if patched.revised:
+                    yield Patched(patched.fields)
+                told = patched.told
+            elif tools.offers(call.name):
+                # Read before it is run, so the traveler learns what is being
+                # fetched while it is being fetched rather than afterwards.
+                lookup = tools.read(call.name, call.arguments)
+                looked_up = True
+                yield Consulting(lookup.activity)
+                answer = await tools.run(lookup)
+                citations.extend(answer.citations)
+                # A lookup somebody charged for — the nested search — is part
+                # of what this turn cost, and goes on the same running total
+                # as the steps around it.
+                cost.add(answer.usage)
+                told = answer.content
+            else:
+                # A name neither catalogue has, or a plan tool that has left
+                # the table for the rest of this turn (ADR-0010). Either way
+                # there is nothing to call — and nothing to tell the traveler
+                # is happening, which is why this is answered here rather than
+                # handed to the Live-data Tools to refuse. Their refusal comes
+                # with a status line, and a write that was never made must not
+                # put "checking a live source" on somebody's screen.
+                told = no_such_tool(call.name)
             said.append(
                 ChatCompletionToolMessageParam(
-                    role="tool", tool_call_id=call.id, content=answer.content
+                    role="tool", tool_call_id=call.id, content=told
                 )
             )
-        yield Consulted()
+        # Only where something was actually fetched. A step that only wrote to
+        # the plan never said it was consulting anything, and saying it has
+        # finished would put the status line down twice.
+        if looked_up:
+            yield Consulted()
+            fetched = True
 
     yield TurnComplete("".join(reply), cost.total, citations)
+
+
+def _offered(tools: LiveDataTools, *, writing: bool) -> list[ChatCompletionToolParam]:
+    """What the model may call on this step, which is not the same every step.
+
+    The Live-data Tools, always. The Trip Plan tools only while nothing
+    fetched has entered the turn — which is the rule ADR-0009 hands to
+    whoever builds a writing tool, and the whole of how ADR-0004's promise is
+    kept once one exists.
+
+    A page the advisor read cannot cause a write, then, because by the time
+    anything that page said is in front of the model there is no tool on the
+    table that writes. It is not a rule applied at the moment of the call and
+    it is not something the Advisor Instructions ask for: the capability is
+    simply gone, and a model that asks for it anyway is told there is no such
+    tool. What follows is that a plan change always follows from something the
+    traveler said — a search that changes the advisor's mind changes the plan
+    on the next turn, from the same conversation, once the traveler has read
+    it too.
+    """
+    return [*tools.offered(), *(planning.offered() if writing else [])]
 
 
 @dataclass(frozen=True, slots=True)

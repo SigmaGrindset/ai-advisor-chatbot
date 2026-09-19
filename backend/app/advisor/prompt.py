@@ -21,12 +21,24 @@ from openai.types.chat import (
 
 from ..db.tables import Message, MessageRole
 from .instructions import compose_system_prompt
+from .planning import TripPlan, TripSummary
 
 
-def compose_prompt(said: Sequence[Message]) -> list[ChatCompletionMessageParam]:
-    """The whole of what the model is sent for this turn."""
+def compose_prompt(
+    said: Sequence[Message],
+    plan: TripPlan | None = None,
+    trips: Sequence[TripSummary] = (),
+) -> list[ChatCompletionMessageParam]:
+    """The whole of what the model is sent for this turn.
+
+    The plan is the Trip Plan of the Trip this Conversation is attached to, and
+    None while it is attached to none. `trips` is every Trip the traveler has,
+    which is the list `join_trip` picks out of.
+    """
     return [
-        ChatCompletionSystemMessageParam(role="system", content=compose_system_prompt()),
+        ChatCompletionSystemMessageParam(
+            role="system", content=compose_system_prompt(plan, trips)
+        ),
         *(_as_model_message(message) for message in said),
     ]
 

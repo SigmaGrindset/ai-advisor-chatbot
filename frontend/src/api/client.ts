@@ -7,7 +7,13 @@
  */
 
 import type { TurnEvent } from "../stream/events";
-import type { Conversation, ConversationSummary } from "./types";
+import type {
+  ConversationRead,
+  ConversationSummary,
+  PartOfDay,
+  PlanPatch,
+  TripPlan,
+} from "./types";
 
 export async function listConversations(): Promise<ConversationSummary[]> {
   return await expected<ConversationSummary[]>(await fetch("/api/conversations"));
@@ -19,8 +25,59 @@ export async function startConversation(): Promise<ConversationSummary> {
   );
 }
 
-export async function readConversation(id: string): Promise<Conversation> {
-  return await expected<Conversation>(await fetch(`/api/conversations/${id}`));
+export async function readConversation(id: string): Promise<ConversationRead> {
+  return await expected<ConversationRead>(await fetch(`/api/conversations/${id}`));
+}
+
+/**
+ * Changing the Trip Plan by hand.
+ *
+ * Every one of these answers with the whole plan, because every one of them
+ * changed it and the pane is showing it — one round trip rather than a write
+ * and a read. What they *write* is only what was named: a field left out of a
+ * patch is not touched, and a field named as null is one the traveler emptied.
+ */
+
+export async function changePlan(tripId: string, patch: PlanPatch): Promise<TripPlan> {
+  return await sent(`/api/trips/${tripId}`, "PATCH", patch);
+}
+
+export async function addItineraryItem(
+  tripId: string,
+  adding: { day: number; part_of_day?: PartOfDay | null; description: string },
+): Promise<TripPlan> {
+  return await sent(`/api/trips/${tripId}/itinerary`, "POST", adding);
+}
+
+/** The one thing an Itinerary Item is edited in place for. */
+export async function changeItineraryItem(
+  tripId: string,
+  itemId: string,
+  description: string,
+): Promise<TripPlan> {
+  return await sent(`/api/trips/${tripId}/itinerary/${itemId}`, "PATCH", { description });
+}
+
+export async function removeItineraryItem(tripId: string, itemId: string): Promise<TripPlan> {
+  return await sent(`/api/trips/${tripId}/itinerary/${itemId}`, "DELETE");
+}
+
+export async function settleOpenQuestion(
+  tripId: string,
+  questionId: string,
+): Promise<TripPlan> {
+  return await sent(`/api/trips/${tripId}/questions/${questionId}`, "DELETE");
+}
+
+async function sent(url: string, method: string, body?: unknown): Promise<TripPlan> {
+  return await expected<TripPlan>(
+    await fetch(url, {
+      method,
+      ...(body === undefined
+        ? {}
+        : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
+    }),
+  );
 }
 
 export async function deleteConversation(id: string): Promise<void> {

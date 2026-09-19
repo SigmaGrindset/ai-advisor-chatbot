@@ -17,12 +17,14 @@ from openai import APIError, AsyncOpenAI
 from openai.types.chat import ChatCompletionMessageParam
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..advisor.loop import Consulted, Consulting, ReplyFragment, run_turn
+from ..advisor.loop import Consulted, Consulting, Patched, ReplyFragment, run_turn
+from ..advisor.planning import TripPlan
 from ..advisor.titles import name_conversation
 from ..advisor.tools import LiveDataTools
 from ..config import Settings
 from ..db.conversations import record_message, retitle_conversation
 from ..db.tables import Conversation, Message, MessageRole
+from .plans import TripPlanning, plan_of
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +34,24 @@ class Recorded:
     """The reply, now a Message that will still be there after a reload."""
 
     message: Message
+
+
+@dataclass(frozen=True, slots=True)
+class Revised:
+    """The Trip Plan has changed mid-turn, and this is it.
+
+    The loop reports *that* the plan moved and which parts; reading the plan
+    back is this layer's, because the loop has no database. The whole plan
+    rather than the patch: a Conversation's first patch starts a Trip, so
+    there is a case where what the traveler is holding is not an older version
+    of this plan but no plan at all.
+    """
+
+    plan: TripPlan
+    #: What to highlight, named the way the interface names it. Empty when the
+    #: Conversation was attached to a different Trip, which changes everything
+    #: and highlights nothing.
+    changed: Sequence[str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,7 +72,7 @@ class Failed:
 #: rather than copied into twins of themselves: the piece of text that arrives,
 #: and the lookup that is running while it does, are the same facts whichever
 #: layer is holding them.
-Happening = ReplyFragment | Consulting | Consulted | Recorded | Titled | Failed
+Happening = ReplyFragment | Consulting | Consulted | Revised | Recorded | Titled | Failed
 
 
 async def take_turn(
@@ -67,10 +87,25 @@ async def take_turn(
     """Run the turn, recording what it produces as it produces it."""
     try:
         async for event in run_turn(
-            model, model_name=settings.conversation_model, prompt=prompt, tools=tools
+            model,
+            model_name=settings.conversation_model,
+            prompt=prompt,
+            tools=tools,
+            # Built here rather than passed in, because everything it needs is
+            # already here: the plan tools write to this Conversation's Trip,
+            # and to the one they start for it if it has none.
+            plan=TripPlanning(session, conversation),
         ):
             if isinstance(event, (ReplyFragment, Consulting, Consulted)):
                 yield event
+                continue
+
+            if isinstance(event, Patched):
+                plan = await plan_of(session, conversation)
+                # Only ever None if the Trip went away between the write and
+                # this read, which nothing in a turn does.
+                if plan is not None:
+                    yield Revised(plan, event.changed)
                 continue
 
             advisor_message = await record_message(

@@ -34,8 +34,10 @@ from ..db.conversations import (
 )
 from ..db.tables import Conversation, Message, MessageRole
 from ..privacy.outbound import get_http_client
-from ..services.turns import Failed, Happening, Recorded, Titled, take_turn
+from ..services.plans import plan_of, summarise_trips
+from ..services.turns import Failed, Happening, Recorded, Revised, Titled, take_turn
 from .sse import event
+from .trips import TripPlanView
 
 router = APIRouter(tags=["conversations"])
 
@@ -93,6 +95,11 @@ class ConversationView(BaseModel):
     id: uuid.UUID
     title: str | None
     messages: list[MessageView]
+    #: The Trip Plan this Conversation is refining, and null while it is
+    #: refining none. It comes back with the transcript rather than from a
+    #: second request, because the plan sits beside the Conversation at all
+    #: times and the two are opened together (ADR-0006).
+    plan: TripPlanView | None
 
 
 class TravelerMessage(BaseModel):
@@ -132,10 +139,12 @@ async def read_conversation(
     """One Conversation, with everything said in it so far."""
     conversation = await _conversation(session, conversation_id)
     said = await messages_in(session, conversation)
+    plan = await plan_of(session, conversation)
     return ConversationView(
         id=conversation.id,
         title=conversation.title,
         messages=[MessageView.of(message) for message in said],
+        plan=None if plan is None else TripPlanView.of(plan),
     )
 
 
@@ -176,7 +185,14 @@ async def say(
         session, conversation, role=MessageRole.TRAVELER, content=saying.content
     )
 
-    prompt = compose_prompt(await messages_in(session, conversation))
+    prompt = compose_prompt(
+        await messages_in(session, conversation),
+        # Composed from what is recorded at the top of the turn, so the advisor
+        # reads the plan as it stands — including whatever the traveler edited
+        # by hand since the last thing it said.
+        plan=await plan_of(session, conversation),
+        trips=await summarise_trips(session),
+    )
     return StreamingResponse(
         _turn_events(
             session,
@@ -223,6 +239,14 @@ def _as_event(happening: Happening) -> bytes:
         return event({"type": "consulting", "activity": happening.activity})
     if isinstance(happening, Consulted):
         return event({"type": "consulted"})
+    if isinstance(happening, Revised):
+        return event(
+            {
+                "type": "plan_revised",
+                "plan": TripPlanView.of(happening.plan).model_dump(mode="json"),
+                "changed": list(happening.changed),
+            }
+        )
     if isinstance(happening, Recorded):
         return _message_event("advisor_message", happening.message)
     if isinstance(happening, Titled):
