@@ -83,9 +83,10 @@ _Avoid_: Memory, attribute, field
 ### Behaviour and sources
 
 **Advisor Instructions**:
-The editable part of the advisor's system prompt — its persona and its rules. Distinct
-from the injected Traveler Profile, Trip Plan and tool guidance that are composed around
-it at runtime.
+The editable part of the advisor's system prompt — its persona and the way it talks.
+Distinct from the injected Traveler Profile, Trip Plan, scope and tool guidance that are
+composed around it at runtime. What the advisor is *for* — one traveler's trip, and
+nothing booked or bought — is injected rather than editable.
 _Avoid_: System prompt (that is the composed whole), persona, preamble
 
 **Prompt Version**:
