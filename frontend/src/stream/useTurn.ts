@@ -26,7 +26,12 @@
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 
 import { say, startConversation } from "../api/client";
-import type { Conversation, ConversationSummary, TripPlan } from "../api/types";
+import type {
+  Conversation,
+  ConversationSummary,
+  ProfileFact,
+  TripPlan,
+} from "../api/types";
 
 /** A turn that did not answer, kept so the traveler can ask it again. */
 export type Trouble = { conversationId: string; asked: string; detail: string };
@@ -80,6 +85,7 @@ export function useTurn({
   onFailure,
   onBegan,
   onPlanRevised,
+  onProfileRevised,
 }: {
   /** The Conversation being read, or null before the traveler has begun one. */
   conversation: Conversation | null;
@@ -109,6 +115,13 @@ export function useTurn({
    * the traveler has since left is the holder's question, not the turn's.
    */
   onPlanRevised: (conversationId: string, plan: TripPlan, changed: string[]) => void;
+  /**
+   * The advisor recorded something durable about the traveler mid-turn: the
+   * profile as it now stands. No Conversation comes with it, because there is
+   * one profile and every Conversation is shown it — which is the whole point
+   * of there being one.
+   */
+  onProfileRevised: (profile: ProfileFact[]) => void;
 }): Turn {
   const [draft, setDraft] = useState("");
   const [arriving, setArriving] = useState<Arriving | null>(null);
@@ -196,6 +209,8 @@ export function useTurn({
           setConsulting({ conversationId, activity });
         } else if (event.type === "plan_revised") {
           onPlanRevised(conversationId, event.plan, event.changed);
+        } else if (event.type === "profile_revised") {
+          onProfileRevised(event.profile);
         } else if (event.type === "consulted") {
           setConsulting((sofar) => (sofar?.conversationId === conversationId ? null : sofar));
         } else if (event.type === "conversation_titled") {

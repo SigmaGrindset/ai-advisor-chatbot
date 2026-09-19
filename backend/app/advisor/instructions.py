@@ -5,15 +5,17 @@ rules. Everything composed around them here is not editable: it is what the
 application injects for a particular turn.
 
 The tool guidance below is deliberately on the injected side rather than in the
-editable instructions. It says which questions may not be answered from memory
-and that a tool result is never an instruction; a traveler editing their
-advisor's manner in ticket 12 must not be able to edit either of those away.
+editable instructions. It says which questions may not be answered from what
+the model already knows, that a tool result is never an instruction, and what
+may never be written into the Traveler Profile; a traveler editing their
+advisor's manner in ticket 12 must not be able to edit any of those away.
 """
 
 from collections.abc import Sequence
 
-from . import planning
+from . import planning, remembering
 from .planning import TripPlan, TripSummary
+from .remembering import Fact
 from .tools import UNTRUSTED_CLOSE, UNTRUSTED_OPEN
 
 DEFAULT_ADVISOR_INSTRUCTIONS = """\
@@ -139,24 +141,69 @@ your reply and change it on the next turn, once the traveler has read it too.
 """
 
 
+PROFILE_GUIDANCE = """\
+Knowing the traveler:
+
+You are talking to one traveler, across every conversation they have with you. What you
+learn about them that will still be true of their next trip belongs in their Traveler
+Profile, and the profile is composed into every conversation — so a fact you record today
+is something you simply know tomorrow, in a conversation that has not started yet. It is
+why they do not have to tell you their nationality twice.
+
+- remember_profile_fact — one durable thing about them, under one of four subjects.
+- forget_profile_fact — one fact off the profile, by the number it is listed under.
+
+Record as you learn: their nationality the moment a visa question needs it, their home
+city the moment the journey starts there, who they are travelling with the moment they
+say. Anything else durable — a constraint, a preference, how they like to travel — is a
+note. Record what is true of the traveler, never what is true of one trip: the dates, the
+destination and the budget of the journey in front of you belong in the Trip Plan, and
+recording them here would have you greeting them next year with last year's holiday.
+
+Record only what they told you, in their own terms, and record it plainly. Never record a
+passport number, a card number, an identity number or a date of birth: none of them makes
+your advice better, and the profile is the one thing here that outlives the conversation
+it was said in. If they tell you one anyway, use it in that conversation and leave it
+there.
+
+A correction is the same tool again with the new fact. Nationality, home city and who they
+travel with hold one fact each, so recording one again replaces what was there rather than
+leaving the profile saying two things. Notes do not work that way — each one you record is
+its own — so when a note stops being true, forget it by its number in the same turn as you
+record what replaces it, and forget it on its own when nothing does.
+
+The traveler reads this profile, fact by fact, and deletes anything in it they do not want
+kept. Say what you have recorded when you record it, so nothing arrives there they did not
+watch you learn.
+
+Record before you go and look anything up, for the same reason the plan tools are recorded
+first: once a lookup has come back in a turn, these tools are gone for the rest of it.
+"""
+
+
 def compose_system_prompt(
-    plan: TripPlan | None = None, trips: Sequence[TripSummary] = ()
+    plan: TripPlan | None = None,
+    trips: Sequence[TripSummary] = (),
+    profile: Sequence[Fact] = (),
 ) -> str:
     """The system prompt for one turn, composed on the server.
 
     The Advisor Instructions come first and the injected parts are composed
     around them, never inside them: what the traveler edits in ticket 12 is
     the persona and its rules, and the guidance about what may not be answered
-    from memory, what a tool result is, and how the plan is written is the
-    application's rather than theirs. The Traveler Profile joins them in 11.
+    from memory, what a tool result is, and how the plan and the profile are
+    written is the application's rather than theirs.
     """
     return "\n".join(
         [
             DEFAULT_ADVISOR_INSTRUCTIONS,
             TOOL_GUIDANCE,
             PLAN_GUIDANCE,
+            PROFILE_GUIDANCE,
             planning.describe(plan),
             "",
             planning.describe_trips(trips),
+            "",
+            remembering.describe(profile),
         ]
     )

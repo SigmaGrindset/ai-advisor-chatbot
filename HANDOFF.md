@@ -1,10 +1,12 @@
 # Handoff — orientation for the next agent
 
 **Repo:** `D:\Antonio\ai-advisor-chatbot` · branch `main` · **no git remote**
-**Current as of** ticket 10 (tickets 01–10 shipped; the advisor now calls Live-data
-Tools, searches the web through a guarded query, leaves Citations behind, and keeps a Trip
-Plan that fills in beside the conversation as the traveler talks — and the traveler has a
-page listing every Trip and can move a Conversation onto the right one).
+**Current as of** ticket 11 (tickets 01–11 shipped; the advisor now calls Live-data
+Tools, searches the web through a guarded query, leaves Citations behind, keeps a Trip
+Plan that fills in beside the conversation as the traveler talks, and carries what it has
+learned about the traveler from one Conversation into the next — and the traveler has a
+page listing every Trip, can move a Conversation onto the right one, and can read and
+delete everything that was learned about them).
 
 This is the standing orientation for anyone picking up work here: how the application is
 put together, what binds the names you write, how this repo is worked in, and what is
@@ -22,16 +24,18 @@ known to bite on this machine. It is not a task — the task is a ticket.
 - `docs/adr/0001`–`0012` — the decisions that are already made. 0004 (PII boundary) and
   0005 (hand-written tool loop) constrain the backend; 0008 amends 0003, because REST
   Countries stopped being keyless during 07; 0009 is the search query guard, and its last
-  paragraph became **0010**, the rule **11 still has to keep** when it builds the Traveler
-  Profile writes; 0002 (Trips own Trip Plans), 0006 (trip plan as a persistent pane) and
-  0007 (mobile as a first-class target) constrain the frontend, 0011 amends 0006 over
-  what the peek on a phone actually is, and **0012 is what is allowed to be a page** —
-  read it before 12 adds the second one.
+  paragraph became **0010**, which 11's Traveler Profile writes now keep as well; 0001 is
+  why the Traveler Profile is structured rather than retrieved, and the shape 11 gave it
+  is in `CONTEXT.md` and ticket 11 rather than an ADR of its own;
+  0002 (Trips own Trip Plans), 0006 (trip plan as a persistent pane) and 0007 (mobile as
+  a first-class target) constrain the frontend, 0011 amends 0006 over what the peek on a
+  phone actually is, and **0012 is what is allowed to be a page** — read it before 12 adds
+  the second one.
 - `docs/agents/` — the issue tracker, triage labels and domain-doc conventions.
 - `.scratch/ai-travel-advisor/spec.md` and `issues/01`–`15` — the work. Each ticket carries
   a `**Status:**` line using the five canonical labels — a finished ticket keeps its label
   and records what happened in ticked boxes and a `## Comments` section, which is why the
-  done ones still say `ready-for-agent`. 01–10 are done; 11–15 are unrun.
+  done ones still say `ready-for-agent`. 01–11 are done; 12–15 are unrun.
 
 ---
 
@@ -48,8 +52,9 @@ Postgres holds everything; the schema is applied at startup, so there is no migr
 | `api/` | routes and the SSE wire format | HTTP, and `services/` |
 | `services/turns.py` | one turn end to end: drives the loop, records what comes back, names the Conversation | the loop and the database, not the wire |
 | `services/plans.py` | applying one Trip Plan change, and reading the plan back for the prompt, the wire and the Trips list | the plan's shape and the database |
-| `advisor/` | `loop.py`, `tools.py`, `planning.py`, `searching.py`, `prompt.py`, `client.py`, `instructions.py`, `titles.py` | the model, the plan's shape and the keyless sources — no HTTP framework, no database, no browser |
-| `db/` | `tables.py`, `connection.py`, `conversations.py`, `trips.py` | SQLAlchemy |
+| `services/profile.py` | applying one Traveler Profile change, and reading the profile back for the prompt and the wire | the profile's shape and the database |
+| `advisor/` | `loop.py`, `tools.py`, `planning.py`, `remembering.py`, `calls.py`, `searching.py`, `prompt.py`, `client.py`, `instructions.py`, `titles.py` | the model, the plan's and profile's shapes and the keyless sources — no HTTP framework, no database, no browser |
+| `db/` | `tables.py`, `connection.py`, `conversations.py`, `trips.py`, `traveler.py` | SQLAlchemy |
 | `privacy/` | `outbound.py` (the single injectable HTTP client every outbound call leaves through) and `queries.py` (the guard on the one free-text thing that leaves) | nothing above it |
 | `config.py`, `frontend.py`, `main.py` | settings, static serving, composition | everything, by construction |
 
@@ -69,22 +74,28 @@ around them:
   application sends to a third party, so it is read for document-number shapes before the
   plan that would send it even exists (ADR-0009).
 - **The tool loop is ours** (`advisor/loop.py`, ADR-0005). It streams a step, accumulates
-  the tool-call fragments it was sent, dispatches them through `advisor/tools.py` or
-  `advisor/planning.py`, appends the results and re-calls until the model stops asking.
-  `MAX_STEPS` is the runaway guard.
+  the tool-call fragments it was sent, dispatches them through `advisor/tools.py`,
+  `advisor/planning.py` or `advisor/remembering.py`, appends the results and re-calls
+  until the model stops asking. `MAX_STEPS` is the runaway guard.
   A step is the last one when nothing accumulated, not when `finish_reason` says so —
   providers disagree about that. Every *fetched* tool result is wrapped in the
   untrusted-data delimiters named in `advisor/instructions.py`; a lookup that fails becomes
   the result rather than an exception, so the advisor explains it and the turn still
   completes. A plan tool's result is not wrapped: it is the application's own account of
   its own write, not something anyone told it.
-- **Two tool catalogues, dispatched down two branches of that loop** — one fetches and
-  never writes, the other writes and never fetches. `loop.py::_offered` is where the Trip
-  Plan tools leave the table for the rest of a turn the moment anything has been fetched
-  into it, which is how ADR-0004's promise survives the existence of a writing tool
-  (ADR-0010). **Ticket 11's Traveler Profile writes join that second catalogue and inherit
-  that rule.** Two tests hold it: the injection test in `test_web_search.py`, and
-  `test_live_data_tools.py::test_nothing_that_writes_is_offered_once_something_has_been_fetched`.
+- **Three tool catalogues, dispatched down three branches of that loop** — one fetches and
+  never writes; the Trip Plan's and the Traveler Profile's write and never fetch.
+  `loop.py::_offered` is where both writing collections leave the table for the rest of a
+  turn the moment anything has been fetched into it, which is how ADR-0004's promise
+  survives the existence of a writing tool (ADR-0010). Three tests hold it: the injection
+  test in `test_web_search.py`, the Traveler Profile's own in `test_traveler_profile.py`,
+  and `test_live_data_tools.py::test_nothing_that_writes_is_offered_once_something_has_been_fetched`.
+  **Anything else that writes joins that side and inherits the rule.** The two writing
+  catalogues share `advisor/calls.py` — what a tool looks like offered, how a call's
+  arguments are read out of JSON, and what a short line or a whole number is — so each
+  one holds only its own vocabulary. The Live-data Tools do not share it: a call that
+  fetches is read into something that can be refused *before it is made* and carries what
+  to tell the traveler while it runs.
 
 ### Frontend — `frontend/src/`
 
@@ -105,6 +116,7 @@ components/
                     holding.ts  merging.ts  fields.ts  dates.ts  money.ts
                     highlighting.ts  questionPrompt.ts
   trip/             TripChip  TripSwitcher  naming.ts  listing.ts
+  profile/          ProfilePanel  listing.ts
   record/           RecordPane.tsx
 design/             tokens.css  base.css  icons.ts  tripPastel.ts
 ```
@@ -135,8 +147,11 @@ design/             tokens.css  base.css  icons.ts  tripPastel.ts
   Instructions page is one more entry. The state every screen needs lives in `App.tsx`
   *above* the route, so navigating does not take a running turn down with it, and
   `AppFrame` is the one fixed, keyboard-aware window both screens are drawn in.
-- **Where deferred work lands:** `components/profile/` (ticket 11). Do not create the
-  folder before the ticket that fills it.
+- **The Traveler Profile is held in `App.tsx` beside the Trips**, and for the same kind of
+  reason: it belongs to no Conversation, every one of them is shown it, and any one of them
+  can add to it mid-turn. `profile_revised` is the turn event that carries it, whole.
+  `RecordPane`'s `unseen` is a set of tabs rather than a boolean about the plan, so either
+  record can be marked as changed while the traveler reads the other.
 
 ---
 
@@ -216,25 +231,32 @@ cd D:/Antonio/ai-advisor-chatbot/backend && D:/Antonio/ai-advisor-chatbot/.venv/
 cd D:/Antonio/ai-advisor-chatbot/backend && D:/Antonio/ai-advisor-chatbot/.venv/Scripts/python.exe -m mypy
 ```
 
-After ticket 10: **99 frontend tests in 14 files** (~1s), `tsc` silent, build clean; **84
-backend tests**, mypy clean over 46 files. Confirm those numbers *before* you start — if
+After ticket 11: **103 frontend tests in 15 files** (~1s), `tsc` silent, build clean; **93
+backend tests**, mypy clean over 52 files. Confirm those numbers *before* you start — if
 they do not match, something changed underneath you. Update this paragraph when a ticket
 legitimately moves them.
 
-09 and 10 are the tickets that moved the frontend suite, because each brought pure modules
-with opinions in them: 09's merge rule, field readings and calendar, and 10's three —
+09, 10 and 11 are the tickets that moved the frontend suite, because each brought pure
+modules with opinions in them: 09's merge rule, field readings and calendar, 10's three —
 which page an address names, what a Trip is called when nobody has named one, and what
-becomes of the Trips list when a plan arrives. What draws them is still `.tsx` the
-Node-only suite does not reach, and was checked by hand.
+becomes of the Trips list when a plan arrives — and 11's one, the order the Traveler
+Profile reads in. What draws them is still `.tsx` the Node-only suite does not reach, and
+was checked by hand.
 
 **The schema is applied at startup and never altered**, so a database left over from an
-earlier ticket has none of 09's `trip`, `itinerary_item` or `open_question` tables and no
-`conversation.trip_id`. `docker compose down -v` before verifying by hand. (10 added no
-columns, so a database that has been through 09 needs nothing.)
+earlier ticket has none of 09's `trip`, `itinerary_item` or `open_question` tables, no
+`conversation.trip_id`, and none of 11's `profile_fact` table or `traveler.next_fact_ref`
+column. `docker compose down -v` before verifying by hand. `create_all` *does* add a
+missing table, so 11 against an existing database needs only the column:
+`alter table traveler add column if not exists next_fact_ref integer not null default 1`.
+(10 added nothing, so a database that has been through 09 and 11 needs nothing more.)
 
 **Vite proxies to `http://localhost:8000`, which resolves to `[::1]` first here.** A
 backend started with `--host 127.0.0.1` is invisible to it and every `/api` call comes back
-500 through the dev server. Start it with `--host ::` — the dual-stack socket answers both.
+500 through the dev server. Start it with `--host ::`. That socket is **IPv6-only** on this
+machine — Vite reaches it because `localhost` resolves to `[::1]` first, but a `curl
+http://localhost:8000/...` of your own is refused outright. Use `curl "http://[::1]:8000/..."`
+when checking the API by hand.
 
 **Check which process owns port 8000, not only that one is listening.** A dev server left
 over from ticket 08 was still serving old code on `[::1]:8000` while a freshly started one

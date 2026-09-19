@@ -9,8 +9,8 @@ import { icon } from "../../design/icons";
  * The Trip Plan is never somewhere the traveler navigates away to — it sits in
  * view and changes as they talk, which is the only way the plan "taking shape
  * as they talk" happens on screen rather than in a claim (ADR-0006). The
- * Traveler Profile shares the pane because it is the other durable thing the
- * conversation writes to, and arrives with the Traveler Profile itself.
+ * Traveler Profile shares the pane because it is the other durable thing a
+ * Conversation writes to, and it fills in the same way while they talk.
  *
  * It draws itself and nothing around itself. Where it goes is the shell's
  * question: a pane on a laptop and a tablet, and a bottom sheet on a phone.
@@ -43,17 +43,18 @@ export function RecordPane({
   unseen,
   switcher,
   plan,
+  traveler,
 }: {
   tab: RecordTab;
   onTab: (tab: RecordTab) => void;
   /**
-   * Whether the Trip Plan has changed since the Plan tab was last showing.
+   * The records that have changed since their tab was last showing.
    *
    * The tab is marked rather than switched to. A pane that changed tab under
    * a traveler reading the other one would take away what they were reading
    * to show them something they had not asked for.
    */
-  unseen: boolean;
+  unseen: ReadonlySet<RecordTab>;
   /**
    * Which Trip the Conversation is refining, and the way to say otherwise. It
    * is the head of the plan rather than part of it: what a plan says is the
@@ -62,6 +63,8 @@ export function RecordPane({
   switcher: ReactNode;
   /** The Trip Plan, drawn. */
   plan: ReactNode;
+  /** The Traveler Profile, drawn, with the data controls under it. */
+  traveler: ReactNode;
 }) {
   const tabs = useRef(new Map<RecordTab, HTMLButtonElement>());
   const showing = TABS.find((each) => each.id === tab)!;
@@ -83,7 +86,7 @@ export function RecordPane({
       >
         {TABS.map((each) => {
           const showingThis = each.id === tab;
-          const marked = each.id === "plan" && unseen && !showingThis;
+          const marked = unseen.has(each.id) && !showingThis;
           return (
             <button
               key={each.id}
@@ -142,14 +145,7 @@ export function RecordPane({
           <h2 className="font-display text-heading font-semibold text-ink">{showing.heading}</h2>
           {showing.id === "plan" && switcher}
         </div>
-        {showing.id === "plan" ? (
-          plan
-        ) : (
-          <p className="text-meta text-ink-subtle">
-            What the advisor learns about you is listed here, one fact at a time, and you
-            can delete any of them.
-          </p>
-        )}
+        {showing.id === "plan" ? plan : traveler}
       </div>
     </div>
   );

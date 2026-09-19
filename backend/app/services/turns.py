@@ -17,14 +17,23 @@ from openai import APIError, AsyncOpenAI
 from openai.types.chat import ChatCompletionMessageParam
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..advisor.loop import Consulted, Consulting, Patched, ReplyFragment, run_turn
+from ..advisor.loop import (
+    Consulted,
+    Consulting,
+    Patched,
+    Remembered,
+    ReplyFragment,
+    run_turn,
+)
 from ..advisor.planning import TripPlan
+from ..advisor.remembering import Fact
 from ..advisor.titles import name_conversation
 from ..advisor.tools import LiveDataTools
 from ..config import Settings
 from ..db.conversations import record_message, retitle_conversation
 from ..db.tables import Conversation, Message, MessageRole
 from .plans import TripPlanning, plan_of
+from .profile import Remembering, read_profile
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +46,7 @@ class Recorded:
 
 
 @dataclass(frozen=True, slots=True)
-class Revised:
+class PlanRevised:
     """The Trip Plan has changed mid-turn, and this is it.
 
     The loop reports *that* the plan moved and which parts; reading the plan
@@ -52,6 +61,18 @@ class Revised:
     #: Conversation was attached to a different Trip, which changes everything
     #: and highlights nothing.
     changed: Sequence[str]
+
+
+@dataclass(frozen=True, slots=True)
+class ProfileRevised:
+    """The Traveler Profile has changed mid-turn, and this is what it says now.
+
+    The whole profile rather than the fact that moved, and for a plainer reason
+    than the plan's: a correction *replaces* a fact, so a patch would have to
+    say which one it replaced. It is a short list, read whole.
+    """
+
+    profile: Sequence[Fact]
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,7 +93,16 @@ class Failed:
 #: rather than copied into twins of themselves: the piece of text that arrives,
 #: and the lookup that is running while it does, are the same facts whichever
 #: layer is holding them.
-Happening = ReplyFragment | Consulting | Consulted | Revised | Recorded | Titled | Failed
+Happening = (
+    ReplyFragment
+    | Consulting
+    | Consulted
+    | PlanRevised
+    | ProfileRevised
+    | Recorded
+    | Titled
+    | Failed
+)
 
 
 async def take_turn(
@@ -91,10 +121,12 @@ async def take_turn(
             model_name=settings.conversation_model,
             prompt=prompt,
             tools=tools,
-            # Built here rather than passed in, because everything it needs is
+            # Built here rather than passed in, because everything they need is
             # already here: the plan tools write to this Conversation's Trip,
-            # and to the one they start for it if it has none.
+            # and to the one they start for it if it has none, and the profile
+            # tools write to the one profile there is.
             plan=TripPlanning(session, conversation),
+            profile=Remembering(session),
         ):
             if isinstance(event, (ReplyFragment, Consulting, Consulted)):
                 yield event
@@ -105,7 +137,11 @@ async def take_turn(
                 # Only ever None if the Trip went away between the write and
                 # this read, which nothing in a turn does.
                 if plan is not None:
-                    yield Revised(plan, event.changed)
+                    yield PlanRevised(plan, event.changed)
+                continue
+
+            if isinstance(event, Remembered):
+                yield ProfileRevised(await read_profile(session))
                 continue
 
             advisor_message = await record_message(

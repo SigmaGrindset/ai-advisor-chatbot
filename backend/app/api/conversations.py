@@ -36,8 +36,18 @@ from ..db.tables import Conversation, Message, MessageRole
 from ..db.trips import attach_conversation, find_trip
 from ..privacy.outbound import get_http_client
 from ..services.plans import plan_of, read_plan, summarise_trips
-from ..services.turns import Failed, Happening, Recorded, Revised, Titled, take_turn
+from ..services.profile import read_profile
+from ..services.turns import (
+    Failed,
+    Happening,
+    PlanRevised,
+    ProfileRevised,
+    Recorded,
+    Titled,
+    take_turn,
+)
 from .sse import event
+from .traveler import ProfileFactView
 from .trips import TripPlanView
 
 router = APIRouter(tags=["conversations"])
@@ -237,6 +247,9 @@ async def say(
         # by hand since the last thing it said.
         plan=await plan_of(session, conversation),
         trips=await summarise_trips(session),
+        # Every Conversation is shown the same profile, which is the whole of
+        # why a brand-new one does not ask what the last one was told.
+        profile=await read_profile(session),
     )
     return StreamingResponse(
         _turn_events(
@@ -284,12 +297,22 @@ def _as_event(happening: Happening) -> bytes:
         return event({"type": "consulting", "activity": happening.activity})
     if isinstance(happening, Consulted):
         return event({"type": "consulted"})
-    if isinstance(happening, Revised):
+    if isinstance(happening, PlanRevised):
         return event(
             {
                 "type": "plan_revised",
                 "plan": TripPlanView.of(happening.plan).model_dump(mode="json"),
                 "changed": list(happening.changed),
+            }
+        )
+    if isinstance(happening, ProfileRevised):
+        return event(
+            {
+                "type": "profile_revised",
+                "profile": [
+                    ProfileFactView.of(fact).model_dump(mode="json")
+                    for fact in happening.profile
+                ],
             }
         )
     if isinstance(happening, Recorded):

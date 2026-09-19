@@ -67,6 +67,30 @@ export type Conversation = {
  */
 export type ConversationRead = Conversation & { plan: TripPlan | null };
 
+/**
+ * What a Profile Fact is about.
+ *
+ * The first three the traveler has exactly one of, which is how a correction
+ * lands as a correction; `note` is the collection for everything a fixed set
+ * could not anticipate.
+ */
+export type ProfileSubject = "nationality" | "home_city" | "companions" | "note";
+
+/**
+ * One thing the advisor durably knows about the traveler.
+ *
+ * Addressable on its own, because deleting one of them has to leave every
+ * other exactly as it was — that is the whole of what makes the Traveler
+ * Profile something a traveler can read rather than something they are told
+ * about.
+ */
+export type ProfileFact = {
+  id: string;
+  subject: ProfileSubject;
+  /** The fact itself, in the words the traveler would recognise. */
+  detail: string;
+};
+
 /** Roughly when in a day an Itinerary Item happens, which is as exact as a plan gets. */
 export type PartOfDay = "morning" | "afternoon" | "evening";
 

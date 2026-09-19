@@ -1,10 +1,11 @@
 """The Trip Plan tools: what the advisor calls when the trip itself changes.
 
 A deliberately separate collection from the Live-data Tools next door. Those
-fetch and never write; these write and never fetch. Keeping them in two
-catalogues, dispatched down two branches of the loop, is what makes it
-structurally impossible for something a tool fetched to cause a write on its
-own rather than merely unlikely to (ADR-0004).
+fetch and never write; these write and never fetch, as the Traveler Profile
+tools beside them do. Keeping them in catalogues of their own, dispatched down
+separate branches of the loop, is what makes it structurally impossible for
+something a tool fetched to cause a write on its own rather than merely
+unlikely to (ADR-0004).
 
 Every tool here patches one field or one collection entry. There is no
 whole-document write, because ADR-0002 committed to field-level patching
@@ -17,15 +18,16 @@ is the same line the rest of `advisor/` sits on: the model and the plan's
 shape live here, the storage does not.
 """
 
-import json
 import uuid
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any, Protocol
 
 from openai.types.chat import ChatCompletionToolParam
+
+from .calls import Tool, Unusable, read_call, words, whole
 
 #: How long the strings a plan tool takes may be. A destination is a place, a
 #: line of an itinerary is a line, and an Open Question is a question.
@@ -117,13 +119,6 @@ PlanEdit = (
 #: a plan edit and is kept apart from them: it changes which plan this
 #: Conversation is keeping rather than anything in one.
 PlanChange = JoinTrip | PlanEdit
-
-
-@dataclass(frozen=True, slots=True)
-class Unusable:
-    """A call that will not be applied, and what to tell the advisor instead."""
-
-    complaint: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -306,24 +301,9 @@ def _itinerary(items: Sequence[Item]) -> list[str]:
 # ---- Reading a call ------------------------------------------------------- #
 
 
-@dataclass(frozen=True, slots=True)
-class PlanTool:
-    """One way of changing the plan, as the model is offered it."""
-
-    name: str
-    description: str
-    arguments: Mapping[str, Any]
-    read: Callable[[Mapping[str, Any]], PlanChange | Unusable]
-
-    def offered(self) -> ChatCompletionToolParam:
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": self.description,
-                "parameters": dict(self.arguments),
-            },
-        }
+#: One plan tool, as the model is offered it. The shape is shared with the
+#: Traveler Profile's catalogue next door — see `calls.py`.
+PlanTool = Tool[PlanChange]
 
 
 def offers(name: str) -> bool:
@@ -343,23 +323,10 @@ async def change(plan: Plan, name: str, arguments: str) -> Changed:
     becomes something the advisor is told about and can correct, rather than
     something that ends the turn.
     """
-    asked = _read(name, arguments)
+    asked = read_call(_BY_NAME, name, arguments)
     if isinstance(asked, Unusable):
         return Changed(told=asked.complaint)
     return await plan.change(asked)
-
-
-def _read(name: str, arguments: str) -> PlanChange | Unusable:
-    tool = _BY_NAME.get(name)
-    if tool is None:
-        return Unusable(f"There is no tool called {name!r}.")
-    try:
-        given = json.loads(arguments or "{}")
-    except json.JSONDecodeError:
-        return Unusable(f"The arguments for {name} were not readable.")
-    if not isinstance(given, dict):
-        return Unusable(f"The arguments for {name} were not a set of named values.")
-    return tool.read(given)
 
 
 def _read_join_trip(given: Mapping[str, Any]) -> PlanChange | Unusable:
@@ -377,7 +344,7 @@ def _read_join_trip(given: Mapping[str, Any]) -> PlanChange | Unusable:
 
 
 def _read_destination(given: Mapping[str, Any]) -> PlanChange | Unusable:
-    destination = _words(given.get("destination"), longest=MAX_DESTINATION)
+    destination = words(given.get("destination"), longest=MAX_DESTINATION)
     if destination is None:
         return Unusable("A destination has to be somewhere, said in a few words.")
     return SetDestination(destination)
@@ -397,7 +364,7 @@ def _read_trip_dates(given: Mapping[str, Any]) -> PlanChange | Unusable:
 
 
 def _read_party_size(given: Mapping[str, Any]) -> PlanChange | Unusable:
-    party_size = _whole(given.get("party_size"), least=1, most=MAX_PARTY)
+    party_size = whole(given.get("party_size"), least=1, most=MAX_PARTY)
     if party_size is None:
         return Unusable(f"A party size is a whole number of people, from 1 to {MAX_PARTY}.")
     return SetPartySize(party_size)
@@ -414,8 +381,8 @@ def _read_budget(given: Mapping[str, Any]) -> PlanChange | Unusable:
 
 
 def _read_add_itinerary_item(given: Mapping[str, Any]) -> PlanChange | Unusable:
-    day = _whole(given.get("day"), least=1, most=MAX_DAY)
-    description = _words(given.get("description"), longest=MAX_DESCRIPTION)
+    day = whole(given.get("day"), least=1, most=MAX_DAY)
+    description = words(given.get("description"), longest=MAX_DESCRIPTION)
     if day is None or description is None:
         return Unusable(
             f"An itinerary item needs a day from 1 to {MAX_DAY} and a short description "
@@ -428,35 +395,29 @@ def _read_add_itinerary_item(given: Mapping[str, Any]) -> PlanChange | Unusable:
 
 
 def _read_remove_itinerary_item(given: Mapping[str, Any]) -> PlanChange | Unusable:
-    item = _whole(given.get("item"), least=1, most=None)
+    item = whole(given.get("item"), least=1)
     if item is None:
         return Unusable("Removing an itinerary item needs its number, as the plan lists it.")
     return RemoveItineraryItem(item)
 
 
 def _read_add_open_question(given: Mapping[str, Any]) -> PlanChange | Unusable:
-    question = _words(given.get("question"), longest=MAX_QUESTION)
+    question = words(given.get("question"), longest=MAX_QUESTION)
     if question is None:
         return Unusable("An open question is one short question about the trip.")
     return AddOpenQuestion(question)
 
 
 def _read_settle_open_question(given: Mapping[str, Any]) -> PlanChange | Unusable:
-    question = _whole(given.get("question"), least=1, most=None)
+    question = whole(given.get("question"), least=1)
     if question is None:
         return Unusable("Settling an open question needs its number, as the plan lists it.")
     return SettleOpenQuestion(question)
 
 
 # ---- Reading arguments ----------------------------------------------------- #
-
-
-def _words(value: object, *, longest: int) -> str | None:
-    """A short line of text, tidied, or None when what arrived was not one."""
-    if not isinstance(value, str):
-        return None
-    tidied = " ".join(value.split())
-    return tidied if 0 < len(tidied) <= longest else None
+# The ones only a plan needs. A short line of text and a whole number are
+# `calls.py`'s, because the profile's tools read those too.
 
 
 def _day(value: object) -> date | None:
@@ -467,25 +428,6 @@ def _day(value: object) -> date | None:
         return date.fromisoformat(value.strip())
     except ValueError:
         return None
-
-
-def _whole(value: object, *, least: int, most: int | None) -> int | None:
-    """A whole number in range, or None. A float that is not whole is not one."""
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, float) and not value.is_integer():
-        return None
-    if isinstance(value, str):
-        try:
-            value = int(value.strip())
-        except ValueError:
-            return None
-    if not isinstance(value, (int, float)):
-        return None
-    whole = int(value)
-    if whole < least or (most is not None and whole > most):
-        return None
-    return whole
 
 
 def _money(value: object) -> Decimal | None:

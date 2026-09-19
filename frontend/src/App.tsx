@@ -5,10 +5,13 @@ import {
   attachConversation,
   changeItineraryItem,
   changePlan,
+  clearEverything,
   deleteConversation,
+  forgetProfileFact,
   listConversations,
   listTrips,
   readConversation,
+  readProfile,
   removeItineraryItem,
   settleOpenQuestion,
 } from "./api/client";
@@ -16,6 +19,7 @@ import type {
   Conversation,
   ConversationRead,
   ConversationSummary,
+  ProfileFact,
   TripPlan,
 } from "./api/types";
 import { ConversationList, type RowActions } from "./components/conversation/ConversationList";
@@ -25,6 +29,7 @@ import { usePlanHolding } from "./components/plan/holding";
 import { PlanPanel } from "./components/plan/PlanPanel";
 import { PlanPeek } from "./components/plan/PlanPeek";
 import { questionPrompt } from "./components/plan/questionPrompt";
+import { ProfilePanel } from "./components/profile/ProfilePanel";
 import { RecordPane, type RecordTab } from "./components/record/RecordPane";
 import { AppFrame } from "./components/shell/AppFrame";
 import { AppShell } from "./components/shell/AppShell";
@@ -62,16 +67,20 @@ export function App() {
   // so a refetch would say the same thing a round trip later — with the chip
   // beside the Conversation arriving after the plan it belongs to.
   const [trips, setTrips] = useState<TripPlan[]>([]);
+  // Everything the advisor durably knows about the traveler. It belongs to no
+  // Conversation — every one of them is shown it and any one of them can add
+  // to it — so it is held here rather than beside the open Conversation.
+  const [profile, setProfile] = useState<ProfileFact[]>([]);
   // Null is a Conversation the traveler has begun but not yet said anything in.
   // It has no row in the list and no row in the database until they do.
   const [current, setCurrent] = useState<Conversation | null>(null);
   const [rowActions, setRowActions] = useState<RowActions | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [tab, setTab] = useState<RecordTab>("plan");
-  // A change to the plan that arrived while the Plan tab was not showing. The
-  // tab is marked with it rather than switched to (ADR-0006 keeps the plan in
-  // view; it does not take the other record away to do it).
-  const [unseen, setUnseen] = useState(false);
+  // The records that changed while their tab was not showing. The tab is
+  // marked rather than switched to (ADR-0006 keeps the plan in view; it does
+  // not take the other record away to do it).
+  const [unseen, setUnseen] = useState<ReadonlySet<RecordTab>>(EMPTY);
   // Which record is showing, kept where a turn can read it. A turn outlives
   // the render that started it, so the tab it closed over is the tab that was
   // open when the traveler pressed send and not the one they are looking at
@@ -103,7 +112,11 @@ export function App() {
       // appeared a request later would be a chip that appeared for no reason
       // the traveler watched happen.
       noteTrip(conversationId, revised);
-      if (showingTab.current !== "plan") setUnseen(true);
+      mark("plan");
+    },
+    onProfileRevised: (learned) => {
+      setProfile(learned);
+      mark("traveler");
     },
   });
 
@@ -111,9 +124,10 @@ export function App() {
     // The most recently active Conversation is the one they were working in, so
     // a reload puts them back rather than somewhere they have to navigate from.
     void resume()
-      .then(([listed, planned, opened]) => {
+      .then(([listed, planned, known, opened]) => {
         setConversations(listed);
         setTrips(planned);
+        setProfile(known);
         if (opened === null) return;
         const { plan: refining, ...conversation } = opened;
         setCurrent(conversation);
@@ -121,6 +135,12 @@ export function App() {
       })
       .catch(() => setFailure("Your conversations could not be loaded."));
   }, []);
+
+  /** Mark a record as changed, unless the traveler is looking straight at it. */
+  function mark(record: RecordTab) {
+    if (showingTab.current === record) return;
+    setUnseen((sofar) => new Set(sofar).add(record));
+  }
 
   /** Everything the page is showing about a Conversation, put down. */
   function clear() {
@@ -170,6 +190,34 @@ export function App() {
     } catch {
       setFailure("That conversation could not be deleted.");
     }
+  }
+
+  /** Take one thing the advisor learned off the Traveler Profile. */
+  function forget(factId: string) {
+    setFailure(null);
+    void forgetProfileFact(factId)
+      .then(setProfile)
+      .catch(() => setFailure("That could not be deleted from your profile."));
+  }
+
+  /**
+   * Leave nothing behind.
+   *
+   * Everything on screen goes with it rather than being re-read: what the
+   * traveler is looking at afterwards is a first visit, and asking the server
+   * what it holds now would be asking a question already answered.
+   */
+  function erase() {
+    setFailure(null);
+    void clearEverything()
+      .then(() => {
+        setConversations([]);
+        setTrips([]);
+        setProfile([]);
+        setUnseen(EMPTY);
+        start();
+      })
+      .catch(() => setFailure("Your data could not be deleted."));
   }
 
   /**
@@ -334,7 +382,7 @@ export function App() {
             tab={tab}
             onTab={(showing) => {
               setTab(showing);
-              if (showing === "plan") setUnseen(false);
+              setUnseen((sofar) => without(sofar, showing));
             }}
             unseen={unseen}
             switcher={
@@ -345,6 +393,9 @@ export function App() {
               )
             }
             plan={planPanel}
+            traveler={
+              <ProfilePanel profile={profile} onForget={forget} onClear={erase} />
+            }
           />
         }
         peek={(showRecord) => (
@@ -356,7 +407,7 @@ export function App() {
               // at the thing it was showing rather than at whichever tab was
               // last looked at.
               setTab("plan");
-              setUnseen(false);
+              setUnseen((sofar) => without(sofar, "plan"));
               showRecord();
             }}
           />
@@ -366,19 +417,35 @@ export function App() {
   );
 }
 
+/** No record has changed unseen, which is how every visit starts. */
+const EMPTY: ReadonlySet<RecordTab> = new Set();
+
+/** The same set without one of them, which is what looking at it does. */
+function without(marked: ReadonlySet<RecordTab>, seen: RecordTab): ReadonlySet<RecordTab> {
+  if (!marked.has(seen)) return marked;
+  const left = new Set(marked);
+  left.delete(seen);
+  return left;
+}
+
 /**
- * What to show on arrival: every Conversation, every Trip, and the one
- * Conversation last worked in.
+ * What to show on arrival: every Conversation, every Trip, everything the
+ * advisor knows about the traveler, and the one Conversation last worked in.
  *
  * The Trips come with the rest rather than when a page asks for them, because
  * the very first screen is already marked with which Trip each Conversation
- * is about.
+ * is about. The profile comes with them because the pane beside the
+ * Conversation has a tab showing it.
  */
 async function resume(): Promise<
-  [ConversationSummary[], TripPlan[], ConversationRead | null]
+  [ConversationSummary[], TripPlan[], ProfileFact[], ConversationRead | null]
 > {
-  const [listed, planned] = await Promise.all([listConversations(), listTrips()]);
+  const [listed, planned, known] = await Promise.all([
+    listConversations(),
+    listTrips(),
+    readProfile(),
+  ]);
   const mostRecent = listed[0];
-  if (mostRecent === undefined) return [listed, planned, null];
-  return [listed, planned, await readConversation(mostRecent.id)];
+  if (mostRecent === undefined) return [listed, planned, known, null];
+  return [listed, planned, known, await readConversation(mostRecent.id)];
 }

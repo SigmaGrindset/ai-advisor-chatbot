@@ -42,8 +42,60 @@ class Traveler(Base):
     __tablename__ = "traveler"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    #: The next number to list a Profile Fact of this Traveler under, counted
+    #: here for the same reason a Trip counts its own — see `Trip.next_item_ref`.
+    #: An advisor working from the profile it was shown at the top of the turn
+    #: must not be able to delete whatever has taken the place of something it
+    #: deleted a moment ago.
+    next_fact_ref: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class FactSubject(StrEnum):
+    """What a Profile Fact can be about.
+
+    Three the traveler has exactly one of, and one collection for everything a
+    fixed set could not anticipate. The difference is the whole of how a
+    correction lands: recording a nationality again replaces the nationality
+    that was there, rather than standing a contradiction beside it.
+    """
+
+    NATIONALITY = "nationality"
+    HOME_CITY = "home_city"
+    COMPANIONS = "companions"
+    NOTE = "note"
+
+
+class ProfileFact(Base):
+    """One entry in the Traveler Profile.
+
+    A row of its own rather than a column on the Traveler, because the traveler
+    reads them back one at a time and deletes them one at a time (ADR-0001,
+    ADR-0004). A profile kept as a document would make "delete this line" a
+    read-modify-write of everything the advisor knows.
+    """
+
+    __tablename__ = "profile_fact"
+    #: The advisor refers to a fact by its number, because that is what it can
+    #: point at in a prompt it is shown every turn.
+    __table_args__ = (UniqueConstraint("traveler_id", "ref", name="profile_fact_ref"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    traveler_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("traveler.id", ondelete="cascade"), nullable=False
+    )
+    ref: Mapped[int] = mapped_column(Integer, nullable=False)
+    subject: Mapped[FactSubject] = mapped_column(
+        Enum(FactSubject, name="fact_subject", values_callable=_values), nullable=False
+    )
+    #: The fact itself, in the words the traveler would recognise it in.
+    detail: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.clock_timestamp(), nullable=False
     )
 
 

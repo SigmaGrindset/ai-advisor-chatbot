@@ -195,8 +195,8 @@ async def test_a_search_result_telling_the_advisor_to_write_produces_no_write(
     """A page cannot hand the advisor a capability the application never offered.
 
     The canned model here *obeys* the injection — it goes on to ask for the two
-    tools the page told it to call, and one of them is a Trip Plan tool that
-    now genuinely exists. Nothing writes, because nothing that writes was on
+    tools the page told it to call, one from each collection that writes, both
+    of which genuinely exist. Nothing writes, because nothing that writes was on
     the table on the step that asked: once a lookup has come back into a turn,
     the step answering it is offered the fetching collection and nothing else
     (ADR-0004, and ADR-0009's last paragraph, which is the rule this ticket
@@ -220,9 +220,9 @@ async def test_a_search_result_telling_the_advisor_to_write_produces_no_write(
                     call_id="call-2",
                     at=0,
                 ),
-                # A tool that really exists, asked for on the one step where it
-                # does not. The injection's other call names nothing at all,
-                # so both halves of the refusal are exercised.
+                # A Trip Plan tool beside the Traveler Profile one above it:
+                # both collections that write are asked for on the one step
+                # where neither of them is on the table.
                 *calling(
                     "set_destination", '{"destination": "Minsk"}', call_id="call-3", at=1
                 ),

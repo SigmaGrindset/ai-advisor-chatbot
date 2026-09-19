@@ -12,6 +12,7 @@ import type {
   ConversationSummary,
   PartOfDay,
   PlanPatch,
+  ProfileFact,
   TripPlan,
 } from "./types";
 
@@ -106,6 +107,29 @@ async function sent(url: string, method: string, body?: unknown): Promise<TripPl
 
 export async function deleteConversation(id: string): Promise<void> {
   refused(await fetch(`/api/conversations/${id}`, { method: "DELETE" }));
+}
+
+/**
+ * The Traveler Profile, and the two ways it goes away.
+ *
+ * Deleting one fact answers with the profile as it stands afterwards, the same
+ * way a change to the Trip Plan answers with the whole plan: the pane is
+ * showing the list that was just deleted from.
+ */
+
+export async function readProfile(): Promise<ProfileFact[]> {
+  return await expected<ProfileFact[]>(await fetch("/api/traveler/profile"));
+}
+
+export async function forgetProfileFact(factId: string): Promise<ProfileFact[]> {
+  return await expected<ProfileFact[]>(
+    await fetch(`/api/traveler/profile/${factId}`, { method: "DELETE" }),
+  );
+}
+
+/** Every Conversation, every Trip and the whole profile, gone. */
+export async function clearEverything(): Promise<void> {
+  refused(await fetch("/api/traveler/everything", { method: "DELETE" }));
 }
 
 /**

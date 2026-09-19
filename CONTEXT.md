@@ -64,8 +64,11 @@ them.
 _Avoid_: Memory, user data, context
 
 **Profile Fact**:
-One entry in the Traveler Profile. Individually viewable and individually deletable. Never
-a "field" — that word belongs to the Trip Plan.
+One entry in the Traveler Profile: what it is about — its **subject** — and a line of
+detail. The subjects are a closed set, and three of the four hold one fact each, so
+recording one of those again is a correction rather than a second fact.
+Individually viewable and individually deletable. Never a "field" — that word belongs to
+the Trip Plan.
 _Avoid_: Memory, attribute, field
 
 ### Behaviour and sources
