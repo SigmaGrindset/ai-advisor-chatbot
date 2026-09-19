@@ -2,19 +2,18 @@
 
 The utility model does the naming, because a title is exactly the kind of small,
 unseen work the cheaper model is configured for. It is never worth failing a turn
-over: every way the call can disappoint ends at the traveler's own first words.
+over: every way the call can disappoint ends at the traveler's own first words,
+which is why `utility.ask` answering None covers all of them at once.
 """
 
-import logging
-
-from openai import APIError, AsyncOpenAI
+from openai import AsyncOpenAI
 from openai.types.chat import (
     ChatCompletionMessageParam,
     ChatCompletionSystemMessageParam,
     ChatCompletionUserMessageParam,
 )
 
-logger = logging.getLogger(__name__)
+from .utility import ask
 
 #: Long enough to recognise a Conversation by, short enough to sit on one line.
 MAX_TITLE = 48
@@ -40,20 +39,12 @@ async def name_conversation(
     leaves behind. An unnamed Conversation can be named by its next exchange; one
     named the empty string could not be.
     """
-    try:
-        answer = await model.chat.completions.create(
-            model=model_name,
-            messages=_naming_prompt(traveler_said, advisor_said),
-        )
-    except APIError as failure:
-        # Deliberately not the traveler's words or the model's: the log is not a
-        # second copy of the conversation.
-        logger.warning("Naming the Conversation failed: %s", type(failure).__name__)
-        return _shorten(traveler_said) or None
-
-    proposed = answer.choices[0].message.content if answer.choices else None
-    # A call that came back saying nothing has failed just as surely as one that
-    # did not come back at all.
+    proposed = await ask(
+        model,
+        model_name=model_name,
+        messages=_naming_prompt(traveler_said, advisor_said),
+        about="Naming the Conversation",
+    )
     return _tidy(proposed or "") or _shorten(traveler_said) or None
 
 

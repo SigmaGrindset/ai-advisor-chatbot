@@ -35,6 +35,7 @@ from ..db.conversations import (
 from ..db.tables import Conversation, Message, MessageRole, PromptVersion
 from ..db.trips import attach_conversation, find_trip
 from ..privacy.outbound import get_http_client
+from ..services.compaction import compact
 from ..services.instructions import compose_around, current_version
 from ..services.plans import plan_of, read_plan
 from ..services.turns import (
@@ -250,8 +251,12 @@ async def say(
     # whole of what makes an edit to the Advisor Instructions take effect on
     # the very next Message of a Conversation that was already under way.
     prompt_version = await current_version(session)
+    # Folded before the prompt is composed rather than after the reply has
+    # gone, so a Conversation that has crossed the budget never sends the long
+    # prompt even once. What comes back is what is still sent verbatim; the
+    # rest of it is in the rolling summary `compose_around` reads back below.
     prompt = compose_prompt(
-        await messages_in(session, conversation),
+        await compact(session, conversation, model, settings),
         # Composed from what is recorded at the top of the turn, so the advisor
         # reads the plan as it stands and is shown the profile every other
         # Conversation is shown — which is why a brand-new one does not ask

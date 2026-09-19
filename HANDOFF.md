@@ -1,13 +1,14 @@
 # Handoff — orientation for the next agent
 
 **Repo:** `D:\Antonio\ai-advisor-chatbot` · branch `main` · **no git remote**
-**Current as of** ticket 12 (tickets 01–12 shipped; the advisor now calls Live-data
+**Current as of** ticket 13 (tickets 01–13 shipped; the advisor now calls Live-data
 Tools, searches the web through a guarded query, leaves Citations behind, keeps a Trip
-Plan that fills in beside the conversation as the traveler talks, and carries what it has
-learned about the traveler from one Conversation into the next — and the traveler has a
-page listing every Trip, can move a Conversation onto the right one, can read and delete
-everything that was learned about them, and can rewrite the Advisor Instructions and read
-the whole prompt those are composed into).
+Plan that fills in beside the conversation as the traveler talks, carries what it has
+learned about the traveler from one Conversation into the next, knows by name which other
+Conversations the traveler has going, and goes on working in a Conversation that has run
+for weeks — and the traveler has a page listing every Trip, can move a Conversation onto
+the right one, can read and delete everything that was learned about them, and can rewrite
+the Advisor Instructions and read the whole prompt those are composed into).
 
 This is the standing orientation for anyone picking up work here: how the application is
 put together, what binds the names you write, how this repo is worked in, and what is
@@ -22,7 +23,7 @@ known to bite on this machine. It is not a task — the task is a ticket.
   lists bind file, module and component names.** See §3.
 - `TASK.md` and `README.md` — what was asked for, and how to run it. README §2–7 are still
   placeholders and are part of the deliverable.
-- `docs/adr/0001`–`0012` — the decisions that are already made. 0004 (PII boundary) and
+- `docs/adr/0001`–`0013` — the decisions that are already made. 0004 (PII boundary) and
   0005 (hand-written tool loop) constrain the backend; 0008 amends 0003, because REST
   Countries stopped being keyless during 07; 0009 is the search query guard, and its last
   paragraph became **0010**, which 11's Traveler Profile writes now keep as well; 0001 is
@@ -31,12 +32,14 @@ known to bite on this machine. It is not a task — the task is a ticket.
   0002 (Trips own Trip Plans), 0006 (trip plan as a persistent pane) and 0007 (mobile as
   a first-class target) constrain the frontend, 0011 amends 0006 over what the peek on a
   phone actually is, and **0012 is what is allowed to be a page** — 12 added the second
-  and last one it names, so a third wanting a page has to argue with it.
+  and last one it names, so a third wanting a page has to argue with it; **0013** is why
+  the advisor is told the names of the traveler's other Conversations and nothing that was
+  said in them.
 - `docs/agents/` — the issue tracker, triage labels and domain-doc conventions.
 - `.scratch/ai-travel-advisor/spec.md` and `issues/01`–`15` — the work. Each ticket carries
   a `**Status:**` line using the five canonical labels — a finished ticket keeps its label
   and records what happened in ticked boxes and a `## Comments` section, which is why the
-  done ones still say `ready-for-agent`. 01–12 are done; 13–15 are unrun.
+  done ones still say `ready-for-agent`. 01–13 are done; 14–15 are unrun.
 
 ---
 
@@ -54,8 +57,9 @@ Postgres holds everything; the schema is applied at startup, so there is no migr
 | `services/turns.py` | one turn end to end: drives the loop, records what comes back, names the Conversation | the loop and the database, not the wire |
 | `services/plans.py` | applying one Trip Plan change, and reading the plan back for the prompt, the wire and the Trips list | the plan's shape and the database |
 | `services/profile.py` | applying one Traveler Profile change, and reading the profile back for the prompt and the wire | the profile's shape and the database |
-| `services/instructions.py` | which Advisor Instructions are in force, and what saving a revision of them does | the shipped default and the database |
-| `advisor/` | `loop.py`, `tools.py`, `planning.py`, `remembering.py`, `calls.py`, `searching.py`, `prompt.py`, `client.py`, `instructions.py`, `titles.py` | the model, the plan's and profile's shapes and the keyless sources — no HTTP framework, no database, no browser |
+| `services/instructions.py` | which Advisor Instructions are in force, what saving a revision does, and the one assembly of the system prompt every caller composes through | the shipped default and the database |
+| `services/compaction.py` | folding a Conversation's oldest Messages away when it has grown too long to send whole, and answering with what is still sent verbatim | the rolling summary and the database |
+| `advisor/` | `loop.py`, `tools.py`, `planning.py`, `remembering.py`, `calls.py`, `searching.py`, `prompt.py`, `client.py`, `instructions.py`, `titles.py`, `compaction.py`, `conversations.py`, `utility.py` | the model, the plan's and profile's shapes and the keyless sources — no HTTP framework, no database, no browser |
 | `db/` | `tables.py`, `connection.py`, `conversations.py`, `trips.py`, `traveler.py`, `prompt_versions.py` | SQLAlchemy |
 | `privacy/` | `outbound.py` (the single injectable HTTP client every outbound call leaves through) and `queries.py` (the guard on the one free-text thing that leaves) | nothing above it |
 | `config.py`, `frontend.py`, `main.py` | settings, static serving, composition | everything, by construction |
@@ -63,12 +67,20 @@ Postgres holds everything; the schema is applied at startup, so there is no migr
 Dependencies point one way: `api → services → advisor`/`db`. Nothing below reaches back
 up. This is **not** enforced by a test, deliberately — see §4.
 
-Three seams do most of the design work, and new features should join them rather than go
+These seams do most of the design work, and new features should join them rather than go
 around them:
 
 - **`services/turns.py` yields what happened, not what to send.** The wire format stays in
   `api/`, so a tool call or a Trip Plan patch can be added to a turn without the HTTP
   response shape being decided in the service.
+- **One assembly composes the system prompt** — `services/instructions.py::compose_around`.
+  The Advisor Instructions, the tool guidance, the Trip Plan, the Trips list, the Traveler
+  Profile, the one-line names of the traveler's other Conversations and this Conversation's
+  Compaction summary are put together in exactly one place, which the turn and the Advisor
+  Instructions page both compose through — so what the page shows the traveler cannot drift
+  from what the next Message sends. **A new injected record joins it there rather than
+  beside it.** It carries one ordering constraint: `api/conversations.py::say` folds before
+  it composes, because `compose_around` reads the rolling summary off the Conversation row.
 - **`privacy/` is the one egress, and the one check on it.** The model client and every
   Live-data Tool take `outbound.py`'s client as a dependency; tests swap in a transport that
   answers by host, which is what keeps real request-building and response-parsing under test
@@ -238,8 +250,8 @@ cd D:/Antonio/ai-advisor-chatbot/backend && D:/Antonio/ai-advisor-chatbot/.venv/
 cd D:/Antonio/ai-advisor-chatbot/backend && D:/Antonio/ai-advisor-chatbot/.venv/Scripts/python.exe -m mypy
 ```
 
-After ticket 12: **105 frontend tests in 15 files** (~1s), `tsc` silent, build clean; **100
-backend tests**, mypy clean over 56 files. Confirm those numbers *before* you start — if
+After ticket 13: **105 frontend tests in 15 files** (~1s), `tsc` silent, build clean; **107
+backend tests**, mypy clean over 61 files. Confirm those numbers *before* you start — if
 they do not match, something changed underneath you. Update this paragraph when a ticket
 legitimately moves them.
 
@@ -248,23 +260,28 @@ modules with opinions in them: 09's merge rule, field readings and calendar, 10'
 which page an address names, what a Trip is called when nobody has named one, and what
 becomes of the Trips list when a plan arrives — and 11's one, the order the Traveler
 Profile reads in. 12 added no module of its own and only two cases to the router's, which
-is why it moved that suite by two. What draws all of them is still `.tsx` the Node-only
-suite does not reach, and was checked by hand.
+is why it moved that suite by two. 13 left it alone entirely — Compaction is not surfaced
+in the interface in any way, so the browser was not told about it. What draws all of them
+is still `.tsx` the Node-only suite does not reach, and was checked by hand.
 
 **The schema is applied at startup and never altered**, so a database left over from an
 earlier ticket has none of 09's `trip`, `itinerary_item` or `open_question` tables, no
 `conversation.trip_id`, none of 11's `profile_fact` table or `traveler.next_fact_ref`
-column, and none of 12's `prompt_version` table or `message.prompt_version_id` column.
+column, none of 12's `prompt_version` table or `message.prompt_version_id` column, and
+neither of 13's `conversation.summary` and `conversation.summarised_messages`.
 `docker compose down -v` before verifying by hand. `create_all` *does* add a missing
-table, so against an existing database each of those two tickets needs only its column:
+table, so against an existing database each of those three tickets needs only its columns:
 
 ```sql
 alter table traveler add column if not exists next_fact_ref integer not null default 1;
 alter table message add column if not exists prompt_version_id uuid
   references prompt_version(id) on delete set null;
+alter table conversation add column if not exists summary text;
+alter table conversation add column if not exists summarised_messages integer not null
+  default 0;
 ```
 
-(10 added nothing, so a database through 09, 11 and 12 needs nothing more.)
+(10 added nothing, so a database through 09, 11, 12 and 13 needs nothing more.)
 
 **Vite proxies to `http://localhost:8000`, which resolves to `[::1]` first here.** A
 backend started with `--host 127.0.0.1` is invisible to it and every `/api` call comes back
@@ -322,9 +339,11 @@ to live here: a `--reload` server does not pick up new modules either.
   a Conversation's two Messages coming back advisor-first, and would not reproduce; the
   obvious causes were measured and ruled out (1µs clock steps, no equal timestamps in 3000
   back-to-back inserts, no backwards step in 60s of sampling), so the mechanism is not
-  known. 12 took its own ordering off the clock — `PromptVersion.revision` is an identity
-  column — but doing the same to every Message is a schema change to the oldest table in
-  the application and belongs to whoever decides the migration question above.
+  known. It happened once more during 13, in that same `test_web_search.py` test, with
+  five clean full runs after it. 12 took its own ordering off the clock —
+  `PromptVersion.revision` is an identity column — but doing the same to every Message is
+  a schema change to the oldest table in the application, and belongs to whoever decides
+  the migration question above.
 
 ---
 

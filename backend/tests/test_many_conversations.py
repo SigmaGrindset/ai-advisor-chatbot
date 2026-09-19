@@ -1,5 +1,10 @@
-"""Several Conversations: starting them, finding them, returning to them, deleting them."""
+"""Several Conversations: starting them, finding them, returning to them, deleting them.
 
+And what one of them is told about the others: their names, and the journeys they
+are about, never a word of what was said in them (ADR-0013).
+"""
+
+import json
 from typing import Any
 
 import httpx2
@@ -8,9 +13,19 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
+from app.db.conversations import MOST_RECENT_OTHERS
 
 from .conftest import ApiFactory
-from .fakes.canned_model import answering, replying, unwell
+from .fakes.canned_model import (
+    CannedModel,
+    answering,
+    calling,
+    content,
+    finish,
+    replying,
+    unwell,
+    wants_tools,
+)
 from .fakes.canned_transport import Responder
 from .fakes.talking import send, start, transcript
 
@@ -62,7 +77,9 @@ async def test_a_reopened_conversation_continues_where_it_was_left(
         ("traveler", "And Oslo?"),
         ("advisor", "Oslo in April is still cold."),
     ]
-    # The other Conversation is not in the prompt either: keeping them apart is
+    # Nothing said in the other Conversation is in this one's prompt either. The
+    # advisor is told that Conversation exists, by name and by journey — the two
+    # tests further down — and never what was said in it: keeping them apart is
     # what the traveler asked for by starting a second one.
     assert "Oslo" not in str(later.prompt)
 
@@ -236,6 +253,82 @@ async def test_deleting_a_conversation_twice_is_refused_the_second_time(
 ) -> None:
     assert (await api.delete(f"/api/conversations/{conversation}")).status_code == 204
     assert (await api.delete(f"/api/conversations/{conversation}")).status_code == 404
+
+
+async def test_the_advisor_is_told_the_travelers_other_conversations_exist(
+    api: httpx2.AsyncClient, outbound_routes: dict[str, Responder]
+) -> None:
+    """A Conversation the traveler has going elsewhere is one the advisor knows of."""
+    outbound_routes["openrouter.ai"] = _setting(
+        "Lisbon", "Lisbon it is.", titled="Three days in Lisbon"
+    )
+    lisbon = await start(api)
+    await send(api, lisbon, "We have settled on Lisbon.")
+
+    outbound_routes["openrouter.ai"] = model = replying(
+        "Oslo is still cold in April.", utility=answering("A weekend in Oslo")
+    )
+    oslo = await start(api)
+    await send(api, oslo, "And what about Oslo?")
+
+    assert "Three days in Lisbon — about Lisbon" in _system(model.prompt)
+    # Its name and its journey, and not a word of what was said in it: keeping
+    # Conversations apart is what the traveler asked for by starting a second.
+    assert "We have settled on Lisbon." not in str(model.prompt)
+
+    outbound_routes["openrouter.ai"] = later = replying("Take the tram.")
+    await send(api, oslo, "How do I get around?")
+
+    # And a Conversation is not one of its own others.
+    assert "Three days in Lisbon" in _system(later.prompt)
+    assert "A weekend in Oslo" not in _system(later.prompt)
+
+
+async def test_only_the_most_recently_spoken_in_others_reach_the_prompt(
+    api: httpx2.AsyncClient, outbound_routes: dict[str, Responder]
+) -> None:
+    """However long the traveler has been coming back, this part of the prompt is bounded."""
+    for number in range(MOST_RECENT_OTHERS + 1):
+        outbound_routes["openrouter.ai"] = replying(
+            "Noted.", utility=answering(f"Trip number {number:02d}")
+        )
+        await send(api, await start(api), f"Tell me about trip {number:02d}.")
+
+    outbound_routes["openrouter.ai"] = model = replying("April in Lisbon is mild.")
+    await send(api, await start(api), "And Lisbon?")
+
+    system = _system(model.prompt)
+    assert f"Trip number {MOST_RECENT_OTHERS:02d}" in system
+    # The one spoken in longest ago falls off the end rather than the prompt
+    # growing by a line for every Conversation the traveler has ever had.
+    assert "Trip number 00" not in system
+
+
+async def test_a_conversation_nobody_has_spoken_in_is_not_one_of_the_others(
+    api: httpx2.AsyncClient, outbound_routes: dict[str, Responder]
+) -> None:
+    """One the traveler opened and wandered away from is not about any journey."""
+    await start(api)
+    outbound_routes["openrouter.ai"] = model = replying("April in Lisbon is mild.")
+
+    await send(api, await start(api), "What is Lisbon like in April?")
+
+    assert "the only conversation the traveler has going with you" in _system(model.prompt)
+
+
+def _setting(destination: str, says: str, titled: str) -> CannedModel:
+    """A model that puts a destination on the Trip, then answers."""
+    return CannedModel(
+        *calling("set_destination", json.dumps({"destination": destination})),
+        wants_tools(),
+        then=[[content(says), finish()]],
+        utility=answering(titled),
+    )
+
+
+def _system(prompt: list[dict[str, Any]]) -> str:
+    """The system prompt of a turn the canned model was sent."""
+    return str(prompt[0]["content"])
 
 
 async def conversations(api: httpx2.AsyncClient) -> list[dict[str, Any]]:

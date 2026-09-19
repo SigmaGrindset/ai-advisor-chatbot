@@ -13,7 +13,15 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .tables import SOLE_TRAVELER_ID, Conversation, Message, MessageRole
+from .tables import SOLE_TRAVELER_ID, Conversation, Message, MessageRole, Trip
+
+#: How many other Conversations the advisor is told about. A bound rather than a
+#: rule about travel: the point of Compaction is a prompt that does not grow
+#: without end, and a traveler of two years' standing with two hundred
+#: Conversations would otherwise carry two hundred lines into every turn of every
+#: one of them. The most recently spoken in are the ones a trip is still being
+#: planned across.
+MOST_RECENT_OTHERS = 10
 
 #: The moment of the last Message, or the Conversation's own beginning while it
 #: has none. Derived rather than stored, so there is one clock and no way for a
@@ -39,6 +47,52 @@ async def conversations_by_activity(
         .order_by(LAST_ACTIVITY.desc(), Conversation.id)
     )
     return [(conversation, last_activity_at) for conversation, last_activity_at in rows]
+
+
+async def conversations_apart_from(
+    session: AsyncSession, conversation: Conversation | None
+) -> Sequence[tuple[str, str | None]]:
+    """Every *other* Conversation that has been spoken in, named and placed.
+
+    A title and the destination of whatever Trip it refines — never a word of
+    what was said in it. The ones with no title are left out rather than listed
+    as unnamed: a Conversation has no title because nothing has been said in it
+    yet, and an empty one the traveler opened and wandered away from is not
+    another Conversation about their journey.
+
+    At most `MOST_RECENT_OTHERS` of them, so that what this adds to the prompt is
+    bounded however long the traveler has been coming back. With no Conversation
+    named — the Advisor Instructions page, opened from nowhere in particular —
+    every one of them is another one.
+    """
+    apart = (
+        select(Conversation.title, Trip.destination)
+        .outerjoin(Trip, Conversation.trip_id == Trip.id)
+        .where(Conversation.traveler_id == SOLE_TRAVELER_ID)
+        .where(Conversation.title.is_not(None))
+        .order_by(LAST_ACTIVITY.desc(), Conversation.id)
+        .limit(MOST_RECENT_OTHERS)
+    )
+    if conversation is not None:
+        apart = apart.where(Conversation.id != conversation.id)
+    rows = await session.execute(apart)
+    # Narrowed for the type checker rather than filtered: the where clause above
+    # is what makes every title here a string.
+    return [(title, destination) for title, destination in rows if title is not None]
+
+
+async def fold_into_summary(
+    session: AsyncSession, conversation: Conversation, *, summary: str, summarised: int
+) -> None:
+    """Record what Compaction folded away, and how much of the Conversation it covers.
+
+    Only the Conversation row moves. Not a Message is touched, which is the
+    whole of what CONTEXT.md promises about Compaction: the transcript the
+    traveler reads is exactly as long afterwards as it was before.
+    """
+    conversation.summary = summary
+    conversation.summarised_messages = summarised
+    await session.commit()
 
 
 async def begin_conversation(session: AsyncSession) -> Conversation:

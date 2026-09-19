@@ -13,8 +13,10 @@ version it was produced by is `services/turns.py`'s.
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..advisor.conversations import OtherConversation
 from ..advisor.instructions import DEFAULT_ADVISOR_INSTRUCTIONS, compose_system_prompt
 from ..db import prompt_versions
+from ..db.conversations import conversations_apart_from
 from ..db.tables import Conversation, PromptVersion
 from .plans import plan_of, summarise_trips
 from .profile import read_profile
@@ -65,18 +67,25 @@ async def compose_around(
 
     The turn composes it through here and so does the page that shows the
     traveler what the turn will send, which is the whole of why the two cannot
-    disagree: a record composed into the prompt later — 13's Compaction
-    summary — is added to one assembly rather than to two kept in step by eye.
+    disagree: the Compaction summary is a record composed into one assembly
+    rather than into two kept in step by eye.
 
     Read at the moment it is asked for, so the Trip Plan and the Traveler
     Profile are as they stand, including whatever the traveler edited by hand
-    since the advisor last said anything. With no Conversation named there is
-    no plan, which is what a turn of a Conversation refining no Trip is sent
-    too.
+    since the advisor last said anything. The Compaction summary is read the
+    same way, so a turn must fold before it composes — which is the order
+    `api/conversations.py::say` does it in. With no Conversation named there is
+    no plan and nothing has been folded, which is what a turn of a Conversation
+    refining no Trip is sent too.
     """
     return compose_system_prompt(
         instructions,
         plan=None if conversation is None else await plan_of(session, conversation),
         trips=await summarise_trips(session),
         profile=await read_profile(session),
+        elsewhere=[
+            OtherConversation(title=title, destination=destination)
+            for title, destination in await conversations_apart_from(session, conversation)
+        ],
+        earlier=None if conversation is None else conversation.summary,
     )

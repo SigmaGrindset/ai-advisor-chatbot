@@ -15,7 +15,8 @@ of it: the Advisor Instructions page shows the composed prompt in full.
 
 from collections.abc import Sequence
 
-from . import planning, remembering
+from . import compaction, conversations, planning, remembering
+from .conversations import OtherConversation
 from .planning import TripPlan, TripSummary
 from .remembering import Fact
 from .tools import UNTRUSTED_CLOSE, UNTRUSTED_OPEN
@@ -188,6 +189,8 @@ def compose_system_prompt(
     plan: TripPlan | None = None,
     trips: Sequence[TripSummary] = (),
     profile: Sequence[Fact] = (),
+    elsewhere: Sequence[OtherConversation] = (),
+    earlier: str | None = None,
 ) -> str:
     """The system prompt for one turn, composed on the server.
 
@@ -201,6 +204,10 @@ def compose_system_prompt(
     showing the traveler what will be sent and the turn that sends it are the
     same function of the same words — a preview composed by a second piece of
     code would eventually be a preview of something else.
+
+    The Compaction summary comes last, closest to the Messages it stands in
+    front of: what the advisor reads just before the conversation itself is the
+    part of that conversation it is no longer being sent.
     """
     return "\n".join(
         [
@@ -213,5 +220,9 @@ def compose_system_prompt(
             planning.describe_trips(trips),
             "",
             remembering.describe(profile),
+            "",
+            conversations.describe(elsewhere),
+            "",
+            compaction.describe(earlier),
         ]
     )

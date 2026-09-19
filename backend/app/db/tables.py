@@ -262,6 +262,19 @@ class Conversation(Base):
     #: Named after its first exchange, so it is recognisable in the list. Null
     #: until there has been an exchange to name it after.
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: The rolling summary Compaction keeps: the older stretch of this
+    #: Conversation in prose, standing in for those Messages in the prompt once
+    #: sending them whole costs more than they are worth. Null until the
+    #: Conversation has grown long enough for there to be an older stretch.
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: How many of this Conversation's Messages, counting from the first, the
+    #: summary stands in for. The rest are still sent verbatim. A count rather
+    #: than a marker on each Message because Messages are only ever appended,
+    #: and because Compaction is a fact about the Conversation rather than
+    #: about any Message in it — the traveler still reads every one of them.
+    summarised_messages: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
     #: clock_timestamp() for the same reason Message uses it: now() is the
     #: transaction timestamp, so Conversations started inside one transaction
     #: would share a timestamp and lose their order.
