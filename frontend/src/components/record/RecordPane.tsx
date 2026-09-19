@@ -41,6 +41,7 @@ export function RecordPane({
   tab,
   onTab,
   unseen,
+  switcher,
   plan,
 }: {
   tab: RecordTab;
@@ -53,6 +54,12 @@ export function RecordPane({
    * to show them something they had not asked for.
    */
   unseen: boolean;
+  /**
+   * Which Trip the Conversation is refining, and the way to say otherwise. It
+   * is the head of the plan rather than part of it: what a plan says is the
+   * Trip Plan's business, and which Trip is being shown at all is not.
+   */
+  switcher: ReactNode;
   /** The Trip Plan, drawn. */
   plan: ReactNode;
 }) {
@@ -131,7 +138,10 @@ export function RecordPane({
         tabIndex={0}
         className="flex min-h-0 flex-1 animate-panel flex-col gap-4 overflow-y-auto overscroll-contain px-5 py-6"
       >
-        <h2 className="font-display text-heading font-semibold text-ink">{showing.heading}</h2>
+        <div className="flex flex-col gap-2">
+          <h2 className="font-display text-heading font-semibold text-ink">{showing.heading}</h2>
+          {showing.id === "plan" && switcher}
+        </div>
         {showing.id === "plan" ? (
           plan
         ) : (

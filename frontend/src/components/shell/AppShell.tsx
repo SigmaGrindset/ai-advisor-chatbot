@@ -2,7 +2,6 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { useLayout } from "./layout";
 import { Sheet } from "./Sheet";
-import { useVisibleViewport } from "./viewport";
 
 /**
  * How to reach what this width has folded into a sheet, and null for whatever
@@ -68,11 +67,6 @@ export function AppShell({
   const [sheet, setSheet] = useState<"conversations" | "record" | null>(null);
   const layout = useLayout();
 
-  // The shell is sized from what the browser says it is showing rather than
-  // from `100dvh`, so a virtual keyboard cannot push the composer off the
-  // bottom of the screen.
-  useVisibleViewport();
-
   useEffect(() => {
     // A window widened until it has a pane for what is in the sheet does not
     // need the sheet, and leaving it out would put a modal scrim over a
@@ -92,10 +86,10 @@ export function AppShell({
   const listing = list(dismiss);
 
   return (
-    // Fixed rather than flowed, and sized from `--spacing-viewport`: a phone
-    // with its keyboard open is showing less of the page than any stylesheet
-    // can be told about, and `viewport.ts` is what knows how much.
-    <div className="fixed inset-x-0 top-0 flex h-viewport translate-y-viewport-top overflow-hidden bg-canvas pl-safe-left pr-safe-right text-ink">
+    // The panes themselves, in the order they stand. The frame they stand in
+    // is `AppFrame`, which every screen shares — this arrangement is one of
+    // the things that can be inside it, not the application's own window.
+    <>
       {listed ? (
         <div className="w-rail shrink-0 border-r border-line">{listing}</div>
       ) : null}
@@ -135,7 +129,7 @@ export function AppShell({
       >
         {recorded ? null : record}
       </Sheet>
-    </div>
+    </>
   );
 }
 

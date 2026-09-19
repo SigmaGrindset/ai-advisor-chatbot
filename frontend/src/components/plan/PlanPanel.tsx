@@ -4,6 +4,7 @@ import { HelpCircle, Plus, X } from "lucide-react";
 import type { ItineraryItem, TripPlan } from "../../api/types";
 import { nights, showDate, showDay } from "./dates";
 import { EditableField } from "./EditableField";
+import { showAmount } from "./money";
 import { smallIcon } from "../../design/icons";
 import { valueOf } from "./fields";
 
@@ -115,7 +116,7 @@ export function PlanPanel({
               {...field("budget_amount")}
               label="Budget"
               kind="number"
-              shown={plan.budget_amount === null ? "" : format(plan.budget_amount)}
+              shown={plan.budget_amount === null ? "" : showAmount(plan.budget_amount)}
               placeholder="How much?"
             />
             <EditableField
@@ -395,9 +396,4 @@ function Questions({
       )}
     </section>
   );
-}
-
-/** A budget, with its thousands marked so a figure is read at a glance. */
-function format(amount: number): string {
-  return new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 }).format(amount);
 }

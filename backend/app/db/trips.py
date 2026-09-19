@@ -74,10 +74,17 @@ async def start_trip(session: AsyncSession, conversation: Conversation) -> Trip:
 
 
 async def attach_conversation(
-    session: AsyncSession, conversation: Conversation, trip: Trip
+    session: AsyncSession, conversation: Conversation, trip: Trip | None
 ) -> None:
-    """Point a Conversation at a Trip, so both threads refine the one plan."""
-    conversation.trip_id = trip.id
+    """Point a Conversation at a Trip, or at none.
+
+    Attaching is how several Conversations come to refine one plan; detaching
+    is how one the advisor put on the wrong journey is taken off it. Neither
+    touches the Trip: a Trip with no Conversation left on it is still the
+    traveler's and is still listed, because the plan is the durable thing here
+    and the Conversations are how it got written.
+    """
+    conversation.trip_id = None if trip is None else trip.id
     await session.commit()
 
 

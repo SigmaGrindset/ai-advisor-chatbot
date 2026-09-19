@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from "react";
 
 import {
   addItineraryItem,
+  attachConversation,
   changeItineraryItem,
   changePlan,
   deleteConversation,
   listConversations,
+  listTrips,
   readConversation,
   removeItineraryItem,
   settleOpenQuestion,
@@ -24,7 +26,12 @@ import { PlanPanel } from "./components/plan/PlanPanel";
 import { PlanPeek } from "./components/plan/PlanPeek";
 import { questionPrompt } from "./components/plan/questionPrompt";
 import { RecordPane, type RecordTab } from "./components/record/RecordPane";
+import { AppFrame } from "./components/shell/AppFrame";
 import { AppShell } from "./components/shell/AppShell";
+import { withPlan } from "./components/trip/listing";
+import { TripSwitcher } from "./components/trip/TripSwitcher";
+import { goTo, useRoute } from "./routes/routing";
+import { TripsPage } from "./routes/TripsPage";
 import { useTurn } from "./stream/useTurn";
 
 /**
@@ -38,11 +45,23 @@ import { useTurn } from "./stream/useTurn";
  * the same reason and one more: it is shown in two places at once on a phone,
  * as a sheet and as the strip above the composer.
  *
+ * The Trips are held here for a third: one turn can start a Trip, name it and
+ * attach the Conversation to it all at once, and the chip in the list, the
+ * switcher over the plan and the page listing every Trip all have to say the
+ * same thing about it a moment later. What a page shows is the route's
+ * question; what is true is this one's, which is why the state lives above
+ * both screens and a page cannot take a running turn down with it.
+ *
  * The turn itself is `useTurn`, what becomes of a plan two people are writing
  * to is `plan/holding`, and the arrangement of panes and sheets is `AppShell`.
  */
 export function App() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  // Every Trip the traveler has. Kept rather than re-read: a Trip is born
+  // mid-turn, and the plan the turn sends back is the whole of the new Trip,
+  // so a refetch would say the same thing a round trip later — with the chip
+  // beside the Conversation arriving after the plan it belongs to.
+  const [trips, setTrips] = useState<TripPlan[]>([]);
   // Null is a Conversation the traveler has begun but not yet said anything in.
   // It has no row in the list and no row in the database until they do.
   const [current, setCurrent] = useState<Conversation | null>(null);
@@ -63,6 +82,7 @@ export function App() {
   }, [tab]);
 
   const plan = usePlanHolding();
+  const route = useRoute();
 
   const turn = useTurn({
     conversation: current,
@@ -78,6 +98,11 @@ export function App() {
     onBegan: (conversationId) => plan.opened(conversationId, null),
     onPlanRevised: (conversationId, revised, changed) => {
       plan.revised(conversationId, revised, changed);
+      // The turn may have started this Trip or joined another, so the list
+      // and the row both hear about it from the same event — a chip that
+      // appeared a request later would be a chip that appeared for no reason
+      // the traveler watched happen.
+      noteTrip(conversationId, revised);
       if (showingTab.current !== "plan") setUnseen(true);
     },
   });
@@ -86,8 +111,9 @@ export function App() {
     // The most recently active Conversation is the one they were working in, so
     // a reload puts them back rather than somewhere they have to navigate from.
     void resume()
-      .then(([listed, opened]) => {
+      .then(([listed, planned, opened]) => {
         setConversations(listed);
+        setTrips(planned);
         if (opened === null) return;
         const { plan: refining, ...conversation } = opened;
         setCurrent(conversation);
@@ -147,6 +173,45 @@ export function App() {
   }
 
   /**
+   * A plan that has arrived, filed where the rest of the interface reads it
+   * from: the Trips list, and the row of the Conversation refining it.
+   *
+   * Both from the one plan, because both are answers to the same question.
+   * A Conversation whose Trip changed mid-turn and a list that has not heard
+   * of the Trip would leave a row marked with a colour nothing explains.
+   */
+  function noteTrip(conversationId: string, refining: TripPlan) {
+    setTrips((sofar) => withPlan(sofar, refining));
+    markTrip(conversationId, refining.trip_id);
+  }
+
+  /** Say on a Conversation's row which Trip it is refining. */
+  function markTrip(conversationId: string, tripId: string | null) {
+    setConversations((sofar) =>
+      sofar.map((row) => (row.id === conversationId ? { ...row, trip_id: tripId } : row)),
+    );
+  }
+
+  /**
+   * Put this Conversation on a Trip, or take it off the one it is on.
+   *
+   * The advisor is the one that decides what a Conversation is about, and it
+   * is working from a list of Trips it was shown — so it can attach one to the
+   * wrong journey, and only the traveler can say so (ADR-0002).
+   */
+  function attach(tripId: string | null) {
+    const conversationId = current?.id;
+    if (conversationId === undefined) return;
+    void attachConversation(conversationId, tripId)
+      .then((refining) => {
+        plan.opened(conversationId, refining);
+        markTrip(conversationId, tripId);
+        if (refining !== null) setTrips((sofar) => withPlan(sofar, refining));
+      })
+      .catch(() => setFailure("This conversation could not be moved to that trip."));
+  }
+
+  /**
    * One change the traveler made to the plan themselves.
    *
    * Every one of these answers with the whole plan, so there is nothing to
@@ -157,7 +222,12 @@ export function App() {
     const tripId = plan.plan?.trip_id;
     if (tripId === undefined) return;
     void changing(tripId)
-      .then(plan.replaced)
+      .then((revised) => {
+        plan.replaced(revised);
+        // The page that lists every Trip shows what the traveler just typed
+        // into this one, so it hears about it from the same answer.
+        setTrips((sofar) => withPlan(sofar, revised));
+      })
       .catch(() => setFailure("That change to your trip could not be saved."));
   }
 
@@ -196,77 +266,119 @@ export function App() {
     />
   );
 
-  return (
-    <AppShell
-      list={(dismiss) => (
-        <ConversationList
+  if (route === "trips") {
+    return (
+      <AppFrame>
+        <TripsPage
+          trips={trips}
           conversations={conversations}
           currentId={current?.id ?? null}
-          actions={rowActions}
-          onStart={() => {
-            start();
-            dismiss();
-          }}
           onOpen={(id) => {
-            dismiss();
+            // Opening one is also the way back to it: a traveler who came
+            // here to find a Conversation has found it.
+            goTo("conversations");
             void open(id);
           }}
-          onActions={setRowActions}
-          onDelete={(id) => void remove(id)}
+          onBack={() => goTo("conversations")}
         />
-      )}
-      conversation={(folded) => (
-        <ConversationPane
-          conversation={current}
-          arriving={turn.arriving}
-          consulting={turn.consulting}
-          trouble={turn.trouble}
-          stopped={turn.stopped}
-          failure={failure}
-          draft={turn.draft}
-          sending={turn.sending}
-          onDraft={turn.setDraft}
-          onSend={turn.send}
-          onStop={turn.stop}
-          onRetry={turn.again}
-          onShowConversations={folded.conversations}
-          onShowRecord={folded.record}
-          peek={folded.peek}
-        />
-      )}
-      record={
-        <RecordPane
-          tab={tab}
-          onTab={(showing) => {
-            setTab(showing);
-            if (showing === "plan") setUnseen(false);
-          }}
-          unseen={unseen}
-          plan={planPanel}
-        />
-      }
-      peek={(showRecord) => (
-        <PlanPeek
-          plan={plan.plan}
-          lit={plan.lit}
-          onOpen={() => {
-            // The strip says where and when, so the record has to come out at
-            // the thing it was showing rather than at whichever tab was last
-            // looked at.
-            setTab("plan");
-            setUnseen(false);
-            showRecord();
-          }}
-        />
-      )}
-    />
+      </AppFrame>
+    );
+  }
+
+  return (
+    <AppFrame>
+      <AppShell
+        list={(dismiss) => (
+          <ConversationList
+            conversations={conversations}
+            trips={trips}
+            currentId={current?.id ?? null}
+            actions={rowActions}
+            onStart={() => {
+              start();
+              dismiss();
+            }}
+            onOpen={(id) => {
+              dismiss();
+              void open(id);
+            }}
+            onActions={setRowActions}
+            onDelete={(id) => void remove(id)}
+            onTrips={() => {
+              dismiss();
+              goTo("trips");
+            }}
+          />
+        )}
+        conversation={(folded) => (
+          <ConversationPane
+            conversation={current}
+            arriving={turn.arriving}
+            consulting={turn.consulting}
+            trouble={turn.trouble}
+            stopped={turn.stopped}
+            failure={failure}
+            draft={turn.draft}
+            sending={turn.sending}
+            onDraft={turn.setDraft}
+            onSend={turn.send}
+            onStop={turn.stop}
+            onRetry={turn.again}
+            onShowConversations={folded.conversations}
+            onShowRecord={folded.record}
+            peek={folded.peek}
+          />
+        )}
+        record={
+          <RecordPane
+            tab={tab}
+            onTab={(showing) => {
+              setTab(showing);
+              if (showing === "plan") setUnseen(false);
+            }}
+            unseen={unseen}
+            switcher={
+              // Nothing to switch on a Conversation that does not exist yet:
+              // there is nothing to put on a Trip until they say something.
+              current === null ? null : (
+                <TripSwitcher plan={plan.plan} trips={trips} onChoose={attach} />
+              )
+            }
+            plan={planPanel}
+          />
+        }
+        peek={(showRecord) => (
+          <PlanPeek
+            plan={plan.plan}
+            lit={plan.lit}
+            onOpen={() => {
+              // The strip says where and when, so the record has to come out
+              // at the thing it was showing rather than at whichever tab was
+              // last looked at.
+              setTab("plan");
+              setUnseen(false);
+              showRecord();
+            }}
+          />
+        )}
+      />
+    </AppFrame>
   );
 }
 
-/** What to show on arrival: every Conversation, and the one last worked in. */
-async function resume(): Promise<[ConversationSummary[], ConversationRead | null]> {
-  const listed = await listConversations();
+/**
+ * What to show on arrival: every Conversation, every Trip, and the one
+ * Conversation last worked in.
+ *
+ * The Trips come with the rest rather than when a page asks for them, because
+ * the very first screen is already marked with which Trip each Conversation
+ * is about.
+ */
+async function resume(): Promise<
+  [ConversationSummary[], TripPlan[], ConversationRead | null]
+> {
+  const [listed, planned] = await Promise.all([listConversations(), listTrips()]);
   const mostRecent = listed[0];
-  if (mostRecent === undefined) return [listed, null];
-  return [listed, await readConversation(mostRecent.id)];
+  if (mostRecent === undefined) return [listed, planned, null];
+  return [listed, planned, await readConversation(mostRecent.id)];
 }

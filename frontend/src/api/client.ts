@@ -29,6 +29,30 @@ export async function readConversation(id: string): Promise<ConversationRead> {
   return await expected<ConversationRead>(await fetch(`/api/conversations/${id}`));
 }
 
+/** Every Trip the traveler is planning, the most recently started first. */
+export async function listTrips(): Promise<TripPlan[]> {
+  return await expected<TripPlan[]>(await fetch("/api/trips"));
+}
+
+/**
+ * Move a Conversation to a Trip, or take it off the one it is on.
+ *
+ * It answers with the plan the Conversation refines from here — null when it
+ * refines none — because that is what the pane beside it shows next.
+ */
+export async function attachConversation(
+  conversationId: string,
+  tripId: string | null,
+): Promise<TripPlan | null> {
+  return await expected<TripPlan | null>(
+    await fetch(`/api/conversations/${conversationId}/trip`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ trip_id: tripId }),
+    }),
+  );
+}
+
 /**
  * Changing the Trip Plan by hand.
  *

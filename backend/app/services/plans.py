@@ -72,6 +72,17 @@ async def read_plan(session: AsyncSession, trip: Trip) -> TripPlan:
     )
 
 
+async def read_plans(session: AsyncSession) -> list[TripPlan]:
+    """Every Trip the traveler has, each with its plan, most recently first.
+
+    Whole plans rather than a summary of each: the page that lists Trips shows
+    what is in one, and the switcher beside the Conversation labels them from
+    the same read. A second, thinner shape for a Trip Plan would be a second
+    thing to keep true.
+    """
+    return [await read_plan(session, trip) for trip in await trips.trips_by_age(session)]
+
+
 async def summarise_trips(session: AsyncSession) -> Sequence[TripSummary]:
     """Every Trip the traveler has, as the list `join_trip` picks out of."""
     return [

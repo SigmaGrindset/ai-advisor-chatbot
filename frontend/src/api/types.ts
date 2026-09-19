@@ -46,6 +46,12 @@ export type ConversationSummary = {
   /** Null until the first exchange has been named. */
   title: string | null;
   last_activity_at: string;
+  /**
+   * The Trip this Conversation is refining, and null while it is refining
+   * none. The row carries it so the list can say which journey each one
+   * belongs to without reading each Conversation to find out.
+   */
+  trip_id: string | null;
 };
 
 export type Conversation = {

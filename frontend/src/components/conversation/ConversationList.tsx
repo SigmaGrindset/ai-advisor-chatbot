@@ -1,8 +1,9 @@
-import { Compass, MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import { Compass, Luggage, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 
-import type { ConversationSummary } from "../../api/types";
+import type { ConversationSummary, TripPlan } from "../../api/types";
 import { conversationName } from "./conversationName";
 import { icon, smallIcon } from "../../design/icons";
+import { TripChip } from "../trip/TripChip";
 
 /**
  * The row whose actions are showing, and whether it has been asked to delete.
@@ -14,14 +15,22 @@ export type RowActions = { id: string; confirming: boolean };
 
 export function ConversationList({
   conversations,
+  trips,
   currentId,
   actions,
   onStart,
   onOpen,
   onActions,
   onDelete,
+  onTrips,
 }: {
   conversations: ConversationSummary[];
+  /**
+   * Every Trip the traveler has, which is what the rows are marked from. A
+   * row knows the identifier of its Trip; what that Trip is called and what
+   * colour it is known by are the plan's.
+   */
+  trips: TripPlan[];
   /** The Conversation being read, if any of them is. */
   currentId: string | null;
   /** The row whose actions are open, if one of them is. */
@@ -30,7 +39,10 @@ export function ConversationList({
   onOpen: (id: string) => void;
   onActions: (actions: RowActions | null) => void;
   onDelete: (id: string) => void;
+  /** Leave for the page that lists every Trip. */
+  onTrips: () => void;
 }) {
+  const byId = new Map(trips.map((trip) => [trip.trip_id, trip]));
   return (
     <nav
       aria-label="Conversations"
@@ -58,6 +70,20 @@ export function ConversationList({
           <Plus {...smallIcon} aria-hidden="true" />
           New conversation
         </button>
+
+        {/* Navigation lives here, where the traveler already goes to move
+            between things — the rail on a laptop, the left sheet everywhere
+            narrower. The Trip Plan itself is never navigated to (ADR-0006);
+            the set of Trips is the one thing about no Conversation in
+            particular. */}
+        <button
+          type="button"
+          className="flex items-center gap-2 rounded-control px-1 py-1 text-meta text-ink-muted transition-colors hover:text-ink"
+          onClick={onTrips}
+        >
+          <Luggage {...smallIcon} aria-hidden="true" />
+          All trips
+        </button>
       </div>
 
       {/* Contained, so that flicking this list past its end scrolls neither
@@ -73,6 +99,8 @@ export function ConversationList({
 
         {conversations.map((conversation) => {
           const named = conversationName(conversation.title);
+          const onTrip =
+            conversation.trip_id === null ? undefined : byId.get(conversation.trip_id);
           const open = conversation.id === currentId;
           const showing = actions?.id === conversation.id ? actions : null;
           const strip = `${conversation.id}-actions`;
@@ -87,10 +115,19 @@ export function ConversationList({
                   <button
                     type="button"
                     aria-current={open ? "true" : undefined}
-                    className="min-w-0 flex-1 truncate rounded-control py-2 pl-3 text-left text-meta text-ink"
+                    className="flex min-w-0 flex-1 flex-col items-start gap-1 rounded-control py-2 pl-3 text-left text-meta text-ink"
                     onClick={() => onOpen(conversation.id)}
                   >
-                    <span className={open ? "font-medium" : undefined}>{named}</span>
+                    <span className={`max-w-full truncate ${open ? "font-medium" : ""}`}>
+                      {named}
+                    </span>
+                    {/* Which journey this Conversation is about, in that
+                        Trip's own colour, so several of them about one journey
+                        read as a group without being read at all. One on no
+                        Trip carries nothing: every Conversation begins that
+                        way, and a rail of "no trip" marks says nothing about
+                        any of them. */}
+                    {onTrip !== undefined && <TripChip plan={onTrip} />}
                   </button>
 
                   {/* The row's actions live behind one permanently visible

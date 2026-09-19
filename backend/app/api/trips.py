@@ -29,7 +29,7 @@ from ..advisor.planning import (
 from ..db import trips
 from ..db.connection import get_session
 from ..db.tables import PartOfDay, Trip
-from ..services.plans import read_plan
+from ..services.plans import read_plan, read_plans
 
 router = APIRouter(tags=["trips"])
 
@@ -126,6 +126,17 @@ class ItineraryItemPatch(BaseModel):
     """
 
     description: Description
+
+
+@router.get("/trips")
+async def list_trips(session: AsyncSession = Depends(get_session)) -> list[TripPlanView]:
+    """Every Trip the traveler is planning, the most recently started first.
+
+    One read serves both places Trips are listed: the page that shows them all
+    with what is in each plan, and the switcher that moves a Conversation
+    between them.
+    """
+    return [TripPlanView.of(plan) for plan in await read_plans(session)]
 
 
 @router.patch("/trips/{trip_id}")

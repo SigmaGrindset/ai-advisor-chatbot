@@ -33,8 +33,9 @@ from ..db.conversations import (
     remove_conversation,
 )
 from ..db.tables import Conversation, Message, MessageRole
+from ..db.trips import attach_conversation, find_trip
 from ..privacy.outbound import get_http_client
-from ..services.plans import plan_of, summarise_trips
+from ..services.plans import plan_of, read_plan, summarise_trips
 from ..services.turns import Failed, Happening, Recorded, Revised, Titled, take_turn
 from .sse import event
 from .trips import TripPlanView
@@ -89,6 +90,10 @@ class ConversationSummary(BaseModel):
     #: When something was last said in this Conversation, or when it was started
     #: if nothing has been said yet.
     last_activity_at: datetime
+    #: The Trip this Conversation is refining, and null while it is refining
+    #: none. The row carries it so the list can mark which journey a
+    #: Conversation belongs to without reading each one to find out.
+    trip_id: uuid.UUID | None
 
 
 class ConversationView(BaseModel):
@@ -100,6 +105,17 @@ class ConversationView(BaseModel):
     #: second request, because the plan sits beside the Conversation at all
     #: times and the two are opened together (ADR-0006).
     plan: TripPlanView | None
+
+
+class ChosenTrip(BaseModel):
+    """Which Trip a Conversation is to refine from now on.
+
+    Named as null to take it off the one it is on. Required rather than
+    defaulted, so detaching is something asked for rather than something a
+    body that forgot to say anything does by accident.
+    """
+
+    trip_id: uuid.UUID | None
 
 
 class TravelerMessage(BaseModel):
@@ -115,7 +131,10 @@ async def list_conversations(
     """Every Conversation the traveler has, the most recently active first."""
     return [
         ConversationSummary(
-            id=conversation.id, title=conversation.title, last_activity_at=last_activity_at
+            id=conversation.id,
+            title=conversation.title,
+            last_activity_at=last_activity_at,
+            trip_id=conversation.trip_id,
         )
         for conversation, last_activity_at in await conversations_by_activity(session)
     ]
@@ -128,7 +147,10 @@ async def start_conversation(
     """Begin a separate line of thinking."""
     conversation = await begin_conversation(session)
     return ConversationSummary(
-        id=conversation.id, title=conversation.title, last_activity_at=conversation.created_at
+        id=conversation.id,
+        title=conversation.title,
+        last_activity_at=conversation.created_at,
+        trip_id=conversation.trip_id,
     )
 
 
@@ -160,6 +182,29 @@ async def delete_conversation(
     """
     await remove_conversation(session, await _conversation(session, conversation_id))
     return Response(status_code=204)
+
+
+@router.put("/conversations/{conversation_id}/trip")
+async def attach_to_trip(
+    conversation_id: uuid.UUID,
+    chosen: ChosenTrip,
+    session: AsyncSession = Depends(get_session),
+) -> TripPlanView | None:
+    """Move a Conversation to a different Trip, or take it off the one it is on.
+
+    Which Trip a Conversation belongs to is the advisor's guess, and one it can
+    get wrong — so correcting it is the traveler's (ADR-0002). What comes back
+    is the Trip Plan this Conversation refines from here, and null when it
+    refines none, because that is what the pane beside it has to show next.
+    """
+    conversation = await _conversation(session, conversation_id)
+    trip = None
+    if chosen.trip_id is not None:
+        trip = await find_trip(session, chosen.trip_id)
+        if trip is None:
+            raise HTTPException(status_code=404, detail="No such Trip.")
+    await attach_conversation(session, conversation, trip)
+    return None if trip is None else TripPlanView.of(await read_plan(session, trip))
 
 
 @router.post("/conversations/{conversation_id}/messages")
