@@ -11,6 +11,7 @@ import type {
   AdvisorInstructions,
   ConversationRead,
   ConversationSummary,
+  Failure,
   PartOfDay,
   PlanPatch,
   ProfileFact,
@@ -192,15 +193,40 @@ export async function* say(
   content: string,
   signal?: AbortSignal,
 ): AsyncGenerator<TurnEvent> {
-  const response = await fetch(`/api/conversations/${conversationId}/messages`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ content }),
-    signal,
-  });
+  yield* turn(
+    await fetch(`/api/conversations/${conversationId}/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ content }),
+      signal,
+    }),
+  );
+}
 
+/**
+ * Run a failed turn again, in place of the reply it never gave.
+ *
+ * The named Message is the one that turn left behind. The question it answers
+ * is already recorded, so it is not sent again — which is the whole reason
+ * this is a call of its own rather than saying the same words twice.
+ */
+export async function* runAgain(
+  conversationId: string,
+  messageId: string,
+  signal?: AbortSignal,
+): AsyncGenerator<TurnEvent> {
+  yield* turn(
+    await fetch(`/api/conversations/${conversationId}/messages/${messageId}/again`, {
+      method: "POST",
+      signal,
+    }),
+  );
+}
+
+/** A streamed turn, read event by event, however it was asked for. */
+async function* turn(response: Response): AsyncGenerator<TurnEvent> {
   if (!response.ok || !response.body) {
-    yield { type: "failed", detail: await refusal(response) };
+    yield { type: "failed", message: null, ...(await refusal(response)) };
     return;
   }
 
@@ -242,12 +268,28 @@ function refused(response: Response): void {
   if (!response.ok) throw new Error(`${response.status} from ${response.url}`);
 }
 
-async function refusal(response: Response): Promise<string> {
+/**
+ * What the API said when it would not run a turn.
+ *
+ * A refusal the application composed says which kind of failure it is — a
+ * missing key is the one the traveler can do something about, and it says so.
+ * Anything else that comes back is the application declining the request,
+ * which is nobody's configuration and so is reported as its own.
+ */
+async function refusal(response: Response): Promise<Failure> {
   try {
     const body = (await response.json()) as { detail?: unknown };
-    if (typeof body.detail === "string") return body.detail;
+    const detail = body.detail;
+    if (typeof detail === "string") return { kind: "application", detail };
+    if (isFailure(detail)) return detail;
   } catch {
     // A response that is not the API's own JSON says nothing useful.
   }
-  return "The advisor could not answer.";
+  return { kind: "application", detail: "The advisor could not answer." };
+}
+
+function isFailure(detail: unknown): detail is Failure {
+  if (typeof detail !== "object" || detail === null) return false;
+  const given = detail as Partial<Failure>;
+  return typeof given.kind === "string" && typeof given.detail === "string";
 }

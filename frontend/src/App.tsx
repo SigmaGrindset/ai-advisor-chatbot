@@ -456,7 +456,7 @@ export function App() {
             conversation={current}
             arriving={turn.arriving}
             consulting={turn.consulting}
-            trouble={turn.trouble}
+            unrecorded={turn.unrecorded}
             stopped={turn.stopped}
             failure={failure}
             draft={turn.draft}
@@ -464,7 +464,8 @@ export function App() {
             onDraft={turn.setDraft}
             onSend={turn.send}
             onStop={turn.stop}
-            onRetry={turn.again}
+            onRetry={turn.retry}
+            onAskAgain={turn.again}
             onShowConversations={folded.conversations}
             onShowRecord={folded.record}
             peek={folded.peek}

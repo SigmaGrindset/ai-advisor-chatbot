@@ -28,8 +28,29 @@ async def send(api: httpx2.AsyncClient, conversation: str, said: str) -> list[di
     return events
 
 
-async def transcript(api: httpx2.AsyncClient, conversation: str) -> list[tuple[str, str]]:
-    """What a Conversation holds, as the browser would read it back after a reload."""
+async def again(
+    api: httpx2.AsyncClient, conversation: str, message: str
+) -> list[dict[str, Any]]:
+    """Run the failed turn that left `message` again, and read back the stream."""
+    events: list[dict[str, Any]] = []
+    async with api.stream(
+        "POST", f"/api/conversations/{conversation}/messages/{message}/again"
+    ) as response:
+        assert response.status_code == 200
+        async for line in response.aiter_lines():
+            if line.startswith("data: "):
+                events.append(json.loads(line.removeprefix("data: ")))
+    return events
+
+
+async def messages(api: httpx2.AsyncClient, conversation: str) -> list[dict[str, Any]]:
+    """Every Message of a Conversation, as the browser reads them back."""
     reopened = await api.get(f"/api/conversations/{conversation}")
     assert reopened.status_code == 200
-    return [(message["role"], message["content"]) for message in reopened.json()["messages"]]
+    said: list[dict[str, Any]] = reopened.json()["messages"]
+    return said
+
+
+async def transcript(api: httpx2.AsyncClient, conversation: str) -> list[tuple[str, str]]:
+    """What a Conversation holds, as the browser would read it back after a reload."""
+    return [(message["role"], message["content"]) for message in await messages(api, conversation)]

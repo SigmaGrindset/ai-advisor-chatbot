@@ -17,7 +17,7 @@ from typing import Any
 
 import httpx2
 
-from .fakes.canned_model import CannedModel, answering, replying, unwell
+from .fakes.canned_model import CannedModel, answering, content, gives_up, replying, unwell
 from .fakes.canned_transport import Responder
 from .fakes.talking import send, transcript
 
@@ -27,6 +27,12 @@ ASKED = "Tell me everything about Lisbon in April. " * 188
 ANSWERED = "April in Lisbon is mild and bright, and Sintra is worth a day. " * 32
 
 SUMMARY = "They have settled on four days in Lisbon in April, and want Sintra in them."
+
+#: As much of a reply as arrived before the turn it belonged to gave up. As
+#: long as a reply that reports back a page, so that the stretch it is in is
+#: the one the third turn folds away.
+HALF_WRITTEN = "The Alfama is worth an afternoon on its own, and " * 42
+
 
 
 def _system(prompt: list[dict[str, Any]]) -> str:
@@ -128,3 +134,30 @@ async def test_a_summary_that_could_not_be_written_folds_nothing_away(
         "assistant",
         "user",
     ]
+
+
+async def test_a_half_written_reply_is_not_folded_into_the_summary_either(
+    api: httpx2.AsyncClient, conversation: str, outbound_routes: dict[str, Responder]
+) -> None:
+    """A failed Message is kept from the advisor by the summary as well as by the prompt.
+
+    `advisor/prompt.py` leaves one out of what is sent verbatim, which is the
+    whole of the rule for a short Conversation. A long one has a second way
+    back in: the stretch that is folded away is read by the summarising model
+    first, and what it writes is in every prompt from then on.
+    """
+    outbound_routes["openrouter.ai"] = replying(ANSWERED, utility=answering(SUMMARY))
+    await send(api, conversation, ASKED)
+
+    # A turn that dies with half a reply written, in the stretch that is about
+    # to be folded away.
+    outbound_routes["openrouter.ai"] = CannedModel(content(HALF_WRITTEN), gives_up())
+    await send(api, conversation, ASKED)
+
+    outbound_routes["openrouter.ai"] = model = replying(ANSWERED, utility=answering(SUMMARY))
+    await send(api, conversation, ASKED)
+
+    folded = str([call["messages"] for call in _summarising(model)])
+    # The stretch was folded at all — otherwise this asserts nothing.
+    assert ASKED[:40] in folded
+    assert HALF_WRITTEN[:48] not in folded

@@ -13,7 +13,12 @@ logger = logging.getLogger(__name__)
 
 
 def create_engine(database_url: str) -> AsyncEngine:
-    return create_async_engine(database_url, pool_pre_ping=True)
+    # `hide_parameters` keeps bound values out of SQLAlchemy's own error text
+    # and logging. Without it, a statement that fails on the `message` table
+    # carries what was said into the traceback whoever is running the server
+    # reads — the one way a Message body could reach a log despite nothing here
+    # ever logging one on purpose.
+    return create_async_engine(database_url, pool_pre_ping=True, hide_parameters=True)
 
 
 async def apply_schema(engine: AsyncEngine) -> None:

@@ -30,6 +30,23 @@ export type Citation = {
   query: string | null;
 };
 
+/**
+ * Whose problem a failed turn is.
+ *
+ * Four rather than a sentence on its own, because the reader of a failure is
+ * deciding what to do about it: set something, pay something, wait, or report
+ * a bug. `configuration` and `credit` are theirs to fix, `upstream` is nobody's
+ * and worth trying again, and `application` is ours.
+ */
+export type FailureKind = "configuration" | "credit" | "upstream" | "application";
+
+/** Why a turn did not answer, as the traveler is told about it. */
+export type Failure = {
+  kind: FailureKind;
+  /** What happened and what would change it, addressed to whoever is reading. */
+  detail: string;
+};
+
 export type Message = {
   id: string;
   role: MessageRole;
@@ -45,6 +62,14 @@ export type Message = {
   cost_usd: number | null;
   /** Empty unless the turn that produced this Message looked something up. */
   citations: Citation[];
+  /**
+   * Why the turn that produced this Message stopped, and null when it did not.
+   * An advisor Message carrying one holds whatever had arrived of the reply,
+   * which may be nothing at all — the marker is what tells a turn that died
+   * from an advisor with nothing to say, and what puts the question back on
+   * screen with a way to ask it again after a reload.
+   */
+  failure: Failure | null;
 };
 
 /** A Conversation as it appears in the list, without its transcript. */

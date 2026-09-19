@@ -77,6 +77,20 @@ def calling(name: str, *arguments: str, call_id: str = "call-1", at: int = 0) ->
     ]
 
 
+def gives_up(code: int | None = None) -> bytes:
+    """The event a provider sends when it stops mid-stream.
+
+    A stream that fails after it has started is a 200 that is still arriving,
+    so the failure travels as an event in the body rather than as a status. Its
+    `code` is the provider's own, and is absent when the provider only says
+    that something went wrong.
+    """
+    error: dict[str, Any] = {"message": "the upstream provider went away"}
+    if code is not None:
+        error["code"] = code
+    return event({"error": error})
+
+
 def usage(cost: float) -> bytes:
     """The final chunk, carrying OpenRouter's own figures for the call."""
     chunk = _chunk({}, finish_reason="stop")

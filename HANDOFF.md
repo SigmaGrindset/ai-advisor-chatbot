@@ -1,14 +1,16 @@
 # Handoff — orientation for the next agent
 
 **Repo:** `D:\Antonio\ai-advisor-chatbot` · branch `main` · **no git remote**
-**Current as of** ticket 13 (tickets 01–13 shipped; the advisor now calls Live-data
+**Current as of** ticket 14 (tickets 01–14 shipped; the advisor now calls Live-data
 Tools, searches the web through a guarded query, leaves Citations behind, keeps a Trip
 Plan that fills in beside the conversation as the traveler talks, carries what it has
 learned about the traveler from one Conversation into the next, knows by name which other
 Conversations the traveler has going, and goes on working in a Conversation that has run
 for weeks — and the traveler has a page listing every Trip, can move a Conversation onto
 the right one, can read and delete everything that was learned about them, and can rewrite
-the Advisor Instructions and read the whole prompt those are composed into).
+the Advisor Instructions and read the whole prompt those are composed into — and a turn
+that fails says whose problem it is, keeps whatever of the answer had arrived, and can be
+run again without asking the question twice).
 
 This is the standing orientation for anyone picking up work here: how the application is
 put together, what binds the names you write, how this repo is worked in, and what is
@@ -32,9 +34,10 @@ known to bite on this machine. It is not a task — the task is a ticket.
   0002 (Trips own Trip Plans), 0006 (trip plan as a persistent pane) and 0007 (mobile as
   a first-class target) constrain the frontend, 0011 amends 0006 over what the peek on a
   phone actually is, and **0012 is what is allowed to be a page** — 12 added the second
-  and last one it names, so a third wanting a page has to argue with it; **0013** is why
-  the advisor is told the names of the traveler's other Conversations and nothing that was
-  said in them.
+  and last one it names, so a third wanting a page has to argue with it; and **0013** is
+  why the advisor is told the names of the traveler's other Conversations and nothing that
+  was said in them. Why a failed turn is a Message rather than something the browser
+  remembers is in ticket 14 rather than an ADR, the way 11's profile shape is in ticket 11.
 - `docs/agents/` — the issue tracker, triage labels and domain-doc conventions.
 - `.scratch/ai-travel-advisor/spec.md` and `issues/01`–`15` — the work. Each ticket carries
   a `**Status:**` line using the five canonical labels — a finished ticket keeps its label
@@ -59,7 +62,7 @@ Postgres holds everything; the schema is applied at startup, so there is no migr
 | `services/profile.py` | applying one Traveler Profile change, and reading the profile back for the prompt and the wire | the profile's shape and the database |
 | `services/instructions.py` | which Advisor Instructions are in force, what saving a revision does, and the one assembly of the system prompt every caller composes through | the shipped default and the database |
 | `services/compaction.py` | folding a Conversation's oldest Messages away when it has grown too long to send whole, and answering with what is still sent verbatim | the rolling summary and the database |
-| `advisor/` | `loop.py`, `tools.py`, `planning.py`, `remembering.py`, `calls.py`, `searching.py`, `prompt.py`, `client.py`, `instructions.py`, `titles.py`, `compaction.py`, `conversations.py`, `utility.py` | the model, the plan's and profile's shapes and the keyless sources — no HTTP framework, no database, no browser |
+| `advisor/` | `loop.py`, `tools.py`, `planning.py`, `remembering.py`, `calls.py`, `searching.py`, `prompt.py`, `client.py`, `instructions.py`, `titles.py`, `compaction.py`, `conversations.py`, `failures.py`, `utility.py` | the model, the plan's and profile's shapes and the keyless sources — no HTTP framework, no database, no browser |
 | `db/` | `tables.py`, `connection.py`, `conversations.py`, `trips.py`, `traveler.py`, `prompt_versions.py` | SQLAlchemy |
 | `privacy/` | `outbound.py` (the single injectable HTTP client every outbound call leaves through) and `queries.py` (the guard on the one free-text thing that leaves) | nothing above it |
 | `config.py`, `frontend.py`, `main.py` | settings, static serving, composition | everything, by construction |
@@ -126,6 +129,7 @@ components/
                     dragging.ts  layout.ts  snapping.ts  viewport.ts
   conversation/     ConversationPane  ConversationList  Composer  Prose  Citations
                     markdown.ts  announcing.ts  following.ts  firstRun.ts  conversationName.ts
+                    spend.ts  failures.ts
   plan/             PlanPanel  EditableField  PlanPeek
                     holding.ts  merging.ts  fields.ts  dates.ts  money.ts
                     highlighting.ts  questionPrompt.ts
@@ -142,6 +146,10 @@ design/             tokens.css  base.css  icons.ts  tripPastel.ts
   is the turn before it is one.
 - **`App.tsx` holds the Conversation state** because a turn both appends a Message to the
   open Conversation and moves its row to the top of the list; two copies would disagree.
+- **A failed turn is a Message, not browser state** (ticket 14). What `useTurn` still holds
+  is the one failure that recorded nothing: a turn that never reached the server. Its
+  retry re-sends the words; the retry on a recorded failure is `runAgain`, which discards
+  the Message that turn left and answers the question already in the transcript.
 - **`stream/events.ts` is the whole mid-turn vocabulary** — the union of what the server can
   say while a turn runs. Anything new a turn can report is a member of that union. 07 added
   `consulting` and `consulted`, which is what the status line above a forming reply is
@@ -250,8 +258,8 @@ cd D:/Antonio/ai-advisor-chatbot/backend && D:/Antonio/ai-advisor-chatbot/.venv/
 cd D:/Antonio/ai-advisor-chatbot/backend && D:/Antonio/ai-advisor-chatbot/.venv/Scripts/python.exe -m mypy
 ```
 
-After ticket 13: **105 frontend tests in 15 files** (~1s), `tsc` silent, build clean; **107
-backend tests**, mypy clean over 61 files. Confirm those numbers *before* you start — if
+After ticket 14: **110 frontend tests in 16 files** (~1.5s), `tsc` silent, build clean;
+**117 backend tests**, mypy clean over 63 files. Confirm those numbers *before* you start — if
 they do not match, something changed underneath you. Update this paragraph when a ticket
 legitimately moves them.
 
@@ -261,16 +269,19 @@ which page an address names, what a Trip is called when nobody has named one, an
 becomes of the Trips list when a plan arrives — and 11's one, the order the Traveler
 Profile reads in. 12 added no module of its own and only two cases to the router's, which
 is why it moved that suite by two. 13 left it alone entirely — Compaction is not surfaced
-in the interface in any way, so the browser was not told about it. What draws all of them
+in the interface in any way, so the browser was not told about it. 14 added one, `spend`:
+how a figure that is a fraction of a cent is written, so that two turns which cost
+different amounts do not read as the same one. What draws all of them
 is still `.tsx` the Node-only suite does not reach, and was checked by hand.
 
 **The schema is applied at startup and never altered**, so a database left over from an
 earlier ticket has none of 09's `trip`, `itinerary_item` or `open_question` tables, no
 `conversation.trip_id`, none of 11's `profile_fact` table or `traveler.next_fact_ref`
-column, none of 12's `prompt_version` table or `message.prompt_version_id` column, and
-neither of 13's `conversation.summary` and `conversation.summarised_messages`.
-`docker compose down -v` before verifying by hand. `create_all` *does* add a missing
-table, so against an existing database each of those three tickets needs only its columns:
+column, none of 12's `prompt_version` table or `message.prompt_version_id` column,
+neither of 13's `conversation.summary` and `conversation.summarised_messages`, and not
+14's `message.failure`. `docker compose down -v` before verifying by hand. `create_all`
+*does* add a missing table, so against an existing database each of those tickets needs
+only its columns:
 
 ```sql
 alter table traveler add column if not exists next_fact_ref integer not null default 1;
@@ -279,9 +290,10 @@ alter table message add column if not exists prompt_version_id uuid
 alter table conversation add column if not exists summary text;
 alter table conversation add column if not exists summarised_messages integer not null
   default 0;
+alter table message add column if not exists failure jsonb;
 ```
 
-(10 added nothing, so a database through 09, 11, 12 and 13 needs nothing more.)
+(10 added nothing, so a database through 09, 11, 12, 13 and 14 needs nothing more.)
 
 **Vite proxies to `http://localhost:8000`, which resolves to `[::1]` first here.** A
 backend started with `--host 127.0.0.1` is invisible to it and every `/api` call comes back

@@ -18,15 +18,18 @@ from openai.types.chat import ChatCompletionMessageParam
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..advisor import failures
 from ..advisor.client import OpenRouterKeyMissing, create_model_client
 from ..advisor.loop import Consulted, Consulting, ReplyFragment
 from ..advisor.prompt import compose_prompt
+from ..advisor.failures import Failure, FailureKind
 from ..advisor.tools import LiveDataTools
 from ..config import Settings, get_settings
 from ..db.connection import get_session
 from ..db.conversations import (
     begin_conversation,
     conversations_by_activity,
+    discard_message,
     find_conversation,
     messages_in,
     record_message,
@@ -69,6 +72,18 @@ class CitationView(BaseModel):
     query: str | None = None
 
 
+class FailureView(BaseModel):
+    """Why the turn that produced a Message did not finish.
+
+    The kind is what the interface labels it with, and is the whole of what
+    tells a traveler with no key from a traveler with no credit from a bug
+    here. The detail is the sentence under that label.
+    """
+
+    kind: FailureKind
+    detail: str
+
+
 class MessageView(BaseModel):
     id: uuid.UUID
     role: MessageRole
@@ -83,6 +98,12 @@ class MessageView(BaseModel):
     cost_usd: float | None
     #: Empty unless the turn went and looked something up.
     citations: list[CitationView]
+    #: Why the turn that produced this Message stopped, and null when it did
+    #: not. An advisor Message carrying one holds whatever had arrived of the
+    #: reply, which may be nothing — the marker is what tells a turn that died
+    #: from an advisor with nothing to say. Defaulted, because Messages
+    #: recorded before there was a marker have no such key stored against them.
+    failure: FailureView | None = None
 
     @classmethod
     def of(cls, message: Message) -> "MessageView":
@@ -94,6 +115,9 @@ class MessageView(BaseModel):
             prompt_version_id=message.prompt_version_id,
             cost_usd=float(message.cost_usd) if message.cost_usd is not None else None,
             citations=[CitationView.model_validate(cited) for cited in message.citations],
+            failure=(
+                None if message.failure is None else FailureView.model_validate(message.failure)
+            ),
         )
 
 
@@ -234,19 +258,92 @@ async def say(
 ) -> StreamingResponse:
     """Say something to the advisor and watch the reply arrive."""
     conversation = await _conversation(session, conversation_id)
-    try:
-        model = create_model_client(http_client, settings)
-    except OpenRouterKeyMissing as missing:
-        # Nothing is persisted: the traveler's question is theirs to send again
-        # once the key is there.
-        raise HTTPException(status_code=503, detail=str(missing)) from missing
+    # Before anything is recorded, so a machine with no key leaves the
+    # traveler's question in the composer rather than in a transcript with
+    # nothing under it.
+    model = _model(http_client, settings)
 
     # Recorded before the model is called, so a turn that fails mid-stream still
     # leaves the traveler's own words where they said them.
     traveler_message = await record_message(
         session, conversation, role=MessageRole.TRAVELER, content=saying.content
     )
+    return await _turn(
+        session, conversation, traveler_message, model, http_client, settings, announce=True
+    )
 
+
+@router.post("/conversations/{conversation_id}/messages/{message_id}/again")
+async def run_again(
+    conversation_id: uuid.UUID,
+    message_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    http_client: httpx2.AsyncClient = Depends(get_http_client),
+    settings: Settings = Depends(get_settings),
+) -> StreamingResponse:
+    """Run a failed turn again, in place of the reply it never gave.
+
+    The named Message is the one the failed turn left behind. It goes, and the
+    turn is run again from the question that is already recorded — which is the
+    whole point of this route existing rather than the interface sending the
+    words a second time: a turn that failed would otherwise leave the same
+    question in the transcript twice, once with an answer and once without.
+
+    Only the last turn of a Conversation can be run again. A reply arriving in
+    the middle of a transcript would answer a question the traveler has since
+    moved on from, and would be written after everything it was meant to come
+    before.
+    """
+    conversation = await _conversation(session, conversation_id)
+    model = _model(http_client, settings)
+    said = await messages_in(session, conversation)
+    failed = said[-1] if said else None
+    if failed is None or failed.id != message_id:
+        raise HTTPException(
+            status_code=409, detail="Only the last turn of a Conversation can be run again."
+        )
+    if failed.failure is None:
+        raise HTTPException(status_code=409, detail="That turn did not fail.")
+    asked = said[-2] if len(said) > 1 else None
+    if asked is None or asked.role is not MessageRole.TRAVELER:
+        raise HTTPException(status_code=409, detail="That turn has no question to run again.")
+
+    # Gone before the prompt is composed, so the advisor is asked the question
+    # rather than asked to finish its own half-sentence.
+    await discard_message(session, failed)
+    return await _turn(
+        session, conversation, asked, model, http_client, settings, announce=False
+    )
+
+
+def _model(http_client: httpx2.AsyncClient, settings: Settings) -> AsyncOpenAI:
+    """The model client, or a refusal that says which setting is missing."""
+    try:
+        return create_model_client(http_client, settings)
+    except OpenRouterKeyMissing as missing:
+        # Structured rather than a sentence, so the interface labels it the
+        # same way it labels a failure that happens mid-turn — a traveler
+        # staring at a machine with no key is told it is a configuration
+        # problem, in the one place they are looking.
+        raise HTTPException(status_code=503, detail=_refusal(failures.NO_KEY)) from missing
+
+
+async def _turn(
+    session: AsyncSession,
+    conversation: Conversation,
+    traveler_message: Message,
+    model: AsyncOpenAI,
+    http_client: httpx2.AsyncClient,
+    settings: Settings,
+    *,
+    announce: bool,
+) -> StreamingResponse:
+    """One turn, composed and handed to the browser as it happens.
+
+    Both ways into a turn compose it the same way, because they are the same
+    turn: the only difference is whether the question it answers is one the
+    traveler has just asked or one already in the transcript.
+    """
     # Read at the top of every turn rather than held anywhere, which is the
     # whole of what makes an edit to the Advisor Instructions take effect on
     # the very next Message of a Conversation that was already under way.
@@ -273,6 +370,7 @@ async def say(
             prompt_version,
             LiveDataTools(http_client, model, utility_model=settings.utility_model),
             settings,
+            announce=announce,
         ),
         media_type="text/event-stream",
         headers={"cache-control": "no-store", "x-accel-buffering": "no"},
@@ -288,9 +386,17 @@ async def _turn_events(
     prompt_version: PromptVersion,
     tools: LiveDataTools,
     settings: Settings,
+    *,
+    announce: bool,
 ) -> AsyncIterator[bytes]:
-    """The turn as the browser reads it."""
-    yield _message_event("traveler_message", traveler_message)
+    """The turn as the browser reads it.
+
+    The traveler's own Message opens the turn that recorded it, and not one
+    running an earlier turn again: that question is on their screen already,
+    and announcing it a second time would draw it twice.
+    """
+    if announce:
+        yield _message_event("traveler_message", traveler_message)
     async for happening in take_turn(
         session, conversation, traveler_message, model, prompt, prompt_version, tools, settings
     ):
@@ -334,8 +440,28 @@ def _as_event(happening: Happening) -> bytes:
     if isinstance(happening, Titled):
         return event({"type": "conversation_titled", "title": happening.title})
     if isinstance(happening, Failed):
-        return event({"type": "failed", "detail": happening.detail})
+        # The Message goes with it: the failure is recorded against the half a
+        # reply that arrived, and the interface needs to know which Message to
+        # offer running again.
+        return event(
+            {
+                "type": "failed",
+                **_refusal(happening.failure),
+                "message": MessageView.of(happening.message).model_dump(mode="json"),
+            }
+        )
     assert_never(happening)
+
+
+def _refusal(failure: Failure) -> dict[str, str]:
+    """A failure as the browser reads it, wherever it is being told about one.
+
+    Through the view rather than from the service's own object, so that what a
+    failed turn looks like on the wire is decided here with every other shape
+    the browser is sent — and so that the refusal of a turn that never started
+    and the failure of one that did are the same two keys.
+    """
+    return FailureView(kind=failure.kind, detail=failure.detail).model_dump(mode="json")
 
 
 def _message_event(kind: str, message: Message) -> bytes:

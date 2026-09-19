@@ -136,7 +136,15 @@ def describe(summary: str | None) -> str:
 def _summarising_prompt(
     earlier: str | None, folding: Sequence[Message]
 ) -> list[ChatCompletionMessageParam]:
-    said = "\n\n".join(f"{_who(message)}: {message.content}" for message in folding)
+    # A Message whose turn failed is folded away with the rest and contributes
+    # nothing to what the summary says. It is half a sentence nobody finished,
+    # and a summary is a record of what was said — this is the same rule
+    # `advisor/prompt.py` keeps for what is still sent verbatim, kept here so
+    # that a Conversation growing long does not smuggle the half-sentence back
+    # in through the summary.
+    said = "\n\n".join(
+        f"{_who(message)}: {message.content}" for message in folding if message.failure is None
+    )
     so_far = "The summary so far:\n" + earlier if earlier else "There is no summary yet."
     return [
         ChatCompletionSystemMessageParam(role="system", content=_SUMMARISING_INSTRUCTION),

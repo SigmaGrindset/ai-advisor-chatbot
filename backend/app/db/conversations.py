@@ -140,6 +140,7 @@ async def record_message(
     prompt_version_id: uuid.UUID | None = None,
     cost_usd: Decimal | None = None,
     citations: Sequence[dict[str, str | None]] = (),
+    failure: dict[str, str] | None = None,
 ) -> Message:
     """Keep something that was said, and answer with it as it was kept.
 
@@ -148,7 +149,9 @@ async def record_message(
     called, the advisor's before the browser is told they exist.
 
     The Prompt Version is the one the turn composed its prompt from, and is
-    left out on a traveler Message, which no prompt produced.
+    left out on a traveler Message, which no prompt produced. The failure is
+    what went wrong in the turn, and is left out on every Message whose turn
+    finished — including one that was recorded before the turn failed.
     """
     message = Message(
         conversation_id=conversation.id,
@@ -157,10 +160,23 @@ async def record_message(
         prompt_version_id=prompt_version_id,
         cost_usd=cost_usd,
         citations=list(citations),
+        failure=failure,
     )
     session.add(message)
     await session.commit()
     return message
+
+
+async def discard_message(session: AsyncSession, message: Message) -> None:
+    """Take a Message back out of a Conversation.
+
+    The one thing this is for is running a failed turn again: the Message that
+    turn left behind is the reply it never gave, and the new turn is going to
+    give one. Nothing else in the application removes a single Message —
+    a Conversation goes whole or not at all.
+    """
+    await session.delete(message)
+    await session.commit()
 
 
 async def messages_in(session: AsyncSession, conversation: Conversation) -> list[Message]:

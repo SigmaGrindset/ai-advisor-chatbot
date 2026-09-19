@@ -10,6 +10,7 @@ the shape of the HTTP response being decided in here.
 """
 
 import logging
+import traceback
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 
@@ -17,6 +18,7 @@ from openai import APIError, AsyncOpenAI
 from openai.types.chat import ChatCompletionMessageParam
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..advisor import failures
 from ..advisor.loop import (
     Consulted,
     Consulting,
@@ -29,6 +31,7 @@ from ..advisor.planning import TripPlan
 from ..advisor.remembering import Fact
 from ..advisor.titles import name_conversation
 from ..advisor.tools import LiveDataTools
+from ..advisor.failures import Failure
 from ..config import Settings
 from ..db.conversations import record_message, retitle_conversation
 from ..db.tables import Conversation, Message, MessageRole, PromptVersion
@@ -84,9 +87,16 @@ class Titled:
 
 @dataclass(frozen=True, slots=True)
 class Failed:
-    """The turn did not answer, and this is what the traveler should be told."""
+    """The turn did not answer, and this is what is left of it.
 
-    detail: str
+    A Message either way, because the failure is the traveler's to come back
+    to: it holds whatever had arrived of the reply — nothing at all, when the
+    turn fell over before the advisor had written a word — and carries the
+    failure as its marker.
+    """
+
+    message: Message
+    failure: Failure
 
 
 #: Everything a turn can produce. The loop's own events are passed along
@@ -121,7 +131,19 @@ async def take_turn(
     prompt was composed from: what the reply is stamped with is the version
     that actually produced it, not whatever is in force by the time it is
     written down.
+
+    A turn that fails leaves a Message behind rather than only an event, so
+    that what the traveler is looking at survives a reload and can be run
+    again from where it stopped.
     """
+    # What has arrived of the reply. Kept as it is passed on, so that a turn
+    # dying halfway through an answer can still leave the half the traveler
+    # watched being written.
+    written: list[str] = []
+    # Whether the reply is already a Message. What is left of a turn after that
+    # is work the traveler never sees — naming the Conversation — and a
+    # failure in it is not a failure of the turn.
+    answered = False
     try:
         async for event in run_turn(
             model,
@@ -135,7 +157,12 @@ async def take_turn(
             plan=TripPlanning(session, conversation),
             profile=Remembering(session),
         ):
-            if isinstance(event, (ReplyFragment, Consulting, Consulted)):
+            if isinstance(event, ReplyFragment):
+                written.append(event.text)
+                yield event
+                continue
+
+            if isinstance(event, (Consulting, Consulted)):
                 yield event
                 continue
 
@@ -163,6 +190,18 @@ async def take_turn(
                 # the traveler comes back to read it tomorrow.
                 citations=[citation.recorded() for citation in event.citations],
             )
+            # The figure and the Conversation it belongs to, and not a word of
+            # what was said: what a turn cost is the one thing about it worth
+            # having in a log, and is what makes spend readable without asking
+            # the provider's account endpoint afterwards.
+            logger.info(
+                "A turn answered in conversation %s, costing %s",
+                conversation.id,
+                "an unreported amount"
+                if event.cost_usd is None
+                else f"{event.cost_usd} USD",
+            )
+            answered = True
             yield Recorded(advisor_message)
 
             # Last, because naming is another round trip to another model. The
@@ -173,11 +212,71 @@ async def take_turn(
             )
             if named is not None:
                 yield Titled(named)
-    except APIError as failure:
-        # Deliberately not the traveler's words or the model's: the log is not a
-        # second copy of the conversation.
-        logger.warning("The turn failed: %s", type(failure).__name__)
-        yield Failed("The advisor could not answer.")
+    except APIError as error:
+        failed = failures.of(error)
+        # The kind and the exception's name, and deliberately neither the
+        # traveler's words nor the model's: the log is not a second copy of the
+        # conversation. The kind is there because it is the thing worth
+        # grepping for — a log full of `configuration` is one machine that was
+        # never given a key.
+        logger.warning("A turn failed: %s (%s)", failed.kind.value, type(error).__name__)
+        if not answered:
+            yield await _failed(session, conversation, prompt_version, written, failed)
+    except Exception as error:
+        # Anything that is not the provider's doing is this application's, and
+        # is reported as such rather than as "the advisor could not answer" —
+        # the whole point of the distinction is that one of them is a bug.
+        #
+        # The type and the line it came from, and not the exception's own
+        # message: a database error carries the statement that failed and the
+        # parameters bound into it, which for a Message is its content.
+        logger.error(
+            "A turn failed unexpectedly: %s at %s", type(error).__name__, _where(error)
+        )
+        if not answered:
+            yield await _failed(
+                session, conversation, prompt_version, written, failures.UNEXPECTED
+            )
+
+
+async def _failed(
+    session: AsyncSession,
+    conversation: Conversation,
+    prompt_version: PromptVersion,
+    written: Sequence[str],
+    failed: Failure,
+) -> Failed:
+    """Keep what the turn had written, marked with what stopped it.
+
+    Stamped with the Prompt Version like any other advisor Message: a reply
+    that stopped halfway is still a reply those instructions produced, and the
+    half of it that arrived is explained by them.
+    """
+    return Failed(
+        await record_message(
+            session,
+            conversation,
+            role=MessageRole.ADVISOR,
+            content="".join(written),
+            prompt_version_id=prompt_version.id,
+            failure=failed.recorded(),
+        ),
+        failed,
+    )
+
+
+def _where(failure: BaseException) -> str:
+    """The file and line a failure came from, and nothing that was in scope there.
+
+    Enough to tell a bug from a misconfiguration at a glance, which is the
+    whole reason an application error is logged differently from a provider's.
+    A traceback would say the same thing and carry whatever was in the
+    exception's message with it.
+    """
+    frames = traceback.extract_tb(failure.__traceback__)
+    if not frames:
+        return "an unknown place"
+    return f"{frames[-1].filename}:{frames[-1].lineno}"
 
 
 async def _name_unless_named(

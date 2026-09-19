@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowDown, MapPinned, PanelLeft, Radar, RotateCcw, TriangleAlert } from "lucide-react";
 
 import { settled } from "./announcing";
-import type { Citation, Conversation, Message } from "../../api/types";
+import type { Citation, Conversation, Failure, Message } from "../../api/types";
 import { Citations } from "./Citations";
 import { Composer } from "./Composer";
 import { conversationName } from "./conversationName";
@@ -11,7 +11,9 @@ import { atBottom, toFoot } from "./following";
 import { GREETING, STARTERS } from "./firstRun";
 import { spoken } from "./markdown";
 import { Prose } from "./Prose";
-import type { Trouble } from "../../stream/useTurn";
+import { spent } from "./spend";
+import { failureLabel } from "./failures";
+import type { Unrecorded } from "../../stream/useTurn";
 
 /** One thing the live region has been given to read out, in its turn. */
 type Announcement = { at: number; text: string };
@@ -20,7 +22,7 @@ export function ConversationPane({
   conversation,
   arriving,
   consulting,
-  trouble,
+  unrecorded,
   stopped,
   failure,
   draft,
@@ -29,6 +31,7 @@ export function ConversationPane({
   onSend,
   onStop,
   onRetry,
+  onAskAgain,
   onShowConversations,
   onShowRecord,
   peek,
@@ -39,8 +42,12 @@ export function ConversationPane({
   arriving: string | null;
   /** What this turn is fetching right now, and null when it is fetching nothing. */
   consulting: string | null;
-  /** The last turn in this Conversation, if it failed. */
-  trouble: Trouble | null;
+  /**
+   * The last turn in this Conversation, if it failed without reaching the
+   * server. A turn that reached it left a Message carrying its own failure,
+   * and that one is drawn in the transcript where it happened.
+   */
+  unrecorded: Unrecorded | null;
   /**
    * What had arrived of a reply the traveler stopped, and null if they
    * stopped none. Empty when they stopped one before it had written anything.
@@ -55,7 +62,10 @@ export function ConversationPane({
   onSend: () => void;
   /** How to stop this Conversation's reply, and null when it has none. */
   onStop: (() => void) | null;
-  onRetry: (trouble: Trouble) => void;
+  /** Run the failed turn this Message is what is left of, again. */
+  onRetry: (failed: Message) => void;
+  /** Ask a question again, when nothing of the turn was kept to run. */
+  onAskAgain: (asking: Unrecorded) => void;
   /**
    * How to reach what this width has folded away, and null at a width that
    * has folded nothing away. The controls are the shell's, drawn here because
@@ -115,7 +125,7 @@ export function ConversationPane({
   const announcements = useAnnouncement({ replying, arriving, consulting, stopped, reply: last });
 
   const untouched =
-    said.length === 0 && arriving === null && trouble === null && stopped === null;
+    said.length === 0 && arriving === null && unrecorded === null && stopped === null;
 
   return (
     <main className="flex min-w-0 flex-1 flex-col bg-canvas">
@@ -176,7 +186,20 @@ export function ConversationPane({
                 role={message.role}
                 content={message.content}
                 citations={message.citations}
-              />
+                cost={message.cost_usd}
+              >
+                {message.failure !== null && (
+                  <NotAnswered
+                    failure={message.failure}
+                    // Only the last turn can be run again: a reply arriving
+                    // above questions the traveler has since asked would
+                    // answer one they have moved on from. An older failure
+                    // keeps its marker and says what happened, which is what
+                    // it was kept for.
+                    onRetry={message.id === last?.id ? () => onRetry(message) : null}
+                  />
+                )}
+              </MessageView>
             ))}
 
             {/* Above the reply it is holding up, so the pause reads as the
@@ -194,30 +217,14 @@ export function ConversationPane({
               </MessageView>
             )}
 
-            {trouble !== null && (
+            {unrecorded !== null && (
               <>
-                {/* A turn can fail before the traveler's own words were
-                    recorded, and when it does they are only here. */}
-                {last?.content !== trouble.asked && (
-                  <MessageView role="traveler" content={trouble.asked} />
+                {/* A turn that never reached the server recorded nothing, so
+                    the traveler's own words are only here. */}
+                {last?.content !== unrecorded.asked && (
+                  <MessageView role="traveler" content={unrecorded.asked} />
                 )}
-                <div
-                  role="alert"
-                  className="flex flex-col items-start gap-3 rounded-panel bg-error-tint px-4 py-3"
-                >
-                  <p className="flex items-start gap-2 text-meta text-error">
-                    <TriangleAlert {...smallIcon} className="mt-0.5 shrink-0" aria-hidden="true" />
-                    {trouble.detail}
-                  </p>
-                  <button
-                    type="button"
-                    className="flex items-center gap-2 rounded-control border border-line-strong bg-surface px-3 py-1.5 text-meta font-medium text-ink shadow-raised transition-colors hover:bg-canvas"
-                    onClick={() => onRetry(trouble)}
-                  >
-                    <RotateCcw {...smallIcon} aria-hidden="true" />
-                    Ask again
-                  </button>
-                </div>
+                <NotAnswered failure={unrecorded} onRetry={() => onAskAgain(unrecorded)} />
               </>
             )}
 
@@ -368,6 +375,48 @@ function useAnnouncement({
 /** How many announcements stay in the region behind the newest one. */
 const KEPT = 8;
 
+/**
+ * A turn that did not answer, and the way to have another go at it.
+ *
+ * The label above the sentence is the whole of what this ticket is for: an
+ * evaluator staring at a machine that will not answer needs to know within a
+ * second whether they forgot a key, ran out of credit, or found a bug, and
+ * "something went wrong" tells them none of the three.
+ */
+function NotAnswered({
+  failure,
+  onRetry,
+}: {
+  failure: Failure;
+  /** How to run it again, and null on a turn that is not the one to run. */
+  onRetry: (() => void) | null;
+}) {
+  return (
+    <div
+      role="alert"
+      className="flex flex-col items-start gap-3 rounded-panel bg-error-tint px-4 py-3"
+    >
+      <p className="flex items-start gap-2 text-meta text-error">
+        <TriangleAlert {...smallIcon} className="mt-0.5 shrink-0" aria-hidden="true" />
+        <span className="flex flex-col gap-1">
+          <span className="font-mono text-micro uppercase">{failureLabel(failure.kind)}</span>
+          {failure.detail}
+        </span>
+      </p>
+      {onRetry !== null && (
+        <button
+          type="button"
+          className="flex items-center gap-2 rounded-control border border-line-strong bg-surface px-3 py-1.5 text-meta font-medium text-ink shadow-raised transition-colors hover:bg-canvas"
+          onClick={onRetry}
+        >
+          <RotateCcw {...smallIcon} aria-hidden="true" />
+          Ask again
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** What the advisor is off fetching, for as long as it is fetching it. */
 function Consulting({ activity }: { activity: string }) {
   return (
@@ -406,6 +455,7 @@ function MessageView({
   role,
   content,
   citations = [],
+  cost = null,
   writing = false,
   children,
 }: {
@@ -413,6 +463,12 @@ function MessageView({
   content: string;
   /** Where this Message's fetched claims came from. Empty when it fetched none. */
   citations?: Citation[];
+  /**
+   * What the turn that produced this Message cost, and null when nothing was
+   * recorded — on the traveler's own Message, and on a turn whose provider
+   * reported no figure.
+   */
+  cost?: number | null;
   /** True while this Message is still being written into the Conversation. */
   writing?: boolean;
   /** Anything belonging to this Message rather than to the transcript. */
@@ -424,8 +480,18 @@ function MessageView({
     // they are set in rather than by a bubble, so a long itinerary has the
     // whole measure to be read across.
     <article className="flex flex-col gap-2">
-      <h2 className="font-mono text-micro uppercase text-ink-subtle">
+      <h2 className="flex items-baseline gap-2 font-mono text-micro uppercase text-ink-subtle">
         {traveler ? "You" : "Advisor"}
+        {cost !== null && (
+          // What the turn cost, where somebody looking for it will find it and
+          // nobody else is bothered by it: beside the name of the voice, in the
+          // face this application sets every other figure in. Recorded from the
+          // provider's own accounting, so reading spend is reading the page
+          // rather than polling an account.
+          <span title="What this turn cost" className="tabular-nums normal-case text-ink-subtle">
+            {spent(cost)}
+          </span>
+        )}
       </h2>
       {traveler ? (
         // Their own words, shown back exactly as typed. Markdown is what the
@@ -434,7 +500,11 @@ function MessageView({
           {content}
         </p>
       ) : (
-        <Prose text={content} writing={writing} />
+        // A turn that failed before the advisor had written anything leaves an
+        // empty Message, and what there is to show is the failure under it.
+        // A reply that has not written its first word yet is not that: it is
+        // still arriving, and the caret is what says so.
+        (content !== "" || writing) && <Prose text={content} writing={writing} />
       )}
       <Citations citations={citations} />
       {children}

@@ -26,6 +26,15 @@ _Avoid_: Chat, session, thread
 **Message**:
 A single turn in a Conversation, from either the traveler or the advisor.
 
+**Failure**:
+Why a turn did not answer: which of four kinds it is — a configuration problem, an
+exhausted balance, the provider, or a fault in this application — and the sentence the
+traveler is shown. A turn that fails leaves an advisor Message holding whatever of the
+reply had arrived, marked with its Failure, so the question keeps its place and the turn
+can be run again from it.
+_Avoid_: Trouble, exception, issue, problem. "Error" is the colour and the alert that
+draw one, not the thing itself.
+
 **Compaction**:
 Replacing the older stretch of a Conversation with a running summary when the history
 grows too large to send in full. Compaction affects only what the advisor is shown; the

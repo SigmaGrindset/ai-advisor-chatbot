@@ -321,6 +321,16 @@ class Message(Base):
     #: figures rather than a later poll of the account. Null on a traveler Message,
     #: and on an advisor Message whose provider reported no cost.
     cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(18, 10), nullable=True)
+    #: Why the turn that produced this Message did not finish — its kind and what
+    #: the traveler is told — and null on every Message whose turn did. A turn
+    #: that fails leaves an advisor Message carrying whatever had arrived of the
+    #: reply, which is empty when nothing had; the marker is what tells that
+    #: apart from an advisor that answered with nothing to say. Kept here rather
+    #: than in the browser's memory, because a traveler who reloads must still
+    #: find their question, what became of it, and the way to ask it again.
+    #: Two keys in one column rather than two columns, for the same reason
+    #: `citations` is one: they are written together or not at all.
+    failure: Mapped[dict[str, str] | None] = mapped_column(JSONB, nullable=True)
     #: clock_timestamp() rather than now(): now() is the transaction timestamp, so
     #: Messages written inside one transaction — as the test harness does — would
     #: share a timestamp and lose their order.

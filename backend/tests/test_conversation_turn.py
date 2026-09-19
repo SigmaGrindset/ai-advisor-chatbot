@@ -138,34 +138,3 @@ async def test_the_conversation_model_is_named_by_the_environment(
     await send(api, await start(api), "Anything at all.")
 
     assert model.sent["model"] == "a/conversation-model"
-
-
-async def test_without_a_key_the_turn_is_refused_and_nothing_is_kept(
-    api: httpx2.AsyncClient, api_for: ApiFactory, settings: Settings
-) -> None:
-    # Started through the configured application, because starting a Conversation
-    # needs no model — only saying something in one does.
-    conversation = await start(api)
-    keyless = await api_for(settings.model_copy(update={"openrouter_api_key": None}))
-
-    refusal = await keyless.post(
-        f"/api/conversations/{conversation}/messages", json={"content": "Lisbon?"}
-    )
-
-    assert refusal.status_code == 503
-    assert await transcript(api, conversation) == []
-
-
-async def test_a_turn_that_fails_says_so_and_keeps_what_the_traveler_said(
-    api: httpx2.AsyncClient, conversation: str, outbound_routes: dict[str, Responder]
-) -> None:
-    outbound_routes["openrouter.ai"] = lambda request: httpx2.Response(
-        500, json={"error": {"message": "upstream is unwell"}}
-    )
-
-    events = await send(api, conversation, "What is Lisbon like in April?")
-
-    assert events[-1]["type"] == "failed"
-    assert await transcript(api, conversation) == [
-        ("traveler", "What is Lisbon like in April?")
-    ]

@@ -25,16 +25,26 @@
 
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 
-import { say, startConversation } from "../api/client";
+import { runAgain, say, startConversation } from "../api/client";
 import type {
   Conversation,
   ConversationSummary,
+  Failure,
+  Message,
   ProfileFact,
   TripPlan,
 } from "../api/types";
+import type { TurnEvent } from "./events";
 
-/** A turn that did not answer, kept so the traveler can ask it again. */
-export type Trouble = { conversationId: string; asked: string; detail: string };
+/**
+ * A turn that left nothing behind, kept so the traveler can ask it again.
+ *
+ * Only the turns that never reached the server come through here — a machine
+ * with no key, a browser with no connection. Everything that *did* reach it is
+ * a Message carrying its own failure, which outlives this and outlives a
+ * reload; this is the one failure there is nowhere else to keep.
+ */
+export type Unrecorded = { conversationId: string; asked: string } & Failure;
 
 /** A reply as it is being written, and which Conversation it belongs to. */
 type Arriving = { conversationId: string; text: string };
@@ -58,8 +68,8 @@ export type Turn = {
    * progress rather than as a hang.
    */
   consulting: string | null;
-  /** The open Conversation's last turn, if it failed. */
-  trouble: Trouble | null;
+  /** The open Conversation's last turn, if it failed and left nothing behind. */
+  unrecorded: Unrecorded | null;
   /**
    * What had arrived of a reply the traveler stopped in the open
    * Conversation, and null if they stopped none.
@@ -69,8 +79,14 @@ export type Turn = {
   sending: boolean;
   /** Say what is in the composer, and empty it. */
   send: () => void;
-  /** Ask a failed question again. */
-  again: (asking: Trouble) => void;
+  /** Ask a question again, when asking again is all there is to do. */
+  again: (asking: Unrecorded) => void;
+  /**
+   * Run a failed turn again, in place of the reply it never gave. The Message
+   * named is the one that turn left behind; the question it answers is already
+   * recorded, so it is not said twice.
+   */
+  retry: (failed: Message) => void;
   /** How to stop the reply arriving into the open Conversation, null when none is. */
   stop: (() => void) | null;
   /** Put down what the last turn left on the page, the draft excepted. */
@@ -125,7 +141,7 @@ export function useTurn({
 }): Turn {
   const [draft, setDraft] = useState("");
   const [arriving, setArriving] = useState<Arriving | null>(null);
-  const [trouble, setTrouble] = useState<Trouble | null>(null);
+  const [unrecorded, setUnrecorded] = useState<Unrecorded | null>(null);
   const [stopped, setStopped] = useState<Stopped | null>(null);
   const [consulting, setConsulting] = useState<Consulting | null>(null);
   // The turn in flight, held so the stop control has something to pull on.
@@ -133,7 +149,7 @@ export function useTurn({
 
   /** What the last turn left on screen, put down. */
   function forget() {
-    setTrouble(null);
+    setUnrecorded(null);
     setStopped(null);
   }
 
@@ -146,16 +162,47 @@ export function useTurn({
   }
 
   /**
-   * Ask a failed question again.
+   * Ask a question again, when asking again is all there is to do.
    *
-   * It goes as a new turn, because that is all the API offers: the traveler's
-   * own Message was already recorded before the turn failed, so asking again
-   * records a second one. Ticket 14 owns what becomes of a traveler Message
-   * whose turn never answered.
+   * It goes as a new turn, and can, because nothing was recorded the first
+   * time: this is the failure of a turn that never reached the server. One
+   * that did is `retry`, which runs the recorded turn again rather than
+   * repeating the question into the transcript.
    */
-  function again(asking: Trouble) {
-    setTrouble(null);
-    void ask(asking.asked, () => setTrouble(asking));
+  function again(asking: Unrecorded) {
+    if (arriving !== null) return;
+    setUnrecorded(null);
+    void ask(asking.asked, () => setUnrecorded(asking));
+  }
+
+  /**
+   * Run a failed turn again, in place of the reply it never gave.
+   *
+   * The Message it left comes off the transcript as the new turn starts, and
+   * goes back if the turn could not be started at all — what the server holds
+   * and what is on screen say the same thing either way, because the server
+   * discards it in the same breath as it composes the prompt.
+   */
+  function retry(failed: Message) {
+    const open = conversation;
+    // One turn at a time, the same rule `send` keeps: a failed Message is
+    // still the last one recorded while the next reply is arriving, so its
+    // control is on screen for as long as that takes.
+    if (open === null || arriving !== null) return;
+    forget();
+    onAsking();
+    revise(open.id, (said) => said.filter((message) => message.id !== failed.id));
+    void run({
+      conversationId: open.id,
+      events: (signal) => runAgain(open.id, failed.id, signal),
+      // Nothing was run, so the Message that turn left is still the server's
+      // and goes back where it was. The question is still in the transcript
+      // above it, so this needs no copy of it.
+      refused: (failure) => {
+        revise(open.id, (said) => [...said, failed]);
+        onFailure(failure.detail);
+      },
+    });
   }
 
   /** Stop a reply that is still being written. */
@@ -171,6 +218,9 @@ export function useTurn({
    * back in the composer, a retry wants its error back where it was.
    */
   async function ask(asking: string, giveBack: () => void) {
+    // Put down before the turn is known to have anywhere to go: what the last
+    // one left on the page is superseded the moment they ask, not a round trip
+    // later. A turn that cannot start reports that like any other failure.
     forget();
     onAsking();
 
@@ -186,7 +236,37 @@ export function useTurn({
       giveBack();
       return;
     }
+    await run({
+      conversationId,
+      events: (signal) => say(conversationId, asking, signal),
+      // Nothing was recorded, so the question is nowhere else: it goes on the
+      // page with the failure under it and a way to ask it again.
+      refused: (failure) => setUnrecorded({ conversationId, asked: asking, ...failure }),
+    });
+  }
 
+  /**
+   * One turn, watched from the first event to the last.
+   *
+   * The two ways into a turn differ only in how it is started and in what a
+   * refusal means — the traveler saying something, or the application running
+   * a turn it already has again — so everything from there on is here.
+   *
+   * `refused` is what to do when the turn never started, which is different
+   * for each of them: one has a question that now exists nowhere else, the
+   * other has a Message to put back. What the last turn left on the page is
+   * put down by whoever starts this one, because they start at different
+   * moments — one of them has a Conversation to open first.
+   */
+  async function run({
+    conversationId,
+    events,
+    refused,
+  }: {
+    conversationId: string;
+    events: (signal: AbortSignal) => AsyncGenerator<TurnEvent>;
+    refused: (failure: Failure) => void;
+  }) {
     const stopping = new AbortController();
     inFlight.current = stopping;
     setArriving({ conversationId, text: "" });
@@ -195,11 +275,27 @@ export function useTurn({
     // Kept alongside the state so that stopping mid-reply knows what had
     // arrived: a state setter is not somewhere to read a value back out of.
     let written = "";
-    // Whether the reply became a Message before the traveler stopped it.
-    let answered = false;
+    // Whether the turn became a Message before the traveler stopped it —
+    // either the reply, or the half of one a failure kept.
+    let kept = false;
+
+    /**
+     * A Message the turn produced, put where the traveler is reading.
+     *
+     * A reply that has landed — whole, or as much of it as a failure kept —
+     * stops being one that is arriving. The turn is not over, since the
+     * Conversation may still be being named, but leaving it arriving would
+     * draw the reply twice and would offer to stop something already kept.
+     */
+    const arrived = (message: Message, { replying }: { replying: boolean }) => {
+      revise(conversationId, (said) => [...said, message]);
+      if (!replying) return;
+      kept = true;
+      setArriving((sofar) => (sofar?.conversationId === conversationId ? null : sofar));
+    };
 
     try {
-      for await (const event of say(conversationId, asking, stopping.signal)) {
+      for await (const event of events(stopping.signal)) {
         if (event.type === "fragment") {
           written += event.text;
           const text = written;
@@ -220,24 +316,14 @@ export function useTurn({
           );
           onConversation((open) => (open?.id === conversationId ? { ...open, title } : open));
         } else if (event.type === "failed") {
-          // The question stays where they asked it, with the failure under it
-          // and a way to ask again.
-          setTrouble({ conversationId, asked: asking, detail: event.detail });
+          // A failure the server recorded comes with the Message it left: the
+          // half of a reply that had arrived, marked with what stopped it. One
+          // it never heard about comes with none, and the question is then
+          // only here.
+          if (event.message === null) refused({ kind: event.kind, detail: event.detail });
+          else arrived(event.message, { replying: true });
         } else {
-          const message = event.message;
-          onConversation((open) =>
-            open?.id === conversationId
-              ? { ...open, messages: [...open.messages, message] }
-              : open,
-          );
-          // The reply is a Message now, so it stops being one that is
-          // arriving. The turn is not over — the Conversation may still be
-          // being named — but leaving it arriving would draw the reply twice,
-          // and would offer to stop something that has already been kept.
-          if (event.type === "advisor_message") {
-            answered = true;
-            setArriving((sofar) => (sofar?.conversationId === conversationId ? null : sofar));
-          }
+          arrived(event.message, { replying: event.type === "advisor_message" });
         }
       }
     } catch {
@@ -247,13 +333,11 @@ export function useTurn({
         // Otherwise the stop is recorded even when nothing had arrived to
         // keep, because pressing a control and being told nothing is worse
         // than being told there was nothing.
-        if (!answered) setStopped({ conversationId, text: written });
+        if (!kept) setStopped({ conversationId, text: written });
       } else {
-        setTrouble({
-          conversationId,
-          asked: asking,
-          detail: "The advisor could not be reached.",
-        });
+        // The connection went rather than the turn: whatever the server made
+        // of it never arrived, so this is the one account of it there is.
+        refused({ kind: "upstream", detail: "The advisor could not be reached." });
       }
     } finally {
       inFlight.current = null;
@@ -273,6 +357,13 @@ export function useTurn({
     return started.id;
   }
 
+  /** Revise the Messages of one Conversation, if it is still the one open. */
+  function revise(conversationId: string, revising: (said: Message[]) => Message[]) {
+    onConversation((open) =>
+      open?.id === conversationId ? { ...open, messages: revising(open.messages) } : open,
+    );
+  }
+
   /** Only what belongs to the Conversation on screen is shown on it. */
   const here = <T extends { conversationId: string }>(it: T | null) =>
     it?.conversationId === conversation?.id ? it : null;
@@ -282,11 +373,12 @@ export function useTurn({
     setDraft,
     arriving: here(arriving)?.text ?? null,
     consulting: here(consulting)?.activity ?? null,
-    trouble: here(trouble),
+    unrecorded: here(unrecorded),
     stopped: here(stopped)?.text ?? null,
     sending: arriving !== null,
     send,
     again,
+    retry,
     stop: here(arriving) === null ? null : stop,
     forget,
   };

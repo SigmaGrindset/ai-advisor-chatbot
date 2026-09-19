@@ -31,10 +31,16 @@ def compose_prompt(said: Sequence[Message], system: str) -> list[ChatCompletionM
     `services/instructions.py::compose_around` for the turn and for the page
     that shows the traveler what the turn will send — one composition, so that
     what they are shown cannot drift from what is sent.
+
+    A Message whose turn failed is left out. The traveler keeps it — it is
+    where their question went and how they ask it again — but what
+    it holds is a sentence the advisor never finished, or nothing at all, and
+    sending either back would have the advisor take a half-written thought for
+    something it had decided to say.
     """
     return [
         ChatCompletionSystemMessageParam(role="system", content=system),
-        *(_as_model_message(message) for message in said),
+        *(_as_model_message(message) for message in said if message.failure is None),
     ]
 
 

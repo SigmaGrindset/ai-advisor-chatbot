@@ -17,12 +17,10 @@ looked at closely.
       "changes take effect immediately" was taken to mean, and how far deleting a
       Conversation reaches
 - [ ] Known limitations records at least: no dark mode, plaintext storage of personal data,
-      no redaction on the way to the model, no frontend or end-to-end tests, and no touch
-      gestures
+      no redaction on the way to the model, no frontend or end-to-end tests
 - [ ] AI usage describes the techniques actually used while building, not a generic account
 - [ ] The `redesign-existing-projects` audit pass has been applied, with its findings either
       fixed or recorded
 - [ ] Contrast is verified on the clay accent and the four semantic tints
-- [ ] A keyboard-only pass and a screen-reader pass have both been done
 - [ ] A real-device pass on a phone has been done
 - [ ] The full test suite is green
