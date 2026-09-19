@@ -1,13 +1,15 @@
-"""Everything the model is shown for one turn, composed on the server.
+"""Everything the model is shown for one turn, in the vocabulary it speaks.
 
-The Advisor Instructions, the Trip Plan, the Traveler Profile and the
-Conversation so far — the three injected records composed *around* the
-instructions rather than inside them (CONTEXT.md draws that line, and the
-Advisor Instructions page in 12 shows the traveler both parts separately).
+The system prompt, and then the Conversation so far. What goes *into* the
+system prompt is `instructions.py`'s — the Advisor Instructions, with the Trip
+Plan, the Traveler Profile and the tool guidance composed around rather than
+inside them (CONTEXT.md draws that line, and the Advisor Instructions page
+shows the traveler both parts separately).
 
-Nothing here reads the database: it is handed what was said and answers with
-what to send, so what the advisor sees is one pure function of what is
-recorded, and a test can ask for it without a session.
+Nothing here reads the database: it is handed what was said and what the
+advisor is told, and answers with what to send, so what the advisor sees is
+one pure function of what is recorded and a test can ask for it without a
+session.
 """
 
 from collections.abc import Sequence
@@ -20,29 +22,18 @@ from openai.types.chat import (
 )
 
 from ..db.tables import Message, MessageRole
-from .instructions import compose_system_prompt
-from .planning import TripPlan, TripSummary
-from .remembering import Fact
 
 
-def compose_prompt(
-    said: Sequence[Message],
-    plan: TripPlan | None = None,
-    trips: Sequence[TripSummary] = (),
-    profile: Sequence[Fact] = (),
-) -> list[ChatCompletionMessageParam]:
+def compose_prompt(said: Sequence[Message], system: str) -> list[ChatCompletionMessageParam]:
     """The whole of what the model is sent for this turn.
 
-    The plan is the Trip Plan of the Trip this Conversation is attached to, and
-    None while it is attached to none. `trips` is every Trip the traveler has,
-    which is the list `join_trip` picks out of. The profile is everything the
-    advisor has learned about the traveler, in every Conversation — which is
-    why a brand-new one already knows their nationality.
+    The system prompt is passed in rather than composed here, and composed by
+    `services/instructions.py::compose_around` for the turn and for the page
+    that shows the traveler what the turn will send — one composition, so that
+    what they are shown cannot drift from what is sent.
     """
     return [
-        ChatCompletionSystemMessageParam(
-            role="system", content=compose_system_prompt(plan, trips, profile)
-        ),
+        ChatCompletionSystemMessageParam(role="system", content=system),
         *(_as_model_message(message) for message in said),
     ]
 

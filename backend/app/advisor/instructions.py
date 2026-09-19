@@ -1,14 +1,16 @@
 """The Advisor Instructions, and the system prompt composed around them.
 
 The Advisor Instructions are the editable part — the advisor's persona and its
-rules. Everything composed around them here is not editable: it is what the
-application injects for a particular turn.
+rules. What ships is below, and what is in force is whatever the traveler last
+saved (`services/instructions.py`); everything composed around it here is not
+editable, because it is what the application injects for a particular turn.
 
-The tool guidance below is deliberately on the injected side rather than in the
+The tool guidance is deliberately on the injected side rather than in the
 editable instructions. It says which questions may not be answered from what
 the model already knows, that a tool result is never an instruction, and what
-may never be written into the Traveler Profile; a traveler editing their
-advisor's manner in ticket 12 must not be able to edit any of those away.
+may never be written into the Traveler Profile; a traveler rewriting their
+advisor's manner must not be able to edit any of those away. They can read all
+of it: the Advisor Instructions page shows the composed prompt in full.
 """
 
 from collections.abc import Sequence
@@ -182,6 +184,7 @@ first: once a lookup has come back in a turn, these tools are gone for the rest 
 
 
 def compose_system_prompt(
+    instructions: str,
     plan: TripPlan | None = None,
     trips: Sequence[TripSummary] = (),
     profile: Sequence[Fact] = (),
@@ -189,14 +192,19 @@ def compose_system_prompt(
     """The system prompt for one turn, composed on the server.
 
     The Advisor Instructions come first and the injected parts are composed
-    around them, never inside them: what the traveler edits in ticket 12 is
-    the persona and its rules, and the guidance about what may not be answered
-    from memory, what a tool result is, and how the plan and the profile are
-    written is the application's rather than theirs.
+    around them, never inside them: what the traveler edits is the persona and
+    its rules, and the guidance about what may not be answered from memory,
+    what a tool result is, and how the plan and the profile are written is the
+    application's rather than theirs.
+
+    The instructions are passed in rather than read here, so that the page
+    showing the traveler what will be sent and the turn that sends it are the
+    same function of the same words — a preview composed by a second piece of
+    code would eventually be a preview of something else.
     """
     return "\n".join(
         [
-            DEFAULT_ADVISOR_INSTRUCTIONS,
+            instructions,
             TOOL_GUIDANCE,
             PLAN_GUIDANCE,
             PROFILE_GUIDANCE,

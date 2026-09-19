@@ -11,11 +11,15 @@ import {
   listConversations,
   listTrips,
   readConversation,
+  readInstructions,
   readProfile,
   removeItineraryItem,
+  restoreInstructions,
+  saveInstructions,
   settleOpenQuestion,
 } from "./api/client";
 import type {
+  AdvisorInstructions,
   Conversation,
   ConversationRead,
   ConversationSummary,
@@ -35,6 +39,7 @@ import { AppFrame } from "./components/shell/AppFrame";
 import { AppShell } from "./components/shell/AppShell";
 import { withPlan } from "./components/trip/listing";
 import { TripSwitcher } from "./components/trip/TripSwitcher";
+import { InstructionsPage } from "./routes/InstructionsPage";
 import { goTo, useRoute } from "./routes/routing";
 import { TripsPage } from "./routes/TripsPage";
 import { useTurn } from "./stream/useTurn";
@@ -74,6 +79,12 @@ export function App() {
   // Null is a Conversation the traveler has begun but not yet said anything in.
   // It has no row in the list and no row in the database until they do.
   const [current, setCurrent] = useState<Conversation | null>(null);
+  // What the advisor is told, and the prompt it composes into. Read when that
+  // page is opened rather than on arrival: nothing else shows it, and the
+  // composed prompt is only true of the moment it was asked for — the plan and
+  // the profile it carries move as the traveler talks.
+  const [instructions, setInstructions] = useState<AdvisorInstructions | null>(null);
+  const [savingInstructions, setSavingInstructions] = useState(false);
   const [rowActions, setRowActions] = useState<RowActions | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [tab, setTab] = useState<RecordTab>("plan");
@@ -135,6 +146,43 @@ export function App() {
       })
       .catch(() => setFailure("Your conversations could not be loaded."));
   }, []);
+
+  useEffect(() => {
+    // Whatever the screen they are leaving was saying, the move supersedes.
+    setFailure(null);
+  }, [route]);
+
+  useEffect(() => {
+    if (route !== "instructions") {
+      // Put down rather than kept: the composed prompt carries the plan and
+      // the profile as they stood, and showing yesterday's on the way back in
+      // would be showing something that is not what the next message sends.
+      setInstructions(null);
+      return;
+    }
+    // What came back for a Conversation that is no longer the one being read
+    // is dropped rather than shown. A traveler arriving at this address has
+    // two reads in flight — the one this page makes before `resume` has said
+    // which Conversation they were in, and the one it makes when it has — and
+    // the first of them answering last would leave a prompt on screen that is
+    // not the one their next message sends.
+    let reading = true;
+    void readInstructions(current?.id ?? null)
+      .then((read) => {
+        if (reading) setInstructions(read);
+      })
+      .catch(() => {
+        if (reading) setFailure("Your advisor's instructions could not be read.");
+      });
+    return () => {
+      reading = false;
+    };
+    // Read again when the Conversation under it changes, which is what a
+    // traveler who arrived at this address rather than navigating to it does:
+    // on a reload or a bookmark the page is drawn before `resume` has said
+    // which Conversation they were in, and a prompt composed without that
+    // Conversation's Trip Plan is not the prompt their next message sends.
+  }, [route, current?.id]);
 
   /** Mark a record as changed, unless the traveler is looking straight at it. */
   function mark(record: RecordTab) {
@@ -198,6 +246,22 @@ export function App() {
     void forgetProfileFact(factId)
       .then(setProfile)
       .catch(() => setFailure("That could not be deleted from your profile."));
+  }
+
+  /**
+   * Change how the advisor behaves, or put back the way it shipped.
+   *
+   * Both answer with the instructions *and* the prompt they now compose into,
+   * so what the traveler is shown after the change is the server's own
+   * composition of what they just saved rather than the page's guess at it.
+   */
+  function revise(saving: Promise<AdvisorInstructions>, trouble: string) {
+    setFailure(null);
+    setSavingInstructions(true);
+    void saving
+      .then(setInstructions)
+      .catch(() => setFailure(trouble))
+      .finally(() => setSavingInstructions(false));
   }
 
   /**
@@ -333,6 +397,31 @@ export function App() {
     );
   }
 
+  if (route === "instructions") {
+    return (
+      <AppFrame>
+        <InstructionsPage
+          instructions={instructions}
+          saving={savingInstructions}
+          failure={failure}
+          onSave={(revised) =>
+            revise(
+              saveInstructions(revised, current?.id ?? null),
+              "Your instructions could not be saved.",
+            )
+          }
+          onRestore={() =>
+            revise(
+              restoreInstructions(current?.id ?? null),
+              "The default instructions could not be restored.",
+            )
+          }
+          onBack={() => goTo("conversations")}
+        />
+      </AppFrame>
+    );
+  }
+
   return (
     <AppFrame>
       <AppShell
@@ -355,6 +444,10 @@ export function App() {
             onTrips={() => {
               dismiss();
               goTo("trips");
+            }}
+            onInstructions={() => {
+              dismiss();
+              goTo("instructions");
             }}
           />
         )}

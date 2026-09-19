@@ -83,6 +83,7 @@ async def record_message(
     *,
     role: MessageRole,
     content: str,
+    prompt_version_id: uuid.UUID | None = None,
     cost_usd: Decimal | None = None,
     citations: Sequence[dict[str, str | None]] = (),
 ) -> Message:
@@ -91,11 +92,15 @@ async def record_message(
     Committed rather than left pending, because both callers need it to have
     survived before they go on: the traveler's words before the model is
     called, the advisor's before the browser is told they exist.
+
+    The Prompt Version is the one the turn composed its prompt from, and is
+    left out on a traveler Message, which no prompt produced.
     """
     message = Message(
         conversation_id=conversation.id,
         role=role,
         content=content,
+        prompt_version_id=prompt_version_id,
         cost_usd=cost_usd,
         citations=list(citations),
     )

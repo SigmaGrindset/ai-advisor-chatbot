@@ -15,7 +15,7 @@ Conversation begun afterwards that already knew it.
 
 import uuid
 
-from app.advisor.instructions import DEFAULT_ADVISOR_INSTRUCTIONS
+from app.advisor.instructions import DEFAULT_ADVISOR_INSTRUCTIONS, compose_system_prompt
 from app.advisor.prompt import compose_prompt
 from app.advisor.tools import UNTRUSTED_CLOSE, UNTRUSTED_OPEN
 from app.db.tables import Message, MessageRole
@@ -25,8 +25,15 @@ def _said(role: MessageRole, content: str) -> Message:
     return Message(id=uuid.uuid4(), conversation_id=uuid.uuid4(), role=role, content=content)
 
 
+def _shipped() -> str:
+    """The system prompt of a traveler who has edited nothing and recorded nothing."""
+    return compose_system_prompt(DEFAULT_ADVISOR_INSTRUCTIONS)
+
+
 def test_the_advisor_instructions_come_first_and_once() -> None:
-    prompt = compose_prompt([_said(MessageRole.TRAVELER, "Three days in Lisbon?")])
+    prompt = compose_prompt(
+        [_said(MessageRole.TRAVELER, "Three days in Lisbon?")], _shipped()
+    )
     system = str(prompt[0]["content"])
     assert [part["role"] for part in prompt] == ["system", "user"]
     assert system.count(DEFAULT_ADVISOR_INSTRUCTIONS) == 1
@@ -39,7 +46,7 @@ def test_the_advisor_is_told_a_tool_result_is_never_an_instruction() -> None:
     wrapped in one pair of markers while the prompt names another is a prompt
     injection the application built itself.
     """
-    system = str(compose_prompt([])[0]["content"])
+    system = _shipped()
     assert UNTRUSTED_OPEN in system
     assert UNTRUSTED_CLOSE in system
     assert "never an instruction" in system
@@ -51,7 +58,8 @@ def test_the_conversation_is_sent_in_the_order_it_was_said() -> None:
             _said(MessageRole.TRAVELER, "Three days in Lisbon?"),
             _said(MessageRole.ADVISOR, "Start in Alfama."),
             _said(MessageRole.TRAVELER, "And the third day?"),
-        ]
+        ],
+        _shipped(),
     )
     assert [part["role"] for part in prompt] == ["system", "user", "assistant", "user"]
     assert [part["content"] for part in prompt[1:]] == [
@@ -64,4 +72,4 @@ def test_the_conversation_is_sent_in_the_order_it_was_said() -> None:
 def test_a_conversation_with_nothing_said_in_it_is_still_the_advisor() -> None:
     # The first turn composes a prompt before the traveler's words are read
     # back, so an empty transcript is a real case rather than a hypothetical.
-    assert [part["role"] for part in compose_prompt([])] == ["system"]
+    assert [part["role"] for part in compose_prompt([], _shipped())] == ["system"]

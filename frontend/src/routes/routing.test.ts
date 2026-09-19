@@ -9,6 +9,10 @@ describe("the address of a page", () => {
     expect(pathFor("trips")).toBe("/trips");
   });
 
+  it("is /instructions for the Advisor Instructions page", () => {
+    expect(pathFor("instructions")).toBe("/instructions");
+  });
+
   it("is the root for the application itself", () => {
     expect(pathFor("conversations")).toBe("/");
   });
@@ -19,8 +23,13 @@ describe("which page an address names", () => {
     expect(routeFor("/trips")).toBe("trips");
   });
 
+  it("reads the Advisor Instructions page back from /instructions", () => {
+    expect(routeFor("/instructions")).toBe("instructions");
+  });
+
   it("ignores a trailing slash, which browsers and people both add", () => {
     expect(routeFor("/trips/")).toBe("trips");
+    expect(routeFor("/instructions/")).toBe("instructions");
   });
 
   it("lands a traveler on the application rather than nowhere", () => {

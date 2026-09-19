@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from .api import conversations, health, traveler, trips
+from .api import conversations, health, instructions, traveler, trips
 from .config import Settings
 from .db.connection import apply_schema, create_engine
 from .frontend import mount_frontend
@@ -43,6 +43,7 @@ def create_app(settings: Settings) -> FastAPI:
     app.include_router(conversations.router, prefix="/api")
     app.include_router(trips.router, prefix="/api")
     app.include_router(traveler.router, prefix="/api")
+    app.include_router(instructions.router, prefix="/api")
     # Last, so the single-page application fallback never shadows an API route.
     mount_frontend(app, settings.static_dir)
     return app

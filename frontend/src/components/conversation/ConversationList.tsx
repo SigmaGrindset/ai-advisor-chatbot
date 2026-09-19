@@ -1,4 +1,4 @@
-import { Compass, Luggage, MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import { Compass, Luggage, MoreHorizontal, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 
 import type { ConversationSummary, TripPlan } from "../../api/types";
 import { conversationName } from "./conversationName";
@@ -23,6 +23,7 @@ export function ConversationList({
   onActions,
   onDelete,
   onTrips,
+  onInstructions,
 }: {
   conversations: ConversationSummary[];
   /**
@@ -41,6 +42,8 @@ export function ConversationList({
   onDelete: (id: string) => void;
   /** Leave for the page that lists every Trip. */
   onTrips: () => void;
+  /** Leave for the page that says how the advisor behaves. */
+  onInstructions: () => void;
 }) {
   const byId = new Map(trips.map((trip) => [trip.trip_id, trip]));
   return (
@@ -74,16 +77,27 @@ export function ConversationList({
         {/* Navigation lives here, where the traveler already goes to move
             between things — the rail on a laptop, the left sheet everywhere
             narrower. The Trip Plan itself is never navigated to (ADR-0006);
-            the set of Trips is the one thing about no Conversation in
-            particular. */}
-        <button
-          type="button"
-          className="flex items-center gap-2 rounded-control px-1 py-1 text-meta text-ink-muted transition-colors hover:text-ink"
-          onClick={onTrips}
-        >
-          <Luggage {...smallIcon} aria-hidden="true" />
-          All trips
-        </button>
+            the two pages are the two things about no Conversation in
+            particular — every Trip at once, and what the advisor is told. */}
+        <div className="flex flex-col items-start gap-1">
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded-control px-1 py-1 text-meta text-ink-muted transition-colors hover:text-ink"
+            onClick={onTrips}
+          >
+            <Luggage {...smallIcon} aria-hidden="true" />
+            All trips
+          </button>
+
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded-control px-1 py-1 text-meta text-ink-muted transition-colors hover:text-ink"
+            onClick={onInstructions}
+          >
+            <SlidersHorizontal {...smallIcon} aria-hidden="true" />
+            Advisor instructions
+          </button>
+        </div>
       </div>
 
       {/* Contained, so that flicking this list past its end scrolls neither

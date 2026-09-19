@@ -31,7 +31,7 @@ from ..advisor.titles import name_conversation
 from ..advisor.tools import LiveDataTools
 from ..config import Settings
 from ..db.conversations import record_message, retitle_conversation
-from ..db.tables import Conversation, Message, MessageRole
+from ..db.tables import Conversation, Message, MessageRole, PromptVersion
 from .plans import TripPlanning, plan_of
 from .profile import Remembering, read_profile
 
@@ -111,10 +111,17 @@ async def take_turn(
     traveler_message: Message,
     model: AsyncOpenAI,
     prompt: Sequence[ChatCompletionMessageParam],
+    prompt_version: PromptVersion,
     tools: LiveDataTools,
     settings: Settings,
 ) -> AsyncIterator[Happening]:
-    """Run the turn, recording what it produces as it produces it."""
+    """Run the turn, recording what it produces as it produces it.
+
+    The Prompt Version travels with the prompt because it is the one the
+    prompt was composed from: what the reply is stamped with is the version
+    that actually produced it, not whatever is in force by the time it is
+    written down.
+    """
     try:
         async for event in run_turn(
             model,
@@ -149,6 +156,7 @@ async def take_turn(
                 conversation,
                 role=MessageRole.ADVISOR,
                 content=event.content,
+                prompt_version_id=prompt_version.id,
                 cost_usd=event.cost_usd,
                 # Kept with the Message rather than with the turn, because a
                 # Citation outlives the turn: it is still under the answer when

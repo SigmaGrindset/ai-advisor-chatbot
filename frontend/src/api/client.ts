@@ -8,6 +8,7 @@
 
 import type { TurnEvent } from "../stream/events";
 import type {
+  AdvisorInstructions,
   ConversationRead,
   ConversationSummary,
   PartOfDay,
@@ -130,6 +131,53 @@ export async function forgetProfileFact(factId: string): Promise<ProfileFact[]> 
 /** Every Conversation, every Trip and the whole profile, gone. */
 export async function clearEverything(): Promise<void> {
   refused(await fetch("/api/traveler/everything", { method: "DELETE" }));
+}
+
+/**
+ * The Advisor Instructions, and the two ways they change.
+ *
+ * Each answers with the instructions *and* the whole prompt composed around
+ * them, the same way a change to the Trip Plan answers with the whole plan:
+ * the page shows both, and what has just changed is what it is showing.
+ *
+ * The Conversation is named so that the Trip Plan composed into the preview is
+ * the plan of the Conversation the traveler came from — what they are shown is
+ * then what their very next message actually sends. Null when they are in no
+ * Conversation yet, which composes the way a turn of one refining no Trip does.
+ */
+
+export async function readInstructions(
+  conversationId: string | null,
+): Promise<AdvisorInstructions> {
+  return await expected<AdvisorInstructions>(
+    await fetch(`/api/advisor/instructions${asking(conversationId)}`),
+  );
+}
+
+export async function saveInstructions(
+  instructions: string,
+  conversationId: string | null,
+): Promise<AdvisorInstructions> {
+  return await expected<AdvisorInstructions>(
+    await fetch(`/api/advisor/instructions${asking(conversationId)}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ instructions }),
+    }),
+  );
+}
+
+/** Put the shipped Advisor Instructions back, as a version of their own. */
+export async function restoreInstructions(
+  conversationId: string | null,
+): Promise<AdvisorInstructions> {
+  return await expected<AdvisorInstructions>(
+    await fetch(`/api/advisor/instructions${asking(conversationId)}`, { method: "DELETE" }),
+  );
+}
+
+function asking(conversationId: string | null): string {
+  return conversationId === null ? "" : `?conversation_id=${conversationId}`;
 }
 
 /**

@@ -25,10 +25,11 @@ import { useSyncExternalStore } from "react";
  * - `conversations`: the application itself — the list, the Conversation and
  *   the record beside it.
  * - `trips`: every Trip the traveler is planning.
+ * - `instructions`: the Advisor Instructions, and the prompt they compose into.
  */
-export type Route = "conversations" | "trips";
+export type Route = "conversations" | "trips" | "instructions";
 
-const PATHS = { conversations: "/", trips: "/trips" } as const;
+const PATHS = { conversations: "/", trips: "/trips", instructions: "/instructions" } as const;
 
 /** The address of a page, which is what a link to it points at. */
 export function pathFor(route: Route): string {
@@ -42,7 +43,10 @@ export function pathFor(route: Route): string {
  */
 export function routeFor(path: string): Route {
   // A trailing slash is the same address. Browsers and people both add one.
-  return path.replace(/\/+$/, "") === PATHS.trips ? "trips" : "conversations";
+  const address = path.replace(/\/+$/, "");
+  if (address === PATHS.trips) return "trips";
+  if (address === PATHS.instructions) return "instructions";
+  return "conversations";
 }
 
 /** Go to a page, leaving the one behind it in the history to come back to. */

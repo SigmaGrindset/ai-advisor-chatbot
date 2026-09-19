@@ -1,12 +1,13 @@
 # Handoff — orientation for the next agent
 
 **Repo:** `D:\Antonio\ai-advisor-chatbot` · branch `main` · **no git remote**
-**Current as of** ticket 11 (tickets 01–11 shipped; the advisor now calls Live-data
+**Current as of** ticket 12 (tickets 01–12 shipped; the advisor now calls Live-data
 Tools, searches the web through a guarded query, leaves Citations behind, keeps a Trip
 Plan that fills in beside the conversation as the traveler talks, and carries what it has
 learned about the traveler from one Conversation into the next — and the traveler has a
-page listing every Trip, can move a Conversation onto the right one, and can read and
-delete everything that was learned about them).
+page listing every Trip, can move a Conversation onto the right one, can read and delete
+everything that was learned about them, and can rewrite the Advisor Instructions and read
+the whole prompt those are composed into).
 
 This is the standing orientation for anyone picking up work here: how the application is
 put together, what binds the names you write, how this repo is worked in, and what is
@@ -29,13 +30,13 @@ known to bite on this machine. It is not a task — the task is a ticket.
   is in `CONTEXT.md` and ticket 11 rather than an ADR of its own;
   0002 (Trips own Trip Plans), 0006 (trip plan as a persistent pane) and 0007 (mobile as
   a first-class target) constrain the frontend, 0011 amends 0006 over what the peek on a
-  phone actually is, and **0012 is what is allowed to be a page** — read it before 12 adds
-  the second one.
+  phone actually is, and **0012 is what is allowed to be a page** — 12 added the second
+  and last one it names, so a third wanting a page has to argue with it.
 - `docs/agents/` — the issue tracker, triage labels and domain-doc conventions.
 - `.scratch/ai-travel-advisor/spec.md` and `issues/01`–`15` — the work. Each ticket carries
   a `**Status:**` line using the five canonical labels — a finished ticket keeps its label
   and records what happened in ticked boxes and a `## Comments` section, which is why the
-  done ones still say `ready-for-agent`. 01–11 are done; 12–15 are unrun.
+  done ones still say `ready-for-agent`. 01–12 are done; 13–15 are unrun.
 
 ---
 
@@ -53,8 +54,9 @@ Postgres holds everything; the schema is applied at startup, so there is no migr
 | `services/turns.py` | one turn end to end: drives the loop, records what comes back, names the Conversation | the loop and the database, not the wire |
 | `services/plans.py` | applying one Trip Plan change, and reading the plan back for the prompt, the wire and the Trips list | the plan's shape and the database |
 | `services/profile.py` | applying one Traveler Profile change, and reading the profile back for the prompt and the wire | the profile's shape and the database |
+| `services/instructions.py` | which Advisor Instructions are in force, and what saving a revision of them does | the shipped default and the database |
 | `advisor/` | `loop.py`, `tools.py`, `planning.py`, `remembering.py`, `calls.py`, `searching.py`, `prompt.py`, `client.py`, `instructions.py`, `titles.py` | the model, the plan's and profile's shapes and the keyless sources — no HTTP framework, no database, no browser |
-| `db/` | `tables.py`, `connection.py`, `conversations.py`, `trips.py`, `traveler.py` | SQLAlchemy |
+| `db/` | `tables.py`, `connection.py`, `conversations.py`, `trips.py`, `traveler.py`, `prompt_versions.py` | SQLAlchemy |
 | `privacy/` | `outbound.py` (the single injectable HTTP client every outbound call leaves through) and `queries.py` (the guard on the one free-text thing that leaves) | nothing above it |
 | `config.py`, `frontend.py`, `main.py` | settings, static serving, composition | everything, by construction |
 
@@ -105,7 +107,7 @@ Vite, React 19, Tailwind v4, TypeScript strict.
 main.tsx            imports design/base.css
 App.tsx             composition, plus the Conversation, Trip and route state below it
 api/                client.ts  types.ts
-routes/             routing.ts  TripsPage.tsx
+routes/             routing.ts  TripsPage.tsx  InstructionsPage.tsx
 stream/             events.ts  useTurn.ts
 components/
   shell/            AppFrame.tsx  AppShell.tsx  Sheet.tsx
@@ -141,12 +143,17 @@ design/             tokens.css  base.css  icons.ts  tripPastel.ts
   on its own. The field under edit keeps the traveler's value, the rest of the patch lands,
   and what the advisor wanted is offered underneath as a suggestion. Which field is under
   edit lives in a ref, because nothing on the page is drawn from it.
-- **`routes/routing.ts` is the whole router** (ADR-0012): two addresses in a `PATHS` literal, read
-  out of `window.location` and pushed onto the history, with `useRoute` subscribing to
-  `popstate` and to a custom event `pushState` fires in its place. Ticket 12's Advisor
-  Instructions page is one more entry. The state every screen needs lives in `App.tsx`
-  *above* the route, so navigating does not take a running turn down with it, and
-  `AppFrame` is the one fixed, keyboard-aware window both screens are drawn in.
+- **`routes/routing.ts` is the whole router** (ADR-0012): three addresses in a `PATHS`
+  literal, read out of `window.location` and pushed onto the history, with `useRoute`
+  subscribing to `popstate` and to a custom event `pushState` fires in its place. The
+  state every screen needs lives in `App.tsx` *above* the route, so navigating does not
+  take a running turn down with it, and `AppFrame` is the one fixed, keyboard-aware
+  window every screen is drawn in.
+- **The Advisor Instructions are read when their page is opened and put down when it is
+  left** (`App.tsx`), unlike everything else above the route: the composed prompt the page
+  shows carries the Trip Plan and the Traveler Profile as they stood at the moment it was
+  asked for, so keeping it would be showing a prompt that is no longer the one the next
+  message sends. The draft being typed stays in `routes/InstructionsPage.tsx`.
 - **The Traveler Profile is held in `App.tsx` beside the Trips**, and for the same kind of
   reason: it belongs to no Conversation, every one of them is shown it, and any one of them
   can add to it mid-turn. `profile_revised` is the turn event that carries it, whole.
@@ -231,8 +238,8 @@ cd D:/Antonio/ai-advisor-chatbot/backend && D:/Antonio/ai-advisor-chatbot/.venv/
 cd D:/Antonio/ai-advisor-chatbot/backend && D:/Antonio/ai-advisor-chatbot/.venv/Scripts/python.exe -m mypy
 ```
 
-After ticket 11: **103 frontend tests in 15 files** (~1s), `tsc` silent, build clean; **93
-backend tests**, mypy clean over 52 files. Confirm those numbers *before* you start — if
+After ticket 12: **105 frontend tests in 15 files** (~1s), `tsc` silent, build clean; **100
+backend tests**, mypy clean over 56 files. Confirm those numbers *before* you start — if
 they do not match, something changed underneath you. Update this paragraph when a ticket
 legitimately moves them.
 
@@ -240,16 +247,24 @@ legitimately moves them.
 modules with opinions in them: 09's merge rule, field readings and calendar, 10's three —
 which page an address names, what a Trip is called when nobody has named one, and what
 becomes of the Trips list when a plan arrives — and 11's one, the order the Traveler
-Profile reads in. What draws them is still `.tsx` the Node-only suite does not reach, and
-was checked by hand.
+Profile reads in. 12 added no module of its own and only two cases to the router's, which
+is why it moved that suite by two. What draws all of them is still `.tsx` the Node-only
+suite does not reach, and was checked by hand.
 
 **The schema is applied at startup and never altered**, so a database left over from an
 earlier ticket has none of 09's `trip`, `itinerary_item` or `open_question` tables, no
-`conversation.trip_id`, and none of 11's `profile_fact` table or `traveler.next_fact_ref`
-column. `docker compose down -v` before verifying by hand. `create_all` *does* add a
-missing table, so 11 against an existing database needs only the column:
-`alter table traveler add column if not exists next_fact_ref integer not null default 1`.
-(10 added nothing, so a database that has been through 09 and 11 needs nothing more.)
+`conversation.trip_id`, none of 11's `profile_fact` table or `traveler.next_fact_ref`
+column, and none of 12's `prompt_version` table or `message.prompt_version_id` column.
+`docker compose down -v` before verifying by hand. `create_all` *does* add a missing
+table, so against an existing database each of those two tickets needs only its column:
+
+```sql
+alter table traveler add column if not exists next_fact_ref integer not null default 1;
+alter table message add column if not exists prompt_version_id uuid
+  references prompt_version(id) on delete set null;
+```
+
+(10 added nothing, so a database through 09, 11 and 12 needs nothing more.)
 
 **Vite proxies to `http://localhost:8000`, which resolves to `[::1]` first here.** A
 backend started with `--host 127.0.0.1` is invisible to it and every `/api` call comes back
@@ -301,6 +316,15 @@ to live here: a `--reload` server does not pick up new modules either.
   `git show cefc2ca:backend/tests/test_outbound_seam.py`.
 - **Ticket 06's last acceptance criterion** — verification on a real phone — is unticked and
   marked `ready-for-human`. It needs the user, not an agent.
+- **What orders a transcript.** `db/conversations.py::messages_in` orders Messages by
+  `created_at` and breaks ties on a random identifier, and `conversations_by_activity` does
+  the same with the derived activity timestamp. A full-suite run during 12 failed once with
+  a Conversation's two Messages coming back advisor-first, and would not reproduce; the
+  obvious causes were measured and ruled out (1µs clock steps, no equal timestamps in 3000
+  back-to-back inserts, no backwards step in 60s of sampling), so the mechanism is not
+  known. 12 took its own ordering off the clock — `PromptVersion.revision` is an identity
+  column — but doing the same to every Message is a schema change to the oldest table in
+  the application and belongs to whoever decides the migration question above.
 
 ---
 

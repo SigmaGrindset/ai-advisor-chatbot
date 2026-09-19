@@ -35,6 +35,13 @@ export type Message = {
   role: MessageRole;
   content: string;
   created_at: string;
+  /**
+   * The Prompt Version whose Advisor Instructions produced this Message, so
+   * that an advisor which started answering differently partway through a
+   * Conversation can be explained rather than wondered at. Null on a traveler
+   * Message, which no prompt produced.
+   */
+  prompt_version_id: string | null;
   cost_usd: number | null;
   /** Empty unless the turn that produced this Message looked something up. */
   citations: Citation[];
@@ -66,6 +73,31 @@ export type Conversation = {
  * request, because the two are opened together and shown together (ADR-0006).
  */
 export type ConversationRead = Conversation & { plan: TripPlan | null };
+
+/**
+ * The Advisor Instructions, and the prompt they are composed into.
+ *
+ * Both together, because the second is only true of the first: a page showing
+ * a composed prompt beside instructions it was not composed from would be
+ * showing the traveler something that is not sent.
+ */
+export type AdvisorInstructions = {
+  /** The editable part: the advisor's persona and its rules. */
+  instructions: string;
+  /**
+   * The Prompt Version these instructions are. Every Message they produce
+   * records it, which is what makes a change in behaviour explicable.
+   */
+  version_id: string;
+  /**
+   * The system prompt exactly as the next message will send it — the
+   * instructions with the tool guidance, the Trip Plan and the Traveler
+   * Profile composed around them.
+   */
+  composed: string;
+  /** Whether what is in force is the shipped default, which cannot be restored further. */
+  is_default: boolean;
+};
 
 /**
  * What a Profile Fact is about.

@@ -11,6 +11,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Identity,
     Integer,
     Numeric,
     SmallInteger,
@@ -94,6 +95,49 @@ class ProfileFact(Base):
     )
     #: The fact itself, in the words the traveler would recognise it in.
     detail: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.clock_timestamp(), nullable=False
+    )
+
+
+class PromptVersion(Base):
+    """A saved revision of the Advisor Instructions.
+
+    A row per revision rather than one column written over in place, because
+    every advisor Message records the version that produced it: a traveler who
+    changed how their advisor answers halfway through a Conversation can still
+    tell which replies came from which instructions, and a single mutable row
+    would have thrown that away at the moment of the edit.
+
+    Only the editable part is stored. What is composed around it — the tool
+    guidance, the Trip Plan, the Traveler Profile — is the application's own
+    and is whatever `advisor/instructions.py` says it is at the time of the
+    turn, so a version is never a stale copy of rules nobody edited.
+
+    The instructions in force are the last of these to be saved. None is ever
+    deleted on its own — a version a Message points at is part of the
+    explanation of that Message — and they go with the Traveler when
+    everything does.
+    """
+
+    __tablename__ = "prompt_version"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    traveler_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("traveler.id", ondelete="cascade"), nullable=False
+    )
+    #: Which revision this is, counted by the database. The one in force is
+    #: the highest, and it is this rather than `created_at` that says so.
+    #: A timestamp answers "which was written last" only as well as the clock
+    #: under it behaves, and it needs a tiebreaker — which for a random
+    #: identifier means an edit and the words it replaced settled by a coin
+    #: toss. Which instructions the advisor is given is not a question to
+    #: answer by inference from a clock.
+    revision: Mapped[int] = mapped_column(Integer, Identity(), nullable=False)
+    #: The advisor's persona and its rules, in the traveler's own words once
+    #: they have edited them.
+    instructions: Mapped[str] = mapped_column(Text, nullable=False)
+    #: When it was saved, which is provenance rather than order.
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.clock_timestamp(), nullable=False
     )
@@ -252,6 +296,13 @@ class Message(Base):
     #: looked nothing up.
     citations: Mapped[list[dict[str, str | None]]] = mapped_column(
         JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
+    )
+    #: The Prompt Version whose Advisor Instructions produced this Message.
+    #: Null on a traveler Message, which no prompt produced — the same way a
+    #: traveler Message carries no cost and no Citations — and null again once
+    #: the version has gone with everything else the traveler deleted.
+    prompt_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("prompt_version.id", ondelete="set null"), nullable=True
     )
     #: What OpenRouter charged for the turn that produced this Message, from its own
     #: figures rather than a later poll of the account. Null on a traveler Message,

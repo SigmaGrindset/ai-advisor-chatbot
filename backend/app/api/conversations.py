@@ -32,11 +32,11 @@ from ..db.conversations import (
     record_message,
     remove_conversation,
 )
-from ..db.tables import Conversation, Message, MessageRole
+from ..db.tables import Conversation, Message, MessageRole, PromptVersion
 from ..db.trips import attach_conversation, find_trip
 from ..privacy.outbound import get_http_client
-from ..services.plans import plan_of, read_plan, summarise_trips
-from ..services.profile import read_profile
+from ..services.instructions import compose_around, current_version
+from ..services.plans import plan_of, read_plan
 from ..services.turns import (
     Failed,
     Happening,
@@ -73,6 +73,11 @@ class MessageView(BaseModel):
     role: MessageRole
     content: str
     created_at: datetime
+    #: The Prompt Version whose Advisor Instructions produced this Message, so
+    #: that an advisor that started answering differently partway through a
+    #: Conversation can be explained rather than wondered at. Null on a
+    #: traveler Message, which no prompt produced.
+    prompt_version_id: uuid.UUID | None
     #: What the turn that produced this Message cost, in US dollars.
     cost_usd: float | None
     #: Empty unless the turn went and looked something up.
@@ -85,6 +90,7 @@ class MessageView(BaseModel):
             role=message.role,
             content=message.content,
             created_at=message.created_at,
+            prompt_version_id=message.prompt_version_id,
             cost_usd=float(message.cost_usd) if message.cost_usd is not None else None,
             citations=[CitationView.model_validate(cited) for cited in message.citations],
         )
@@ -240,16 +246,17 @@ async def say(
         session, conversation, role=MessageRole.TRAVELER, content=saying.content
     )
 
+    # Read at the top of every turn rather than held anywhere, which is the
+    # whole of what makes an edit to the Advisor Instructions take effect on
+    # the very next Message of a Conversation that was already under way.
+    prompt_version = await current_version(session)
     prompt = compose_prompt(
         await messages_in(session, conversation),
         # Composed from what is recorded at the top of the turn, so the advisor
-        # reads the plan as it stands — including whatever the traveler edited
-        # by hand since the last thing it said.
-        plan=await plan_of(session, conversation),
-        trips=await summarise_trips(session),
-        # Every Conversation is shown the same profile, which is the whole of
-        # why a brand-new one does not ask what the last one was told.
-        profile=await read_profile(session),
+        # reads the plan as it stands and is shown the profile every other
+        # Conversation is shown — which is why a brand-new one does not ask
+        # what the last one was told.
+        await compose_around(session, conversation, prompt_version.instructions),
     )
     return StreamingResponse(
         _turn_events(
@@ -258,6 +265,7 @@ async def say(
             traveler_message,
             model,
             prompt,
+            prompt_version,
             LiveDataTools(http_client, model, utility_model=settings.utility_model),
             settings,
         ),
@@ -272,13 +280,14 @@ async def _turn_events(
     traveler_message: Message,
     model: AsyncOpenAI,
     prompt: list[ChatCompletionMessageParam],
+    prompt_version: PromptVersion,
     tools: LiveDataTools,
     settings: Settings,
 ) -> AsyncIterator[bytes]:
     """The turn as the browser reads it."""
     yield _message_event("traveler_message", traveler_message)
     async for happening in take_turn(
-        session, conversation, traveler_message, model, prompt, tools, settings
+        session, conversation, traveler_message, model, prompt, prompt_version, tools, settings
     ):
         yield _as_event(happening)
 
