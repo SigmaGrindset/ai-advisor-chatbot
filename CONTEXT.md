@@ -85,4 +85,13 @@ _Avoid_: Function, plugin, API call, skill
 
 **Citation**:
 A source link attached to an advisor Message, recording where a fetched claim came from.
+One left by a Search Query also carries that query, and one left by a search that found
+nowhere to link to carries the query alone.
 _Avoid_: Reference, source, annotation
+
+**Search Query**:
+The words the advisor sends to the web when it searches. The only free text this
+application sends to anyone but the model, so it is the only thing read for
+passport-like, identity-like and card-like patterns before it leaves; what is left after
+that is what gets sent, and it is what the traveler is shown.
+_Avoid_: Search term, prompt, search string

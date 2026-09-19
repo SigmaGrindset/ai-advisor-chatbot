@@ -1,8 +1,8 @@
 # Handoff — orientation for the next agent
 
 **Repo:** `D:\Antonio\ai-advisor-chatbot` · branch `main` · **no git remote**
-**Current as of** ticket 07 (tickets 01–07 shipped; the advisor now calls Live-data
-Tools and leaves Citations behind).
+**Current as of** ticket 08 (tickets 01–08 shipped; the advisor now calls Live-data
+Tools, searches the web through a guarded query, and leaves Citations behind).
 
 This is the standing orientation for anyone picking up work here: how the application is
 put together, what binds the names you write, how this repo is worked in, and what is
@@ -17,13 +17,14 @@ known to bite on this machine. It is not a task — the task is a ticket.
   lists bind file, module and component names.** See §3.
 - `TASK.md` and `README.md` — what was asked for, and how to run it. README §2–7 are still
   placeholders and are part of the deliverable.
-- `docs/adr/0001`–`0008` — the decisions that are already made. 0004 (PII boundary) and
+- `docs/adr/0001`–`0009` — the decisions that are already made. 0004 (PII boundary) and
   0005 (hand-written tool loop) constrain the backend; 0008 amends 0003, because REST
-  Countries stopped being keyless during 07; 0006 (trip plan as a persistent
+  Countries stopped being keyless during 07; 0009 is the search query guard, and its last
+  paragraph is a rule **09 and 11 have to keep**; 0006 (trip plan as a persistent
   pane) and 0007 (mobile as a first-class target) constrain the frontend.
 - `docs/agents/` — the issue tracker, triage labels and domain-doc conventions.
 - `.scratch/ai-travel-advisor/spec.md` and `issues/01`–`15` — the work. Each ticket carries
-  a `**Status:**` line using the five canonical labels. 01–06 are done; 07–15 are unrun.
+  a `**Status:**` line using the five canonical labels. 01–08 are done; 09–15 are unrun.
 
 ---
 
@@ -39,9 +40,9 @@ Postgres holds everything; the schema is applied at startup, so there is no migr
 |---|---|---|
 | `api/` | routes and the SSE wire format | HTTP, and `services/` |
 | `services/turns.py` | one turn end to end: drives the loop, records what comes back, names the Conversation | the loop and the database, not the wire |
-| `advisor/` | `loop.py`, `tools.py`, `prompt.py`, `client.py`, `instructions.py`, `titles.py` | the model and the keyless sources — no HTTP framework, no database, no browser |
+| `advisor/` | `loop.py`, `tools.py`, `searching.py`, `prompt.py`, `client.py`, `instructions.py`, `titles.py` | the model and the keyless sources — no HTTP framework, no database, no browser |
 | `db/` | `tables.py`, `connection.py`, `conversations.py` | SQLAlchemy |
-| `privacy/outbound.py` | the single injectable HTTP client every outbound call leaves through | nothing above it |
+| `privacy/` | `outbound.py` (the single injectable HTTP client every outbound call leaves through) and `queries.py` (the guard on the one free-text thing that leaves) | nothing above it |
 | `config.py`, `frontend.py`, `main.py` | settings, static serving, composition | everything, by construction |
 
 Dependencies point one way: `api → services → advisor`/`db`. Nothing below reaches back
@@ -53,9 +54,12 @@ around them:
 - **`services/turns.py` yields what happened, not what to send.** The wire format stays in
   `api/`, so a tool call or a Trip Plan patch can be added to a turn without the HTTP
   response shape being decided in the service.
-- **`privacy/outbound.py` is the one egress.** The model client and every future Live-data
-  Tool take that client as a dependency; tests swap in a transport that answers by host,
-  which is what keeps real request-building and response-parsing under test (ADR-0004).
+- **`privacy/` is the one egress, and the one check on it.** The model client and every
+  Live-data Tool take `outbound.py`'s client as a dependency; tests swap in a transport that
+  answers by host, which is what keeps real request-building and response-parsing under test
+  (ADR-0004). `queries.py` is the other half: the web search query is the only free text this
+  application sends to a third party, so it is read for document-number shapes before the
+  plan that would send it even exists (ADR-0009).
 - **The tool loop is ours** (`advisor/loop.py`, ADR-0005). It streams a step, accumulates
   the tool-call fragments it was sent, dispatches them through `advisor/tools.py`, appends
   the results and re-calls until the model stops asking. `MAX_STEPS` is the runaway guard.
@@ -177,15 +181,20 @@ cd D:/Antonio/ai-advisor-chatbot/backend && D:/Antonio/ai-advisor-chatbot/.venv/
 cd D:/Antonio/ai-advisor-chatbot/backend && D:/Antonio/ai-advisor-chatbot/.venv/Scripts/python.exe -m mypy
 ```
 
-After ticket 07: **56 frontend tests in 7 files** (~1s), `tsc` silent, build clean; **49
-backend tests**, mypy clean over 37 files. Confirm those numbers *before* you start — if
+After ticket 08: **56 frontend tests in 7 files** (~1s), `tsc` silent, build clean; **64
+backend tests**, mypy clean over 40 files. Confirm those numbers *before* you start — if
 they do not match, something changed underneath you. Update this paragraph when a ticket
 legitimately moves them.
 
-The backend suite grew and the frontend's did not, which is the shape of 07: the loop, the
-tools and the wire format are all testable through the API, and the status line and the
-Citation chips are `.tsx` that the Node-only frontend suite does not reach. They were
-checked by hand against real lookups instead.
+The backend suite grew and the frontend's did not, twice running, which is the shape of
+both 07 and 08: the loop, the tools, the guard and the wire format are all testable through
+the API, and the status line and the Citation chips are `.tsx` that the Node-only frontend
+suite does not reach. They were checked by hand against real lookups and a real web search
+instead.
+
+**A dev server left running with `--reload` did not pick up ticket 08's new modules.** If
+you are verifying by hand and the advisor says it cannot do the thing you just built,
+restart it rather than believing it.
 
 ---
 

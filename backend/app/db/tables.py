@@ -76,9 +76,10 @@ class Message(Base):
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     #: Where anything fetched during this turn came from — one entry per
-    #: Live-data Tool answer, in the order they were fetched. Empty on a
-    #: traveler Message and on an advisor Message that looked nothing up.
-    citations: Mapped[list[dict[str, str]]] = mapped_column(
+    #: source, in the order they were fetched, and a web search leaves one per
+    #: page it read. Empty on a traveler Message and on an advisor Message that
+    #: looked nothing up.
+    citations: Mapped[list[dict[str, str | None]]] = mapped_column(
         JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
     )
     #: What OpenRouter charged for the turn that produced this Message, from its own

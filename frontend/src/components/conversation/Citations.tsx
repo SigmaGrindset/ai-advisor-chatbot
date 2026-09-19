@@ -9,6 +9,11 @@ import type { Citation } from "../../api/types";
  * matters to somebody who has decided to go and check it, and they are the
  * ones who open it.
  *
+ * What opening one reveals is the whole of what the application did to get
+ * that claim: what was looked up, where, and — for a web search — the exact
+ * query that was sent. A search is the one place the traveler's own words
+ * leave this application, so the words that left are shown back to them.
+ *
  * `details` rather than state of our own: the platform already knows how to
  * open and close one, how to say so to a screen reader, and how to let a
  * keyboard do it.
@@ -32,17 +37,34 @@ export function Citations({ citations }: { citations: Citation[] }) {
             </summary>
             <div className="mt-2 flex flex-col gap-1 rounded-panel border border-line bg-surface px-3 py-2">
               <p className="text-meta text-ink">{citation.about}</p>
-              <a
-                href={citation.url}
-                // Somewhere the application does not control, so it opens away
-                // from the Conversation carrying no referrer and no handle
-                // back onto this window.
-                target="_blank"
-                rel="noopener noreferrer nofollow"
-                className="font-mono text-micro break-all text-accent underline decoration-1 underline-offset-2 transition-colors hover:text-accent-strong"
-              >
-                {citation.url}
-              </a>
+              {citation.url !== null && (
+                <a
+                  href={citation.url}
+                  // Somewhere the application does not control, so it opens away
+                  // from the Conversation carrying no referrer and no handle
+                  // back onto this window.
+                  target="_blank"
+                  rel="noopener noreferrer nofollow"
+                  className="font-mono text-micro break-all text-accent underline decoration-1 underline-offset-2 transition-colors hover:text-accent-strong"
+                >
+                  {citation.url}
+                </a>
+              )}
+              {citation.query !== null && (
+                // The exact words that left the machine, shown exactly as they
+                // left it. A traveler opening a search Citation is checking
+                // what was sent on their behalf, so this is the sent query
+                // rather than the one the advisor asked for — anything shaped
+                // like a document number has already been taken out of it.
+                <p className="flex flex-col gap-0.5">
+                  <span className="font-mono text-micro uppercase text-ink-subtle">
+                    Query sent
+                  </span>
+                  <span className="font-mono text-micro break-words text-ink-muted">
+                    {citation.query}
+                  </span>
+                </p>
+              )}
             </div>
           </details>
         </li>

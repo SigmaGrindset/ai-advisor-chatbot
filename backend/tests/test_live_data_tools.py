@@ -307,7 +307,7 @@ async def test_a_call_the_application_cannot_read_never_leaves_the_machine(
     ]
 
 
-async def test_the_model_is_offered_the_three_live_data_tools(
+async def test_the_model_is_offered_the_live_data_tools_and_nothing_that_writes(
     api: httpx2.AsyncClient, conversation: str, outbound_routes: dict[str, Responder]
 ) -> None:
     outbound_routes["openrouter.ai"] = model = CannedModel(content("Alfama first."), finish())
@@ -315,9 +315,18 @@ async def test_the_model_is_offered_the_three_live_data_tools(
     await send(api, conversation, "Where should I start in Lisbon?")
 
     offered = {tool["function"]["name"]: tool["function"] for tool in model.sent["tools"]}
-    assert sorted(offered) == ["country_facts", "current_weather", "exchange_rate"]
-    # Strictly typed, and closed: no argument the model is offered is room for
-    # prose, so nothing the traveler said can travel with a lookup (ADR-0004).
+    # Four capabilities, all of which fetch. Nothing on this list can write to
+    # the Traveler Profile or change the Trip Plan, which is what makes a tool
+    # result structurally unable to cause either (ADR-0004).
+    assert sorted(offered) == [
+        "country_facts",
+        "current_weather",
+        "exchange_rate",
+        "web_search",
+    ]
+    # Strictly typed, closed, and bounded. The search query is the one argument
+    # that is room for words, and it is the one the guard reads before it is
+    # sent; nothing else can carry anything the traveler said (ADR-0004).
     for described in offered.values():
         arguments = described["parameters"]
         assert arguments["additionalProperties"] is False

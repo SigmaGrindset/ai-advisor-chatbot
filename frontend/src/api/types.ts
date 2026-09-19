@@ -11,12 +11,23 @@ export type MessageRole = "traveler" | "advisor";
 
 /** Where something in an advisor Message was fetched from. */
 export type Citation = {
-  /** The service's own name, as the traveler would recognise it. */
+  /** The service's own name, or the site's, as the traveler would recognise it. */
   service: string;
   /** What was looked up there, in words. */
   about: string;
-  /** The exact request that produced it, so they can go and look. */
-  url: string;
+  /**
+   * The exact request that produced it, so they can go and look. Null when
+   * there is nowhere to go: a web search that came back citing no page still
+   * has the query it sent to answer for.
+   */
+  url: string | null;
+  /**
+   * The exact query a web search sent, and null on every other Citation. It is
+   * what a traveler opens a search Citation to see — the search query is the
+   * one thing this application sends out in the traveler's own words, and it
+   * is checked before it goes.
+   */
+  query: string | null;
 };
 
 export type Message = {

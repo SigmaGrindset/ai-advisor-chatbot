@@ -113,11 +113,14 @@ async def run_turn(
         for call in wanted:
             # Read before it is run, so the traveler learns what is being
             # fetched while it is being fetched rather than afterwards.
-            plan = tools.read(call.name, call.arguments)
-            yield Consulting(plan.activity)
-            answer = await tools.run(plan)
-            if answer.citation is not None:
-                citations.append(answer.citation)
+            lookup = tools.read(call.name, call.arguments)
+            yield Consulting(lookup.activity)
+            answer = await tools.run(lookup)
+            citations.extend(answer.citations)
+            # A lookup somebody charged for — the nested search — is part of
+            # what this turn cost, and goes on the same running total as the
+            # steps around it.
+            cost.add(answer.usage)
             said.append(
                 ChatCompletionToolMessageParam(
                     role="tool", tool_call_id=call.id, content=answer.content

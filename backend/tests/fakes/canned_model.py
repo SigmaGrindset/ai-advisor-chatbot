@@ -4,9 +4,11 @@ The application's stream parsing is real code under test, so what it parses here
 has to be the real thing: server-sent events carrying chat completion chunks,
 keep-alive comment lines, a usage chunk at the end, and a `[DONE]` sentinel.
 
-One canned provider answers both kinds of call the application makes, because on
-the wire they go to one host. A streamed request is the traveler's turn; an
-unstreamed one is the utility model's work, and gets a plain completion.
+One canned provider answers all three kinds of call the application makes,
+because on the wire they go to one host. A streamed request is the traveler's
+turn. An unstreamed one carrying `plugins` is the nested web search, and gets a
+completion with url citations annotated onto it. Any other unstreamed one is the
+utility model's other work — naming a Conversation — and gets a plain one.
 """
 
 import json
@@ -106,6 +108,56 @@ def answering(text: str) -> Responder:
     return answer
 
 
+def searching(written: str, *pages: tuple[str, str], cost: float | None = None) -> Responder:
+    """A searching model, answering the way OpenRouter's web plugin does.
+
+    The pages come back as `url_citation` annotations on the message rather than
+    as anything in the text, which is the whole reason the search is worth
+    nesting: the application gets the sources as data instead of having to read
+    them back out of a paragraph.
+    """
+
+    def answer(request: httpx2.Request) -> httpx2.Response:
+        message: dict[str, Any] = {
+            "role": "assistant",
+            "content": written,
+            "annotations": [
+                {
+                    "type": "url_citation",
+                    "url_citation": {
+                        "url": url,
+                        "title": title,
+                        "content": f"...the part of {title} that was read...",
+                        "start_index": 0,
+                        "end_index": len(written),
+                    },
+                }
+                for title, url in pages
+            ],
+        }
+        answered: dict[str, Any] = {
+            "id": "gen-search",
+            "object": "chat.completion",
+            "created": 1,
+            "model": "test/utility-model",
+            "choices": [{"index": 0, "message": message, "finish_reason": "stop"}],
+        }
+        if cost is not None:
+            answered["usage"] = _usage(cost)
+        return httpx2.Response(200, json=answered)
+
+    return answer
+
+
+def refusing(status: int) -> Responder:
+    """A model that will not answer at all."""
+
+    def answer(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(status, json={"error": {"message": "not today"}})
+
+    return answer
+
+
 def unwell() -> Responder:
     """A model that is having a bad day."""
 
@@ -147,6 +199,7 @@ class CannedModel:
         then: Sequence[Sequence[bytes]] = (),
         split_every: int | None = None,
         utility: Responder | None = None,
+        web: Responder | None = None,
     ) -> None:
         self.requests: list[httpx2.Request] = []
         # One body per step of the turn: a turn that calls a tool streams once,
@@ -159,10 +212,13 @@ class CannedModel:
         # the middle of lines.
         self._split_every = split_every
         self._utility = utility or answering("A canned title")
+        self._web = web or searching("Nothing much came back.")
         self._streamed = 0
 
     def __call__(self, request: httpx2.Request) -> httpx2.Response:
         self.requests.append(request)
+        if _is_search(request):
+            return self._web(request)
         if not _is_streamed(request):
             return self._utility(request)
         body = self._bodies[min(self._streamed, len(self._bodies) - 1)]
@@ -180,8 +236,17 @@ class CannedModel:
 
     @property
     def utility_calls(self) -> list[dict[str, Any]]:
-        """The bodies of the unstreamed calls — the utility model's work."""
-        return [_body(request) for request in self.requests if not _is_streamed(request)]
+        """The bodies of the naming calls — the utility model's unsearched work."""
+        return [
+            _body(request)
+            for request in self.requests
+            if not _is_streamed(request) and not _is_search(request)
+        ]
+
+    @property
+    def searches(self) -> list[dict[str, Any]]:
+        """The bodies of the nested web searches — every call with the plugin on."""
+        return [_body(request) for request in self.requests if _is_search(request)]
 
     @property
     def sent(self) -> dict[str, Any]:
@@ -213,6 +278,11 @@ def _body(request: httpx2.Request) -> dict[str, Any]:
 
 def _is_streamed(request: httpx2.Request) -> bool:
     return bool(_body(request).get("stream"))
+
+
+def _is_search(request: httpx2.Request) -> bool:
+    """Whether this is the nested search, which is to say: whether the plugin is on."""
+    return "plugins" in _body(request)
 
 
 async def _yield(chunks: Iterable[bytes]) -> AsyncIterator[bytes]:

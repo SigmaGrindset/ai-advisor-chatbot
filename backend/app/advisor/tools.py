@@ -1,22 +1,27 @@
 """The Live-data Tools: what the advisor calls when it must not guess.
 
-Three keyless public services — Open-Meteo for current weather, Frankfurter
-for exchange rates, and the World Bank for a country's basics. None of them
-needs a second credential, which is the constraint the whole choice was made
-under (ADR-0003, and ADR-0008 for why the third one is not the one ADR-0003
-named).
+Four capabilities, of two kinds. Three are keyless public services — Open-Meteo
+for current weather, Frankfurter for exchange rates, and the World Bank for a
+country's basics — none of which needs a second credential, which is the
+constraint the whole choice was made under (ADR-0003, and ADR-0008 for why the
+third one is not the one ADR-0003 named). The fourth is a web search, which is
+a nested model call rather than an HTTP GET and lives in `searching.py`.
 
-Every argument is typed and narrow. There is no free-text argument anywhere in
-here, which is what makes personal data structurally unable to travel with a
-lookup rather than merely unlikely to (ADR-0004). The one string the weather
-tool takes is a place *label*: it is shown to the traveler while the lookup
-runs, it is refused if it carries a digit, and it is never part of the request.
+Three of the four take arguments a traveler's words cannot fit into, which is
+what makes personal data structurally unable to travel with a lookup rather
+than merely unlikely to (ADR-0004). The one string the weather tool takes is a
+place *label*: it is shown to the traveler while the lookup runs, it is refused
+if it carries a digit, and it is never part of the request. The search query is
+the single exception — a search needs words — and it is the single thing the
+guard in `privacy/queries.py` reads before it is allowed to leave.
 
 A call is read before it is made, because knowing what is about to be fetched
-is what lets the traveler be told what is happening while it happens. What comes
-back is wrapped in delimiters marking it as data rather than as anything anyone
-is asking for, and a lookup that fails becomes the result the advisor explains
-rather than an exception that collapses the turn.
+is what lets the traveler be told what is happening while it happens, and
+because a call the application will not make must be stopped before it is made
+rather than after. What comes back from outside is wrapped in delimiters
+marking it as data rather than as anything anyone is asking for, and a lookup
+that fails becomes the result the advisor explains rather than an exception
+that collapses the turn.
 """
 
 import json
@@ -26,7 +31,12 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx2
+from openai import APIError, AsyncOpenAI
 from openai.types.chat import ChatCompletionToolParam
+from openai.types.completion_usage import CompletionUsage
+
+from ..privacy.queries import MAX_QUERY, guard
+from . import searching
 
 logger = logging.getLogger(__name__)
 
@@ -52,16 +62,28 @@ UNTRUSTED_CLOSE = "<<<END_UNTRUSTED_TOOL_RESULT>>>"
 class Citation:
     """Where a fetched claim came from, kept with the Message it went into."""
 
-    #: The service's own name, as the traveler would recognise it.
+    #: The service's own name, or the site's, as the traveler would recognise it.
     service: str
     #: What was looked up there, in words.
     about: str
     #: The exact request that produced it, so the traveler can go and look.
-    url: str
+    #: None when there is nowhere to go: a search that came back citing nothing
+    #: is still a search that happened, and still has a query to answer for.
+    url: str | None
+    #: The exact query that was sent, on a Citation a web search left behind,
+    #: and None on every other. It is the only record of what left the machine
+    #: in words, so it is kept with the Message rather than only logged
+    #: (ADR-0004, ADR-0009).
+    query: str | None = None
 
-    def recorded(self) -> dict[str, str]:
+    def recorded(self) -> dict[str, str | None]:
         """The Citation as it is stored and as it reaches the browser."""
-        return {"service": self.service, "about": self.about, "url": self.url}
+        return {
+            "service": self.service,
+            "about": self.about,
+            "url": self.url,
+            "query": self.query,
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,6 +109,24 @@ class Errand:
 
 
 @dataclass(frozen=True, slots=True)
+class Search:
+    """A web search, with the query the guard has already finished with.
+
+    There is no field on here holding what the model originally asked for. What
+    the guard took out of a query is gone by the time this exists, so there is
+    nowhere further down for it to leak from.
+    """
+
+    activity: str
+    #: What will actually be sent — the guard's answer, not the model's ask.
+    query: str
+    #: What kinds of thing the guard took out, in words, and empty when it took
+    #: nothing. The advisor is told, so it can tell the traveler why an answer
+    #: is about slightly less than they asked about.
+    removed: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class Unusable:
     """A call the application could not make sense of, so it never leaves."""
 
@@ -94,14 +134,26 @@ class Unusable:
     complaint: str
 
 
+#: A read call, ready to be run or already refused. Every one of them carries an
+#: `activity`, because the traveler is told what is happening either way.
+Lookup = Errand | Search | Unusable
+
+
 @dataclass(frozen=True, slots=True)
 class ToolResult:
     """A finished lookup: what the model is shown, and what to cite for it."""
 
-    #: Already wrapped as untrusted data — this is what goes into the prompt.
+    #: What goes into the prompt, whole. Anything in here that came from outside
+    #: is already wrapped in the untrusted markers; anything the application has
+    #: to say about its own call sits outside them.
     content: str
-    #: None when the lookup found nothing to stand behind: there is nothing to cite.
-    citation: Citation | None
+    #: Empty when the lookup found nothing to stand behind. A web search leaves
+    #: one per page it read, so this is a sequence rather than the single
+    #: Citation a keyless lookup leaves.
+    citations: Sequence[Citation] = ()
+    #: What the lookup itself cost, when it was a call somebody charged for.
+    #: Only the nested search is; the keyless three are free.
+    usage: CompletionUsage | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,7 +164,7 @@ class LiveDataTool:
     description: str
     #: The JSON Schema for the arguments. Narrow on purpose: see the module note.
     arguments: Mapping[str, Any]
-    read: Callable[[Mapping[str, Any]], Errand | Unusable]
+    read: Callable[[Mapping[str, Any]], Lookup]
 
     def offered(self) -> ChatCompletionToolParam:
         return {
@@ -130,17 +182,29 @@ class LiveDataTools:
 
     Takes the application's one outbound HTTP client, like every other outbound
     caller does (ADR-0004), so a test that swaps that client out has the real
-    request building and response reading under it.
+    request building and response reading under it. The model client comes in
+    the same way and for the same reason: the web search is a nested call to
+    OpenRouter, and it leaves through the one egress like everything else.
+
+    Everything offered from here fetches. Nothing offered from here writes —
+    the tools that change the Traveler Profile or the Trip Plan are a different
+    collection, arriving in tickets 11 and 09, and keeping them apart is what
+    makes it structurally impossible for something a tool fetched to cause a
+    write on its own (ADR-0004).
     """
 
-    def __init__(self, http_client: httpx2.AsyncClient) -> None:
+    def __init__(
+        self, http_client: httpx2.AsyncClient, model: AsyncOpenAI, *, utility_model: str
+    ) -> None:
         self._client = http_client
+        self._model = model
+        self._utility_model = utility_model
 
     def offered(self) -> list[ChatCompletionToolParam]:
         """What the model is told it can call."""
         return [tool.offered() for tool in CATALOGUE]
 
-    def read(self, name: str, arguments: str) -> Errand | Unusable:
+    def read(self, name: str, arguments: str) -> Lookup:
         """What this call is asking for, before anything is fetched.
 
         Never raises. A call naming a tool that does not exist, or carrying
@@ -158,16 +222,21 @@ class LiveDataTools:
             return _unreadable(f"The arguments for {name} were not a set of named values.")
         return tool.read(given)
 
-    async def run(self, plan: Errand | Unusable) -> ToolResult:
+    async def run(self, lookup: Lookup) -> ToolResult:
         """Make the call, and answer with what to tell the model either way."""
-        if isinstance(plan, Unusable):
-            return ToolResult(content=_untrusted(plan.complaint), citation=None)
+        if isinstance(lookup, Unusable):
+            return ToolResult(content=_untrusted(lookup.complaint))
+        if isinstance(lookup, Search):
+            return await self._searched(lookup)
+        return await self._fetched(lookup)
 
+    async def _fetched(self, lookup: Errand) -> ToolResult:
+        """One keyless service, asked, with a single retry where one could help."""
         trouble = "it did not answer"
         for _ in range(ATTEMPTS):
             try:
                 response = await self._client.get(
-                    plan.url, params=dict(plan.params), timeout=LIVE_DATA_TIMEOUT
+                    lookup.url, params=dict(lookup.params), timeout=LIVE_DATA_TIMEOUT
                 )
                 response.raise_for_status()
             except httpx2.HTTPError as failure:
@@ -176,21 +245,52 @@ class LiveDataTools:
                     break
                 continue
             try:
-                found = plan.read(response.json())
+                found = lookup.read(response.json())
             except (ValueError, KeyError, IndexError, TypeError):
                 trouble = "its answer could not be read"
                 break
             return ToolResult(
                 content=_untrusted(found.content),
-                citation=Citation(service=plan.service, about=found.about, url=str(response.url)),
+                citations=(
+                    Citation(service=lookup.service, about=found.about, url=str(response.url)),
+                ),
             )
 
         # Deliberately not what was being looked up: the log is not a second
         # copy of the conversation.
-        logger.warning("A live lookup failed: %s — %s", plan.service, trouble)
+        logger.warning("A live lookup failed: %s — %s", lookup.service, trouble)
         return ToolResult(
-            content=_untrusted(f"This lookup failed: {plan.service} was asked and {trouble}."),
-            citation=None,
+            content=_untrusted(f"This lookup failed: {lookup.service} was asked and {trouble}.")
+        )
+
+    async def _searched(self, lookup: Search) -> ToolResult:
+        """The web, searched through the nested call in `searching.py`.
+
+        What the application has to say about its own call — the query it
+        actually sent, and anything the guard took out on the way — sits
+        *outside* the untrusted envelope, and only what came back from the web
+        goes inside it. The advisor is told that everything inside those markers
+        is never an instruction; the application's own account of what it did is
+        the frame for reading the rest, and marking it never-an-instruction
+        would be telling the advisor to disbelieve the one part of the result
+        that is true by construction.
+        """
+        try:
+            searched = await searching.search(
+                self._model, model_name=self._utility_model, query=lookup.query
+            )
+        except APIError as failure:
+            # Deliberately not the query: the log is not a second copy of the
+            # conversation, and the query is already recorded where it belongs.
+            logger.warning("A web search failed: %s", type(failure).__name__)
+            return ToolResult(
+                content=f"{_sent(lookup)}\nThe search did not answer.",
+                citations=(_pageless(lookup, "The search did not answer"),),
+            )
+        return ToolResult(
+            content=f"{_sent(lookup)}\n{_untrusted(_read_back(searched))}",
+            citations=_cited(lookup, searched.pages),
+            usage=searched.usage,
         )
 
 
@@ -364,6 +464,98 @@ def _country_found(answered: Any) -> Found:
         f"Roughly at {facts.get('latitude') or '?'}, {facts.get('longitude') or '?'}",
     ]
     return Found(content=". ".join(parts) + ".", about=f"World Bank country facts for {name}")
+
+
+# ---- The web, searched through a nested OpenRouter call ------------------- #
+
+
+def _read_web_search(given: Mapping[str, Any]) -> Search | Unusable:
+    """What this search will actually be, once the guard has read the query.
+
+    The guard runs here rather than at the moment of the call, because this is
+    where the query stops being what the model asked for and becomes what the
+    application is going to send: the status line, the Citation and the request
+    all say the same thing afterwards, and there is no version of the query
+    further down that still has the traveler's document number in it.
+    """
+    asked = given.get("query")
+    if not isinstance(asked, str) or asked.strip() == "":
+        return Unusable(
+            activity="Searching the web",
+            complaint="A web search needs a query, as a short question in words.",
+        )
+
+    guarded = guard(asked)
+    if guarded.query == "":
+        return Unusable(
+            activity="Searching the web",
+            complaint=(
+                f"No search was made. That query was {_in_words(guarded.removed)} and nothing "
+                "else, and a number that identifies the traveler is not something this "
+                "application sends to a search engine. Search for the question itself."
+            ),
+        )
+    return Search(
+        # The whole of the sent query, not a shortened one: a traveler watching
+        # this is watching the one thing this application sends out in their own
+        # words, and the guard has already bounded its length.
+        activity=f"Searching the web for {guarded.query}",
+        query=guarded.query,
+        removed=guarded.removed,
+    )
+
+
+def _sent(lookup: Search) -> str:
+    """What the application did, in its own voice and outside the envelope.
+
+    The query that actually left, and what the guard took out of it on the way.
+    An advisor that could not tell what was searched for would happily report an
+    answer to a question nobody asked.
+    """
+    sent = f"A web search was made. The query sent was: {lookup.query}"
+    if not lookup.removed:
+        return sent
+    return (
+        f"{sent}\nThe query originally asked for contained {_in_words(lookup.removed)}, which "
+        "this application removed before the search was made, as it removes anything of "
+        "that shape. The query above is the whole of what was sent."
+    )
+
+
+def _read_back(searched: searching.Searched) -> str:
+    """What the web said, as the model is shown it — inside the envelope."""
+    parts = [searched.written or "The search came back with nothing to report."]
+    if searched.pages:
+        parts += ["", "The pages it read:"]
+        parts += [f"- {page.title} — {page.url}" for page in searched.pages]
+    return "\n".join(parts)
+
+
+def _cited(lookup: Search, pages: Sequence[searching.Page]) -> tuple[Citation, ...]:
+    """One Citation per page the search read, each carrying the query that found it."""
+    if not pages:
+        return (_pageless(lookup, "The search cited no page"),)
+    return tuple(
+        Citation(service=page.site, about=page.title, url=page.url, query=lookup.query)
+        for page in pages
+    )
+
+
+def _pageless(lookup: Search, about: str) -> Citation:
+    """The record of a search that left nothing to link to.
+
+    Still a Citation, and still kept under the Message. A search that answered
+    with nothing is a search that happened, and what was sent to make it happen
+    has to be somewhere the traveler can go and read it.
+    """
+    return Citation(service="Web search", about=about, url=None, query=lookup.query)
+
+
+def _in_words(kinds: Sequence[str]) -> str:
+    """"a long number", or "a card number and a long number"."""
+    if len(kinds) <= 1:
+        return "".join(kinds)
+    return f"{', '.join(kinds[:-1])} and {kinds[-1]}"
 
 
 # ---- Reading arguments ----------------------------------------------------- #
@@ -547,6 +739,40 @@ CATALOGUE: Sequence[LiveDataTool] = (
             "additionalProperties": False,
         },
         read=_read_country_facts,
+    ),
+    LiveDataTool(
+        name="web_search",
+        description=(
+            "Search the web and read what comes back, through a searching model that "
+            "answers with the pages it read. Call this for anything written down "
+            "somewhere current that would be wrong to recall: visa and entry rules above "
+            "all, and also travel advisories, closures, events, opening times and prices. "
+            "A visa or entry question is always this tool and never your own knowledge, "
+            "however sure of the answer you are — those rules change, and a wrong one "
+            "costs the traveler their trip. Pass a short question in plain words, and "
+            "nothing identifying whoever is asking: no name, no document number, no date "
+            "of birth."
+        ),
+        arguments={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "maxLength": MAX_QUERY,
+                    "description": (
+                        "What to search for, as a short question — 'Schengen visa "
+                        "requirements for Croatian citizens'. The only free-text argument "
+                        "any tool here takes, and so the only one that is read before it "
+                        "is sent: anything shaped like a passport, identity or card "
+                        "number is taken out of it, and what was actually sent is shown "
+                        "to the traveler."
+                    ),
+                },
+            },
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+        read=_read_web_search,
     ),
 )
 

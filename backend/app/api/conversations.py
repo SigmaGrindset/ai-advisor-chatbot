@@ -43,10 +43,16 @@ router = APIRouter(tags=["conversations"])
 class CitationView(BaseModel):
     """Where something in this Message was fetched from."""
 
-    #: The service's own name, as the traveler would recognise it.
+    #: The service's own name, or the site's, as the traveler would recognise it.
     service: str
     about: str
-    url: str
+    #: Null when there is nowhere to go and look: a web search that came back
+    #: citing no page still leaves the query it sent behind.
+    url: str | None
+    #: The exact query a web search sent, and null on every other Citation.
+    #: Defaulted, because Messages recorded before there was a web search have
+    #: no such key stored against them.
+    query: str | None = None
 
 
 class MessageView(BaseModel):
@@ -178,7 +184,7 @@ async def say(
             traveler_message,
             model,
             prompt,
-            LiveDataTools(http_client),
+            LiveDataTools(http_client, model, utility_model=settings.utility_model),
             settings,
         ),
         media_type="text/event-stream",

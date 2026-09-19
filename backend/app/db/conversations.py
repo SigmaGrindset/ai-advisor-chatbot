@@ -84,7 +84,7 @@ async def record_message(
     role: MessageRole,
     content: str,
     cost_usd: Decimal | None = None,
-    citations: Sequence[dict[str, str]] = (),
+    citations: Sequence[dict[str, str | None]] = (),
 ) -> Message:
     """Keep something that was said, and answer with it as it was kept.
 
