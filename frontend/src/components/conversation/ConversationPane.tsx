@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowDownLeft, MapPinned, PanelLeft, Radar, RotateCcw, TriangleAlert } from "lucide-react";
+import { ArrowDown, ArrowDownLeft, Check, Copy, MapPinned, PanelLeft, Radar, RotateCcw, TriangleAlert } from "lucide-react";
 
 import { settled } from "./announcing";
 import type { Citation, Conversation, Failure, Message } from "../../api/types";
@@ -11,7 +11,6 @@ import { atBottom, toFoot, toFootSmoothly } from "./following";
 import { GREETING, STARTERS } from "./firstRun";
 import { spoken } from "./markdown";
 import { Prose } from "./Prose";
-import { spent } from "./spend";
 import { failureLabel } from "./failures";
 import { LoadingTranscript, Skeleton } from "../shell/Skeleton";
 import type { Unrecorded } from "../../stream/useTurn";
@@ -236,7 +235,6 @@ export function ConversationPane({
                 role={message.role}
                 content={message.content}
                 citations={message.citations}
-                cost={message.cost_usd}
               >
                 {message.failure !== null && (
                   <NotAnswered
@@ -541,7 +539,6 @@ function MessageView({
   role,
   content,
   citations = [],
-  cost = null,
   writing = false,
   children,
 }: {
@@ -549,12 +546,6 @@ function MessageView({
   content: string;
   /** Where this Message's fetched claims came from. Empty when it fetched none. */
   citations?: Citation[];
-  /**
-   * What the turn that produced this Message cost, and null when nothing was
-   * recorded — on the traveler's own Message, and on a turn whose provider
-   * reported no figure.
-   */
-  cost?: number | null;
   /** True while this Message is still being written into the Conversation. */
   writing?: boolean;
   /** Anything belonging to this Message rather than to the transcript. */
@@ -566,18 +557,8 @@ function MessageView({
     // they are set in rather than by a bubble, so a long itinerary has the
     // whole measure to be read across.
     <article className="flex flex-col gap-2">
-      <h2 className="flex items-baseline gap-2 font-mono text-micro uppercase text-ink-subtle">
+      <h2 className="font-mono text-micro uppercase text-ink-subtle">
         {traveler ? "You" : "Advisor"}
-        {cost !== null && (
-          // What the turn cost, where somebody looking for it will find it and
-          // nobody else is bothered by it: beside the name of the voice, in the
-          // face this application sets every other figure in. Recorded from the
-          // provider's own accounting, so reading spend is reading the page
-          // rather than polling an account.
-          <span title="What this turn cost" className="tabular-nums normal-case text-ink-subtle">
-            {spent(cost)}
-          </span>
-        )}
       </h2>
       {traveler ? (
         // Their own words, shown back exactly as typed. Markdown is what the
@@ -593,7 +574,112 @@ function MessageView({
         (content !== "" || writing) && <Prose text={content} writing={writing} />
       )}
       <Citations citations={citations} />
+      {/* Under the reply and under its sources, so what the traveler takes
+          away is the whole of what the advisor said. A reply still being
+          written has nothing settled to take. */}
+      {!traveler && !writing && content !== "" && <CopyReply text={content} />}
       {children}
     </article>
+  );
+}
+
+/**
+ * The reply, taken away — into an itinerary, a note, a message to whoever else
+ * is going.
+ *
+ * What it copies is the reply as the advisor wrote it, Markdown and all,
+ * rather than the text the page happens to be showing: pasted into anything
+ * that reads Markdown the headings and lists come back, and pasted into a
+ * plain field it is still a reply somebody can read.
+ *
+ * The confirmation is the button itself, because the traveler who pressed it
+ * is looking at it: the icon becomes a tick for a moment. A clipboard can also
+ * refuse — an insecure origin, a browser that will not hand it over — and a
+ * button that quietly does nothing is worse than one that says it could not.
+ */
+function CopyReply({ text }: { text: string }) {
+  const [said, setSaid] = useState<"copy" | "copied" | "refused">("copy");
+  const settling = useRef<number | undefined>(undefined);
+  // Dropped on the way out, so a Conversation closed just after a press does
+  // not come back to a Message that is no longer on the page.
+  useEffect(() => () => window.clearTimeout(settling.current), []);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setSaid("copied");
+    } catch {
+      setSaid("refused");
+    }
+    window.clearTimeout(settling.current);
+    settling.current = window.setTimeout(() => setSaid("copy"), SAID_FOR);
+  }
+
+  const refused = said === "refused";
+  const label = said === "copied" ? "Copied" : refused ? "Could not copy" : "Copy";
+  return (
+    // Pulled back by its own padding, so the icon sits on the same line the
+    // reply above it is set to rather than a few pixels inside it. Positioned,
+    // because the Tip hangs off it.
+    <div className="relative -ms-1.5 flex w-fit items-center">
+      <button
+        type="button"
+        aria-label="Copy reply"
+        className={`peer rounded-control p-1.5 pressable ${
+          refused ? "text-error" : "text-ink-subtle hover:bg-sunken hover:text-ink"
+        }`}
+        onClick={copy}
+      >
+        {said === "copied" ? (
+          <Check {...smallIcon} aria-hidden="true" />
+        ) : (
+          <Copy {...smallIcon} aria-hidden="true" />
+        )}
+      </button>
+      <Tip label={label} refused={refused} />
+      {/* Said rather than drawn: the tick is only a confirmation to somebody
+          who can see it, and nothing else on the page changes to prove the
+          press landed. */}
+      <span role="status" className="sr-only">
+        {said === "copy" ? "" : label}
+      </span>
+    </div>
+  );
+}
+
+/** How long the button keeps saying what happened before going quiet again. */
+const SAID_FOR = 2000;
+
+/**
+ * The word for a control that is drawn as an icon, in this application's own
+ * materials.
+ *
+ * A native `title` is the operating system's tooltip: its own grey, its own
+ * corners, its own half-second of delay, drawn from nothing this application
+ * decided. One of those under a reply is the only thing on the screen that
+ * did not come out of `tokens.css`, and it looks it.
+ *
+ * So it is cut from the paper every other floating thing here is cut from — a
+ * surface, a hairline and the floating shadow — lettered like every other
+ * label in the interface, and it arrives the way a panel arrives.
+ *
+ * It carries no role and is hidden from the accessibility tree: the control
+ * it belongs to is already named, and a tooltip that is also that name is the
+ * name said twice. It answers the pointer and the keyboard both, and a finger
+ * neither — a touch screen has no hover, which is why nothing in this
+ * application is ever said *only* in here.
+ */
+function Tip({ label, refused = false }: { label: string; refused?: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      // Hidden rather than faded out, so each hover starts the arrival again
+      // and a tooltip is never left lying over the transcript.
+      className={`pointer-events-none absolute bottom-full start-0 mb-1.5 hidden animate-panel whitespace-nowrap rounded-control border border-line bg-surface px-2 py-1 font-mono text-micro uppercase shadow-floating peer-hover:block peer-focus-visible:block ${
+        refused ? "text-error" : "text-ink-muted"
+      }`}
+    >
+      {label}
+    </span>
   );
 }
