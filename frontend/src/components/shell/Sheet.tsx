@@ -191,10 +191,13 @@ export function Sheet({
       >
         {/* The one part of a bottom sheet a drag is taken from. Taking it from
             the body would fight the list inside it, and a sheet that steals a
-            scroll is worse than one that has to be gripped. */}
+            scroll is worse than one that has to be gripped.
+            The open hand says it can be picked up; the closed one says it has
+            been, which is the only acknowledgement a drag gets between the
+            grip and wherever the sheet comes to rest. */}
         <div
           className={`relative flex shrink-0 items-center justify-center py-2 ${
-            side === "bottom" ? "cursor-grab touch-none" : ""
+            side === "bottom" ? `touch-none ${dragging ? "cursor-grabbing" : "cursor-grab"}` : ""
           }`}
           {...(side === "bottom" ? drag : {})}
         >

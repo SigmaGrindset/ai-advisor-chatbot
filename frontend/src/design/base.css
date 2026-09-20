@@ -87,6 +87,24 @@
     }
   }
 
+  /* Which things are worth pressing, said before they are pressed.
+     A browser hands the arrow to everything but a link, and Tailwind's reset
+     leaves that alone — the right default for a page of prose with a few
+     native buttons in it, and the wrong one here. The rows of the rail, the
+     tabs over the record, a chip that opens its sources, a value in the plan
+     waiting to be typed over: all of them are drawn surfaces rather than
+     native controls, and on a desktop the hand is what tells them apart from
+     the writing they sit in. The same list the touch rule takes, because it
+     is the same question asked of the other kind of pointer.
+     A control that is disabled keeps the arrow rather than taking the barred
+     circle: it is not refusing the traveler anything, it is simply not a
+     control yet, and it already says so by being drawn faint.
+     Base layer, so anything with its own cursor to name — the grip on a
+     sheet — says so in a utility and is obeyed. */
+  :where(button, [role="tab"], summary):not(:disabled) {
+    cursor: pointer;
+  }
+
   /* One focus treatment, everywhere, and never removed. */
   :focus-visible {
     outline: 2px solid var(--color-focus);

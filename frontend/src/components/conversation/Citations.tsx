@@ -29,7 +29,7 @@ export function Citations({ citations }: { citations: Citation[] }) {
           <details className="max-w-full">
             {/* The summary keeps its own display, so it keeps the role a
                 browser gives a disclosure; the arranging is a span inside it. */}
-            <summary className="w-fit max-w-full cursor-pointer list-none rounded-chip border border-verified/40 bg-verified-tint px-2.5 py-1 font-mono text-micro text-verified pressable hover:border-verified [&::-webkit-details-marker]:hidden">
+            <summary className="w-fit max-w-full list-none rounded-chip border border-verified/40 bg-verified-tint px-2.5 py-1 font-mono text-micro text-verified pressable hover:border-verified [&::-webkit-details-marker]:hidden">
               <span className="flex items-center gap-1.5">
                 <span className="tabular-nums">{at + 1}</span>
                 <span className="min-w-0 truncate uppercase">{citation.service}</span>
