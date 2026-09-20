@@ -1,9 +1,8 @@
 """The advisor going and looking something up, rather than guessing at it.
 
-Every test here drives a whole turn through the API: a canned model asks for a
-tool, the application really dispatches it, a canned service answers on its own
-host, the result re-enters the loop, and the answer that comes out is the one
-the traveler keeps. Nothing between the browser and the socket is stubbed.
+Every test drives a whole turn through the API: a canned model asks for a
+tool, it is really dispatched, a canned service answers on its own host, and
+the result re-enters the loop. Nothing between browser and socket is stubbed.
 """
 
 from datetime import date, timedelta
@@ -64,10 +63,9 @@ COUNTRY = [
 class Source:
     """A canned live-data service that remembers what it was asked for.
 
-    Given something to raise instead of an answer it raises it every time,
-    which is what a service that is down or unreachable does; given a status
-    other than 200 it refuses every time, which is what one does when asked
-    about something that is not there.
+    Given something to raise it raises it every time, as a service that is
+    down does; given a status other than 200 it refuses every time, as one
+    does when asked about something that is not there.
     """
 
     def __init__(
@@ -116,8 +114,8 @@ async def test_a_weather_question_is_fetched_and_answered_from_what_came_back(
 
     events = await send(api, conversation, "What is the weather like in Lisbon right now?")
 
-    # The lookup was really made — and with exactly these arguments. The place
-    # is a label for the traveler's screen, so it is not among them (ADR-0004).
+    # Really made, with exactly these arguments. The place is a label for the
+    # traveler's screen, so it is not among them (ADR-0004).
     assert dict(weather.asked.params) == {
         "latitude": "38.72",
         "longitude": "-9.14",
@@ -173,8 +171,7 @@ async def test_tool_call_arguments_split_across_chunks_arrive_whole(
         '2, "longitud',
         'e": -9.14, "pl',
         'ace": "Lisbon"}',
-        # Cut the stream where the network would cut it — mid-line, rather than
-        # conveniently between events.
+        # Cut where the network would cut it: mid-line, not between events.
         split_every=17,
     )
     outbound_routes[OPEN_METEO] = weather = Source(WEATHER)
@@ -200,8 +197,8 @@ async def test_a_source_that_never_answers_becomes_a_tool_result_not_a_failed_tu
 
     # Tried, then tried once more, and then told the advisor rather than raised.
     assert len(weather.requests) == 2
-    # And each try was given the short timeout rather than the client's own, so a
-    # source that has hung does not hold the traveler for the full ten seconds.
+    # Each try was given the short timeout rather than the client's own, so a
+    # hung source does not hold the traveler for the full ten seconds.
     assert weather.requests[0].extensions["timeout"] == {
         "connect": 2.0,
         "read": 4.0,
@@ -267,8 +264,7 @@ async def test_a_tool_result_arrives_marked_as_untrusted_and_cannot_close_its_ow
     outbound_routes["openrouter.ai"] = model = _asking_weather(
         '{"latitude": 38.72, "longitude": -9.14, "place": "Lisbon"}'
     )
-    # A source trying to end the envelope early and speak in the advisor's own
-    # voice outside it.
+    # A source trying to end the envelope early and speak outside it.
     outbound_routes[OPEN_METEO] = Source(
         {
             **WEATHER,
@@ -283,16 +279,15 @@ async def test_a_tool_result_arrives_marked_as_untrusted_and_cannot_close_its_ow
     (result,) = _tool_results(model)
     assert result.startswith("<<<UNTRUSTED_TOOL_RESULT>>>\n")
     assert result.endswith("\n<<<END_UNTRUSTED_TOOL_RESULT>>>")
-    # The forged marker was taken out, so everything the service said is still
-    # inside the one envelope.
+    # The forged marker is gone, so all the service said is inside one envelope.
     assert result.count("<<<END_UNTRUSTED_TOOL_RESULT>>>") == 1
 
 
 async def test_a_call_the_application_cannot_read_never_leaves_the_machine(
     api: httpx2.AsyncClient, conversation: str, outbound_routes: dict[str, Responder]
 ) -> None:
-    # No route for Open-Meteo: a request reaching it would fail the test rather
-    # than quietly pass, which is the assertion.
+    # No route for Open-Meteo: a request reaching it fails the test rather
+    # than quietly passing, which is the assertion.
     outbound_routes["openrouter.ai"] = model = CannedModel(
         *calling("current_weather", '{"latitude": "somewhere warm", "place": "Lisbon"}'),
         wants_tools(),
@@ -329,9 +324,8 @@ async def test_every_live_data_argument_is_narrow_enough_to_carry_nothing_said(
 
     offered = {tool["function"]["name"]: tool["function"] for tool in model.sent["tools"]}
     assert sorted(name for name in offered if name in FETCHING) == FETCHING
-    # Strictly typed, closed, and bounded. The search query is the one argument
-    # that is room for words, and it is the one the guard reads before it is
-    # sent; nothing else can carry anything the traveler said (ADR-0004).
+    # Strictly typed, closed and bounded: the search query is the one argument
+    # with room for words, and the guard reads it before it is sent (ADR-0004).
     for name in FETCHING:
         arguments = offered[name]["parameters"]
         assert arguments["additionalProperties"] is False
@@ -344,11 +338,10 @@ async def test_nothing_that_writes_is_offered_once_something_has_been_fetched(
 ) -> None:
     """The rule that keeps ADR-0004's promise now that writing tools exist.
 
-    A step that has a tool result in front of it is offered the fetching
-    collection and nothing else, so by the time anything an outside service
-    said is in the model's context there is no tool on the table that could
-    change the traveler's plan. Before the first lookup, on the step composed
-    from nothing but the Conversation itself, the plan tools are there.
+    A step with a tool result in front of it is offered the fetching
+    collection and nothing else, so by the time an outside service's words are
+    in context, no tool on the table could change the plan. Before the first
+    lookup, the plan tools are there.
     """
     outbound_routes["openrouter.ai"] = model = _asking_weather(
         '{"latitude": 38.72, "longitude": -9.14, "place": "Lisbon"}'
@@ -395,15 +388,15 @@ def _outlook(start: date, end: date) -> str:
 def _observed(start: date, end: date, years: int = 10) -> dict[str, Any]:
     """An archive answer: whole years, of which most days are not asked about.
 
-    Built rather than written out because that is what the service really
-    sends — one unbroken run of days — and the filtering under test is the
-    part that picks the trip's dates back out of it.
+    Built rather than written out because one unbroken run of days is what the
+    service really sends, and the filtering under test picks the trip's dates
+    back out of it.
     """
     first = date(date.today().year - years, start.month, start.day)
     last = date(date.today().year - 1, end.month, end.day)
     days = [first + timedelta(days=step) for step in range((last - first).days + 1)]
-    # Warm and dry on the days asked about, freezing and soaking on every other
-    # day of the year, so an answer that failed to filter could not look right.
+    # Warm and dry on the days asked about, freezing and soaking on every
+    # other, so an answer that failed to filter could not look right.
     inside = [(day.month, day.day) in {(d.month, d.day) for d in (start, end)} for day in days]
     return {
         "daily_units": {"temperature_2m_max": "°C", "precipitation_sum": "mm"},
@@ -452,8 +445,8 @@ async def test_the_weather_on_the_trips_dates_is_forecast_when_a_forecast_reache
 
     await send(api, conversation, "What will the weather be like when I am in Lisbon?")
 
-    # The real forecast endpoint, asked for exactly those days. The place is a
-    # label for the traveler's screen, so it is not among the arguments.
+    # The real forecast endpoint, asked for exactly those days, with the place
+    # label not among the arguments.
     assert weather.asked.path == "/v1/forecast"
     assert weather.asked.params["start_date"] == start.isoformat()
     assert weather.asked.params["end_date"] == end.isoformat()
@@ -485,13 +478,13 @@ async def test_dates_no_forecast_reaches_are_answered_from_what_they_have_been_l
     assert archive.asked.params["end_date"] == f"{date.today().year - 1}-06-11"
 
     (result,) = _tool_results(model)
-    # The days of other months came back in the same answer and were left out
-    # of it: an unfiltered reading would have averaged in the -40°C days.
+    # Other months came back in the same answer and were left out: an
+    # unfiltered reading would have averaged in the -40°C days.
     assert "26.0°C on average" in result
     assert "-40" not in result
     assert "10 years" in result
-    # And it says what kind of answer it is, which is what stops the advisor
-    # repeating a ten-year average as a claim about a day.
+    # And it says what kind of answer it is, which stops the advisor repeating
+    # a ten-year average as a claim about a day.
     assert "not a forecast" in result
 
     reopened = await api.get(f"/api/conversations/{conversation}")

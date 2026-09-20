@@ -6,17 +6,12 @@ import { icon } from "../../design/icons";
 /**
  * The third pane: the two durable records a Conversation writes to.
  *
- * The Trip Plan is never somewhere the traveler navigates away to — it sits in
- * view and changes as they talk, which is the only way the plan "taking shape
- * as they talk" happens on screen rather than in a claim (ADR-0006). The
- * Traveler Profile shares the pane because it is the other durable thing a
- * Conversation writes to, and it fills in the same way while they talk.
+ * The Trip Plan is never navigated away to — it sits in view and changes as
+ * they talk, which is the only way ADR-0006's promise happens on screen rather
+ * than in a claim. The Profile shares the pane, filling the same way.
  *
- * It draws itself and nothing around itself. Where it goes is the shell's
- * question: a pane on a laptop and a tablet, and a bottom sheet on a phone.
- * Which tab is open is not its own either, because the shell's peek strip
- * opens this pane *at* the plan — so the answer has to be somewhere both can
- * reach.
+ * Where it goes is the shell's question, and so is which tab is open: the
+ * peek strip opens this pane *at* the plan, so both need the answer.
  */
 
 /** Which of the two records is showing. */
@@ -48,17 +43,14 @@ export function RecordPane({
   tab: RecordTab;
   onTab: (tab: RecordTab) => void;
   /**
-   * The records that have changed since their tab was last showing.
-   *
-   * The tab is marked rather than switched to. A pane that changed tab under
-   * a traveler reading the other one would take away what they were reading
-   * to show them something they had not asked for.
+   * The records changed since their tab was last showing. Marked rather than
+   * switched to: a pane that changed tab under a reader would take away what
+   * they were reading.
    */
   unseen: ReadonlySet<RecordTab>;
   /**
-   * Which Trip the Conversation is refining, and the way to say otherwise. It
-   * is the head of the plan rather than part of it: what a plan says is the
-   * Trip Plan's business, and which Trip is being shown at all is not.
+   * Which Trip the Conversation is refining, and the way to say otherwise —
+   * the head of the plan rather than part of it.
    */
   switcher: ReactNode;
   /** The Trip Plan, drawn. */
@@ -132,8 +124,8 @@ export function RecordPane({
       </div>
 
       <div
-        // Keyed on the tab so switching replaces the panel rather than editing
-        // it, which is what gives the transition something to play over.
+        // Keyed on the tab so switching replaces the panel, which is what
+        // gives the transition something to play over.
         key={showing.id}
         role="tabpanel"
         id={`${showing.id}-panel`}

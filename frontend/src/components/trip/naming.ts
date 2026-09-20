@@ -1,14 +1,12 @@
 /**
  * What a Trip is called, wherever it is mentioned.
  *
- * A Trip has no name of its own — nobody is asked to title one — so it is
- * called after the first thing about it that tells one journey from another.
- * The destination does that; failing a destination, the dates do; and a Trip
- * with neither is said to be missing the one a traveler would look for rather
- * than given a number nobody chose.
+ * Nobody is asked to title a Trip, so it is called after the first thing that
+ * tells one journey from another: the destination, failing that the dates,
+ * and failing both a line saying so rather than a number nobody chose.
  *
- * One reading, because a Trip has to be recognisable as the same Trip on the
- * chip beside a Conversation, in the switcher and on the Trips page.
+ * One reading, so a Trip is recognisable as the same Trip on the chip, in the
+ * switcher and on the Trips page.
  */
 
 import type { TripPlan } from "../../api/types";

@@ -1,21 +1,15 @@
 """The Trip Plan tools: what the advisor calls when the trip itself changes.
 
-A deliberately separate collection from the Live-data Tools next door. Those
-fetch and never write; these write and never fetch, as the Traveler Profile
-tools beside them do. Keeping them in catalogues of their own, dispatched down
-separate branches of the loop, is what makes it structurally impossible for
-something a tool fetched to cause a write on its own rather than merely
-unlikely to (ADR-0004).
+A separate collection from the Live-data Tools next door, which fetch and
+never write. Separate catalogues down separate branches of the loop is what
+makes it structurally impossible for a fetch to cause a write (ADR-0004).
 
-Every tool here patches one field or one collection entry. There is no
-whole-document write, because ADR-0002 committed to field-level patching
-precisely so that an edit the traveler made by hand between two turns is not
-read back and written over by the next one.
+Every tool here patches one field or one entry. There is no whole-document
+write: ADR-0002 chose field-level patching so an edit the traveler made by
+hand between two turns is not read back and written over by the next one.
 
-Nothing in here touches the database. A call is read into a typed change, and
-something above — `services/plans.py` — is what knows how to apply one. That
-is the same line the rest of `advisor/` sits on: the model and the plan's
-shape live here, the storage does not.
+Nothing here touches the database — a call is read into a typed change, and
+`services/plans.py` knows how to apply one.
 """
 
 import uuid
@@ -29,8 +23,7 @@ from openai.types.chat import ChatCompletionToolParam
 
 from .calls import Tool, Unusable, read_call, words, whole
 
-#: How long the strings a plan tool takes may be. A destination is a place, a
-#: line of an itinerary is a line, and an Open Question is a question.
+#: A destination is a place, an itinerary line is a line, a question a question.
 MAX_DESTINATION = 120
 MAX_DESCRIPTION = 200
 MAX_QUESTION = 200
@@ -125,29 +118,24 @@ PlanChange = JoinTrip | PlanEdit
 class Changed:
     """What became of a change: what the advisor is told, and what moved."""
 
-    #: The tool result, in the application's own voice. It is *not* wrapped in
-    #: the untrusted markers a Live-data Tool result wears: this is the
-    #: application's account of a write it performed itself, not something
-    #: somebody on the internet said, and marking it never-an-instruction
-    #: would be telling the advisor to disbelieve the one part of a result
-    #: that is true by construction.
+    #: The tool result, in our own voice. *Not* wrapped in untrusted markers:
+    #: this is our account of a write we performed, not something somebody on
+    #: the internet said.
     told: str
-    #: Which parts of the plan moved, named the way the interface names them:
-    #: a scalar field by its own name, a collection entry by its identifier.
-    #: What the traveler sees highlighted.
+    #: What the traveler sees highlighted, named the way the interface names
+    #: it: a scalar by its own name, a collection entry by its identifier.
     fields: Sequence[str] = ()
-    #: Whether the plan the traveler is looking at is now out of date. True
-    #: whenever anything was written, including a join, which changes the
-    #: whole plan and highlights none of it. False for a change that was
-    #: refused, and for one the plan already satisfied.
+    #: Whether the plan on screen is now out of date. True whenever anything
+    #: was written, including a join, which highlights nothing. False for a
+    #: change refused, and for one the plan already satisfied.
     revised: bool = False
 
 
 class Plan(Protocol):
     """Whatever can actually apply a change to the Trip Plan.
 
-    Implemented above this layer, where the database is. Declared here so the
-    loop can be handed one without `advisor/` learning what a session is.
+    Implemented above this layer, where the database is, so the loop can be
+    handed one without `advisor/` learning what a session is.
     """
 
     async def change(self, asked: PlanChange) -> Changed: ...
@@ -207,8 +195,8 @@ class TripSummary:
 def describe(plan: TripPlan | None) -> str:
     """The Trip Plan as the advisor is shown it at the top of a turn.
 
-    Every entry carries the number the tools take, because a plan the advisor
-    can read but cannot point at is a plan it can only rewrite.
+    Every entry carries the number the tools take: a plan the advisor can read
+    but not point at is one it can only rewrite.
     """
     if plan is None:
         return (
@@ -319,9 +307,8 @@ def offered() -> list[ChatCompletionToolParam]:
 async def change(plan: Plan, name: str, arguments: str) -> Changed:
     """Read one call and apply it, answering with what to tell the advisor.
 
-    Never raises. A call carrying arguments that are not what the tool takes
-    becomes something the advisor is told about and can correct, rather than
-    something that ends the turn.
+    Never raises: bad arguments become something the advisor is told about and
+    can correct, rather than something that ends the turn.
     """
     asked = read_call(_BY_NAME, name, arguments)
     if isinstance(asked, Unusable):

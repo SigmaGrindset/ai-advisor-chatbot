@@ -1,14 +1,12 @@
 """A canned OpenRouter, in the wire format it actually uses.
 
-The application's stream parsing is real code under test, so what it parses here
-has to be the real thing: server-sent events carrying chat completion chunks,
-keep-alive comment lines, a usage chunk at the end, and a `[DONE]` sentinel.
+The stream parsing is real code under test, so what it parses here is the real
+thing: SSE chat completion chunks, keep-alive comments, a usage chunk and a
+`[DONE]` sentinel.
 
-One canned provider answers all three kinds of call the application makes,
-because on the wire they go to one host. A streamed request is the traveler's
-turn. An unstreamed one carrying `plugins` is the nested web search, and gets a
-completion with url citations annotated onto it. Any other unstreamed one is the
-utility model's other work — naming a Conversation — and gets a plain one.
+One provider answers all three kinds of call, because on the wire they go to
+one host: a streamed request is the traveler's turn, an unstreamed one
+carrying `plugins` is the nested search, and any other is the utility model's.
 """
 
 import json
@@ -48,11 +46,9 @@ def wants_tools() -> bytes:
 def calling(name: str, *arguments: str, call_id: str = "call-1", at: int = 0) -> list[bytes]:
     """The chunks in which a model asks for one tool call.
 
-    The arguments arrive in pieces because that is how a stream delivers them:
-    the name and the identifier once, in the chunk that opens the call, and the
-    JSON a fragment at a time in the bare chunks that follow it. `at` is the
-    provider's own index for the call, which is the only thing those later
-    fragments carry.
+    The arguments arrive in pieces, as a stream delivers them: name and
+    identifier once, then bare JSON fragments. `at` is the provider's index,
+    which is the only thing those later fragments carry.
     """
     opening, *rest = arguments or ("",)
     return [
@@ -80,10 +76,8 @@ def calling(name: str, *arguments: str, call_id: str = "call-1", at: int = 0) ->
 def gives_up(code: int | None = None) -> bytes:
     """The event a provider sends when it stops mid-stream.
 
-    A stream that fails after it has started is a 200 that is still arriving,
-    so the failure travels as an event in the body rather than as a status. Its
-    `code` is the provider's own, and is absent when the provider only says
-    that something went wrong.
+    A stream that fails after starting is a 200 still arriving, so the failure
+    travels as an event in the body rather than as a status.
     """
     error: dict[str, Any] = {"message": "the upstream provider went away"}
     if code is not None:
@@ -125,10 +119,9 @@ def answering(text: str) -> Responder:
 def searching(written: str, *pages: tuple[str, str], cost: float | None = None) -> Responder:
     """A searching model, answering the way OpenRouter's web plugin does.
 
-    The pages come back as `url_citation` annotations on the message rather than
-    as anything in the text, which is the whole reason the search is worth
-    nesting: the application gets the sources as data instead of having to read
-    them back out of a paragraph.
+    Pages come back as `url_citation` annotations rather than as text, which is
+    why the search is worth nesting: the sources arrive as data instead of
+    having to be read back out of a paragraph.
     """
 
     def answer(request: httpx2.Request) -> httpx2.Response:

@@ -63,24 +63,21 @@ router = APIRouter(tags=["conversations"])
 class CitationView(BaseModel):
     """Where something in this Message was fetched from."""
 
-    #: The service's own name, or the site's, as the traveler would recognise it.
+    #: The service's own name, as the traveler would recognise it.
     service: str
     about: str
-    #: Null when there is nowhere to go and look: a web search that came back
-    #: citing no page still leaves the query it sent behind.
+    #: Null when there is nowhere to go and look.
     url: str | None
-    #: The exact query a web search sent, and null on every other Citation.
-    #: Defaulted, because Messages recorded before there was a web search have
-    #: no such key stored against them.
+    #: The query a web search sent, null on every other Citation. Defaulted,
+    #: because Messages predating the web search have no such key stored.
     query: str | None = None
 
 
 class FailureView(BaseModel):
     """Why the turn that produced a Message did not finish.
 
-    The kind is what the interface labels it with, and is the whole of what
-    tells a traveler with no key from a traveler with no credit from a bug
-    here. The detail is the sentence under that label.
+    The kind is the label, and is what tells no key from no credit from a bug
+    here; the detail is the sentence under it.
     """
 
     kind: FailureKind
@@ -92,20 +89,16 @@ class MessageView(BaseModel):
     role: MessageRole
     content: str
     created_at: datetime
-    #: The Prompt Version whose Advisor Instructions produced this Message, so
-    #: that an advisor that started answering differently partway through a
-    #: Conversation can be explained rather than wondered at. Null on a
-    #: traveler Message, which no prompt produced.
+    #: What produced this Message, so an advisor that started answering
+    #: differently partway through can be explained. Null on a traveler Message.
     prompt_version_id: uuid.UUID | None
-    #: What the turn that produced this Message cost, in US dollars.
+    #: In US dollars.
     cost_usd: float | None
     #: Empty unless the turn went and looked something up.
     citations: list[CitationView]
-    #: Why the turn that produced this Message stopped, and null when it did
-    #: not. An advisor Message carrying one holds whatever had arrived of the
-    #: reply, which may be nothing — the marker is what tells a turn that died
-    #: from an advisor with nothing to say. Defaulted, because Messages
-    #: recorded before there was a marker have no such key stored against them.
+    #: Why the turn stopped. A Message carrying one holds whatever had arrived
+    #: of the reply, which may be nothing. Defaulted, because Messages
+    #: predating the marker have no such key stored.
     failure: FailureView | None = None
 
     @classmethod
@@ -128,15 +121,12 @@ class ConversationSummary(BaseModel):
     """A Conversation as it appears in the list, without its transcript."""
 
     id: uuid.UUID
-    #: Null until the first exchange has been named. The interface says so in its
-    #: own words rather than the application inventing a placeholder title.
+    #: Null until the first exchange has been named; the interface says so in
+    #: its own words rather than storing a placeholder.
     title: str | None
-    #: When something was last said in this Conversation, or when it was started
-    #: if nothing has been said yet.
+    #: Or when it was started, if nothing has been said yet.
     last_activity_at: datetime
-    #: The Trip this Conversation is refining, and null while it is refining
-    #: none. The row carries it so the list can mark which journey a
-    #: Conversation belongs to without reading each one to find out.
+    #: Carried on the row so the list can mark each one without reading it.
     trip_id: uuid.UUID | None
 
 
@@ -144,19 +134,16 @@ class ConversationView(BaseModel):
     id: uuid.UUID
     title: str | None
     messages: list[MessageView]
-    #: The Trip Plan this Conversation is refining, and null while it is
-    #: refining none. It comes back with the transcript rather than from a
-    #: second request, because the plan sits beside the Conversation at all
-    #: times and the two are opened together (ADR-0006).
+    #: Comes back with the transcript rather than from a second request: the
+    #: plan sits beside the Conversation and the two open together (ADR-0006).
     plan: TripPlanView | None
 
 
 class ChosenTrip(BaseModel):
     """Which Trip a Conversation is to refine from now on.
 
-    Named as null to take it off the one it is on. Required rather than
-    defaulted, so detaching is something asked for rather than something a
-    body that forgot to say anything does by accident.
+    Null takes it off the one it is on. Required rather than defaulted, so
+    detaching is asked for rather than done by a body that said nothing.
     """
 
     trip_id: uuid.UUID | None
@@ -165,13 +152,10 @@ class ChosenTrip(BaseModel):
 class ChosenTitle(BaseModel):
     """What the traveler wants this Conversation called.
 
-    Bounded at the length the advisor's own naming is bounded at, because it is
-    the same line in the same list: a title is what a Conversation is
-    recognised by in a rail one row high.
-
-    Trimmed before it is measured, so a name of nothing but spaces is refused
-    rather than stored. An unnamed Conversation can still be named by its next
-    exchange; one named the empty string could not be.
+    Bounded at the length the advisor's own naming is, because it is the same
+    line in the same list. Trimmed before it is measured, so a name of nothing
+    but spaces is refused: an unnamed Conversation can still be named later,
+    one named the empty string could not.
     """
 
     title: Annotated[
@@ -237,9 +221,8 @@ async def delete_conversation(
 ) -> Response:
     """Remove a Conversation and everything said in it, for good.
 
-    There is no flag and no hidden row: the Messages go with it, on the
-    database's own cascade. Asking the traveler first is the interface's job,
-    because by the time the request arrives the decision has been made.
+    No flag and no hidden row: the Messages go with it on the database's
+    cascade. Asking first is the interface's job.
     """
     await remove_conversation(session, await _conversation(session, conversation_id))
     return Response(status_code=204)
@@ -253,14 +236,11 @@ async def rename_conversation(
 ) -> ConversationSummary:
     """Call a Conversation something the traveler recognises it by.
 
-    The advisor names a Conversation after its first exchange and never again,
-    so this is the only thing that ever renames one — and a Conversation the
-    traveler names first is one the advisor then leaves alone, which is the
-    same rule read from the other side (`services/turns.py`).
+    The advisor names one after its first exchange and never again, so this is
+    the only thing that renames one; a Conversation the traveler names first is
+    then left alone (`services/turns.py`).
 
-    A rename is not activity: it changes what the row says, never where the row
-    sits. What comes back is that row as the list now reads it, because the
-    list is the thing that was just renamed.
+    A rename is not activity: it changes what the row says, not where it sits.
     """
     conversation = await _conversation(session, conversation_id)
     await retitle_conversation(session, conversation, chosen.title)
@@ -280,10 +260,9 @@ async def attach_to_trip(
 ) -> TripPlanView | None:
     """Move a Conversation to a different Trip, or take it off the one it is on.
 
-    Which Trip a Conversation belongs to is the advisor's guess, and one it can
-    get wrong — so correcting it is the traveler's (ADR-0002). What comes back
-    is the Trip Plan this Conversation refines from here, and null when it
-    refines none, because that is what the pane beside it has to show next.
+    Which Trip it belongs to is the advisor's guess and can be wrong, so
+    correcting it is the traveler's (ADR-0002). What comes back is the plan the
+    pane beside it has to show next.
     """
     conversation = await _conversation(session, conversation_id)
     trip = None
@@ -305,9 +284,8 @@ async def say(
 ) -> StreamingResponse:
     """Say something to the advisor and watch the reply arrive."""
     conversation = await _conversation(session, conversation_id)
-    # Before anything is recorded, so a machine with no key leaves the
-    # traveler's question in the composer rather than in a transcript with
-    # nothing under it.
+    # Before anything is recorded, so a machine with no key leaves the question
+    # in the composer rather than in a transcript with nothing under it.
     model = _model(http_client, settings)
 
     # Recorded before the model is called, so a turn that fails mid-stream still
@@ -330,16 +308,12 @@ async def run_again(
 ) -> StreamingResponse:
     """Run a failed turn again, in place of the reply it never gave.
 
-    The named Message is the one the failed turn left behind. It goes, and the
-    turn is run again from the question that is already recorded — which is the
-    whole point of this route existing rather than the interface sending the
-    words a second time: a turn that failed would otherwise leave the same
-    question in the transcript twice, once with an answer and once without.
+    The named Message goes and the turn runs again from the question already
+    recorded, rather than the interface sending the words a second time and
+    leaving the same question in the transcript twice.
 
-    Only the last turn of a Conversation can be run again. A reply arriving in
-    the middle of a transcript would answer a question the traveler has since
-    moved on from, and would be written after everything it was meant to come
-    before.
+    Only the last turn can be run again: a reply arriving mid-transcript would
+    answer a question the traveler has moved on from.
     """
     conversation = await _conversation(session, conversation_id)
     model = _model(http_client, settings)
@@ -369,9 +343,7 @@ def _model(http_client: httpx2.AsyncClient, settings: Settings) -> AsyncOpenAI:
         return create_model_client(http_client, settings)
     except OpenRouterKeyMissing as missing:
         # Structured rather than a sentence, so the interface labels it the
-        # same way it labels a failure that happens mid-turn — a traveler
-        # staring at a machine with no key is told it is a configuration
-        # problem, in the one place they are looking.
+        # same way it labels a failure that happens mid-turn.
         raise HTTPException(status_code=503, detail=_refusal(failures.NO_KEY)) from missing
 
 
@@ -387,24 +359,19 @@ async def _turn(
 ) -> StreamingResponse:
     """One turn, composed and handed to the browser as it happens.
 
-    Both ways into a turn compose it the same way, because they are the same
-    turn: the only difference is whether the question it answers is one the
-    traveler has just asked or one already in the transcript.
+    Both ways in compose it the same way; they differ only in whether the
+    question is one just asked or one already in the transcript.
     """
-    # Read at the top of every turn rather than held anywhere, which is the
-    # whole of what makes an edit to the Advisor Instructions take effect on
-    # the very next Message of a Conversation that was already under way.
+    # Read at the top of every turn rather than held, which is what makes an
+    # edit to the Instructions take effect on the very next Message.
     prompt_version = await current_version(session)
-    # Folded before the prompt is composed rather than after the reply has
-    # gone, so a Conversation that has crossed the budget never sends the long
-    # prompt even once. What comes back is what is still sent verbatim; the
-    # rest of it is in the rolling summary `compose_around` reads back below.
+    # Folded before the prompt is composed, so a Conversation over the budget
+    # never sends the long prompt even once. What comes back is what is still
+    # sent verbatim; the rest is in the summary `compose_around` reads back.
     prompt = compose_prompt(
         await compact(session, conversation, model, settings),
-        # Composed from what is recorded at the top of the turn, so the advisor
-        # reads the plan as it stands and is shown the profile every other
-        # Conversation is shown — which is why a brand-new one does not ask
-        # what the last one was told.
+        # From what is recorded at the top of the turn, so the advisor reads
+        # the plan as it stands and the profile every Conversation is shown.
         await compose_around(session, conversation, prompt_version.instructions),
     )
     return StreamingResponse(
@@ -438,9 +405,8 @@ async def _turn_events(
 ) -> AsyncIterator[bytes]:
     """The turn as the browser reads it.
 
-    The traveler's own Message opens the turn that recorded it, and not one
-    running an earlier turn again: that question is on their screen already,
-    and announcing it a second time would draw it twice.
+    The traveler's Message opens the turn that recorded it, but not one running
+    an earlier turn again: that question is on their screen already.
     """
     if announce:
         yield _message_event("traveler_message", traveler_message)
@@ -453,10 +419,9 @@ async def _turn_events(
 def _as_event(happening: Happening) -> bytes:
     """What happened, in the words the browser's stream reader knows.
 
-    Exhaustive on purpose rather than falling through to a default: a turn that
-    grows a new kind of happening — a Trip Plan patch in 09 — should fail the
-    type check here rather than quietly reach the browser wearing the last
-    branch's name.
+    Exhaustive rather than falling through to a default, so a new kind of
+    happening fails the type check here rather than reaching the browser
+    wearing the last branch's name.
     """
     if isinstance(happening, ReplyFragment):
         return event({"type": "fragment", "text": happening.text})
@@ -487,9 +452,8 @@ def _as_event(happening: Happening) -> bytes:
     if isinstance(happening, Titled):
         return event({"type": "conversation_titled", "title": happening.title})
     if isinstance(happening, Failed):
-        # The Message goes with it: the failure is recorded against the half a
-        # reply that arrived, and the interface needs to know which Message to
-        # offer running again.
+        # The Message goes with it, so the interface knows which one to offer
+        # running again.
         return event(
             {
                 "type": "failed",
@@ -503,10 +467,8 @@ def _as_event(happening: Happening) -> bytes:
 def _refusal(failure: Failure) -> dict[str, str]:
     """A failure as the browser reads it, wherever it is being told about one.
 
-    Through the view rather than from the service's own object, so that what a
-    failed turn looks like on the wire is decided here with every other shape
-    the browser is sent — and so that the refusal of a turn that never started
-    and the failure of one that did are the same two keys.
+    Through the view rather than the service's own object, so a turn that never
+    started and one that failed mid-flight are the same two keys.
     """
     return FailureView(kind=failure.kind, detail=failure.detail).model_dump(mode="json")
 

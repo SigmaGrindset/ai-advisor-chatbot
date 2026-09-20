@@ -29,25 +29,19 @@ no later ticket has to invent one.
 
 ## Comments
 
-Implemented and verified on this machine: `docker compose up` from a torn-down volume, a
-restart against an existing volume, and a start with no `OPENROUTER_API_KEY` — which logs
-a warning and reports `"openrouter_key": "missing"` rather than refusing to boot.
+Verified on this machine: `docker compose up` from a torn-down volume, a restart against
+an existing volume, and a start with no `OPENROUTER_API_KEY` — which warns and reports
+`"openrouter_key": "missing"` rather than refusing to boot.
 
-- The database health check probes `127.0.0.1` rather than the Unix socket, so the
-  temporary server the Postgres image runs during first-run `initdb` cannot satisfy it
-  early.
 - The one outbound client is an `httpx2.AsyncClient`: `openai` 3.x moved to `httpx2`
   (httpx 2.x under a new distribution name), so the application and the harness share one
   client type and one seam.
+- The database health check probes `127.0.0.1` rather than the Unix socket, so the
+  temporary server the Postgres image runs during first-run `initdb` cannot satisfy it.
+- `test_outbound_seam.py` and `test_schema_application.py` reach past the HTTP seam, the
+  only way to assert their criteria before anything reaches outward; both say so in their
+  docstrings. `test_harness_isolation.py` was removed later — it tested the fixtures
+  rather than the application.
 
-Two deliberate deviations from the spec's testing rules, both because nothing reaches
-outward yet: `test_outbound_seam.py` builds the model client directly, the only way to
-assert criterion 6 before 02 exists, and `test_schema_application.py` uses the database
-directly, because the startup path has no HTTP surface. Both say so in their docstrings.
-
-`test_harness_isolation.py`, which asserted the harness's own rollback guarantee, was
-removed later: it tested the fixtures rather than the application, and every test in the
-suite now leans on that guarantee well enough to fail if it breaks.
-
-Not done here, by design: the README's remaining six sections are 15's, and the structured
-in-interface error for a missing key is 14's.
+Not done here, by design: the README's remaining six sections are 15's, and the
+structured in-interface error for a missing key is 14's.

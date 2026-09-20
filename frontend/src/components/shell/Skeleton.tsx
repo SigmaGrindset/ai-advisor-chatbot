@@ -1,31 +1,20 @@
 /**
  * The shape of something that has not arrived yet.
  *
- * On arrival the application reads the Conversations, the Trips, the profile
- * and the last Conversation worked in, all at once, and until they land every
- * pane holds its empty state: a rail saying "Conversations you start appear
- * here", a transcript greeting a traveler who has been here forty times, a
- * plan saying no trip has been talked about. Then the data lands and all
- * three are replaced. Nothing was broken, but for a moment the application
- * told the traveler three things about their own account that were not true.
+ * Until the first read lands, every pane's empty state would tell the traveler
+ * something about their own account that nothing has checked — a rail saying
+ * conversations appear here, a greeting for someone who has been here forty
+ * times. So the empty state waits, and the shape of what is coming stands in:
+ * a block per line, at the size and place of the line it stands for, so the
+ * real thing arrives where the eye already is.
  *
- * So the empty state is held back until there is something to be empty about,
- * and what stands in its place is the shape of what is coming. A block per
- * line, at the size and in the position of the line it is standing in for, so
- * that when the real thing arrives it arrives where the eye is already
- * looking rather than reflowing the pane around it.
- *
- * Not a spinner. A spinner says only that something is happening, in the
- * middle of a pane, and then the pane jumps.
+ * Not a spinner, which says only that something is happening and then jumps.
  */
 
 /**
- * One block, standing in for one line.
- *
- * Drawn in the hairline colour rather than in `sunken`, because `sunken` is
- * the rail's own background and a block that matches what is behind it is
- * not a block. Hidden from screen readers entirely: the pane it is in has
- * nothing in it yet, and reading out its dimensions is not a report of that.
+ * One block, standing in for one line. Drawn in the hairline colour rather
+ * than `sunken`, which is the rail's own background. Hidden from screen
+ * readers: reading out its dimensions is not a report of anything.
  */
 export function Skeleton({ className = "" }: { className?: string }) {
   return (
@@ -37,11 +26,8 @@ export function Skeleton({ className = "" }: { className?: string }) {
 }
 
 /**
- * What the transcript is holding a place for: a question and the answer to it.
- *
- * Two turns rather than one, at the widths a question and an answer actually
- * run to — a question is a line, an answer is a paragraph — so the block the
- * traveler is looking at while it loads is the block the transcript fills.
+ * What the transcript is holding a place for: a question and its answer, at
+ * the widths each actually runs to — a line, then a paragraph.
  */
 export function LoadingTranscript() {
   return (

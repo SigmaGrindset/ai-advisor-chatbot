@@ -5,10 +5,9 @@ import { parse, type Block, type Inline } from "./markdown";
 /**
  * The advisor's reply, drawn from the tree the parser read it into.
  *
- * Every element on the page is chosen here, from a closed set of shapes. The
- * reply's own text only ever reaches the page as the children of an element
- * this file named, which is why there is nothing to sanitise: a reply cannot
- * name an element, so there is no element for it to name badly.
+ * Every element is chosen here from a closed set, and the reply's text only
+ * reaches the page as the children of one. There is nothing to sanitise: a
+ * reply cannot name an element, so there is none for it to name badly.
  */
 export function Prose({
   text,
@@ -19,8 +18,8 @@ export function Prose({
   writing?: boolean;
 }) {
   const blocks = parse(text);
-  // A reply whose first fragment has not arrived yet is still a reply being
-  // written, and the caret is the only thing saying so.
+  // A reply whose first fragment has not arrived is still being written, and
+  // the caret is the only thing saying so.
   if (writing && blocks.length === 0) {
     return (
       <p className="text-body text-ink">

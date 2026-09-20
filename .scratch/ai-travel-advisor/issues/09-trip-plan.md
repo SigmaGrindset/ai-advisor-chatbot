@@ -45,8 +45,7 @@ second sheet implementation.
 ## Comments
 
 All fourteen criteria are done and were driven through the running application against a
-real model. **75 backend tests** (was 64) and **84 frontend tests in 11 files** (was 56);
-`tsc --noEmit` silent, `npm run build` clean, mypy clean over 45 files.
+real model.
 
 - **The plan is rows.** `Trip` carries the scalars, `itinerary_item` and `open_question`
   are tables of their own, and `conversation.trip_id` is nullable with
@@ -54,86 +53,33 @@ real model. **75 backend tests** (was 64) and **84 frontend tests in 11 files** 
   write anywhere — which is what lets the traveler's own edit survive the next turn rather
   than being read back stale and put straight back (ADR-0002).
 - **Two catalogues, dispatched down two branches of the loop.** The Live-data Tools fetch
-  and never write; the plan tools write and never fetch. That was a claim in
-  `LiveDataTools`' docstring; it is a fact about `loop.py` now. **ADR-0009's last
-  paragraph came due and is now ADR-0010**: once anything has been fetched into a turn the
-  plan tools are gone for the rest of it. Both tripwire tests were rewritten rather than
-  relaxed — the injection test now names `set_destination`, a tool that genuinely exists,
-  asks for it after a search, and asserts it was refused *and* that no Trip was started.
+  and never write; the plan tools write and never fetch. **ADR-0009's last paragraph came
+  due and is now ADR-0010**: once anything has been fetched into a turn the plan tools are
+  gone for the rest of it. Both tripwire tests were rewritten rather than relaxed.
 - **The advisor points at entries by number, not by UUID.** `next_item_ref` and
   `next_question_ref` hand out numbers that are never reused, so an advisor working from
   the plan it was shown at the top of the turn cannot remove whatever has taken the place
-  of something it removed a moment ago. The interface addresses the same rows by
-  identifier.
+  of something it removed a moment ago. The interface addresses the same rows by identifier.
 - **Days are numbers, not dates.** Moving a trip a week later is one patch to `starts_on`
-  rather than a rewrite of every item. What day 2 falls on is arithmetic in `dates.ts`,
-  done in UTC throughout — a calendar day read as an instant west of Greenwich becomes the
+  rather than a rewrite of every item. What day 2 falls on is arithmetic in `dates.ts`, done
+  in UTC throughout — a calendar day read as an instant west of Greenwich becomes the
   evening before, and shows the traveler a date they did not type.
-- **Three pure modules carry the opinions**, which is where the new frontend tests are:
-  `merging.ts`, `fields.ts`, `dates.ts`. `holding.ts` holds the plan; `PlanPanel` draws
-  what it is handed. A patch that changes nothing is not reported as a change — a field
-  lighting up for a change that was not one sends the traveler looking for something that
-  did not happen.
-
-Decided rather than assumed:
-
-- **The phone peek is a strip above the composer, not a third snap point — ADR-0011, which
-  amends ADR-0006.** The sheet is a modal `<dialog>` by 06's decision, and a modal sheet
-  resting permanently over the composer would stop the traveler typing, which is the one
-  thing the peek exists to let them do. The three states still cycle under a thumb. No
-  second sheet.
-- **Open Questions can be settled by hand as well as clicked.** The criteria only ask for
-  add/remove on Itinerary Items, but the ticket's prose says any part of the plan can be
-  changed by hand, and a question already settled is the most obvious thing to want gone.
+- **Three pure modules carry the opinions**: `merging.ts`, `fields.ts`, `dates.ts`.
+  `holding.ts` holds the plan; `PlanPanel` draws what it is handed. A patch that changes
+  nothing is not reported as a change.
+- **The phone peek is a strip above the composer, not a third snap point**, because the
+  sheet is a modal `<dialog>` and one resting over the composer would stop the traveler
+  typing. Recorded in ADR-0006.
 - **A removal cannot start a Trip** — only a change that records something does. A test
   caught `remove_itinerary_item` creating an empty Trip to fail against.
-- **Itinerary Items have no part-of-day when the traveler adds one.** Asking someone to
-  pick morning or evening before they can write a line down is a form, not a plan.
+- Beyond the criteria, because the ticket's prose says any part of the plan can be changed
+  by hand: an Open Question can be settled by hand as well as clicked, and an Itinerary Item
+  the traveler adds has no part-of-day — asking someone to pick morning or evening before
+  they can write a line down is a form, not a plan.
 
-Three bugs found by driving the application: "Use it" on a suggestion blurred the field
-first, so the blur committed the half-typed draft and the two saves raced — the suggestion
-controls prevent the default of the press now, so taking a suggestion abandons the open
-editor rather than saving it; itinerary text was right-aligned because it shared the
-editable field with the facts above it, and a sentence that wraps reads from the left, so
-the field takes an alignment; and the unseen-change mark read the tab from the render that
-started the turn, which a turn outlives, so it reads a ref now.
+Not fixable here: the edit-immunity test exercises the pure `merged()` with `editing` handed
+to it, and nothing tests the wiring that produces that argument, because the frontend suite
+is Node-only and component tests are out of scope by the spec. That wiring was driven by
+hand.
 
-**A stale dev server from an earlier session was serving old code on `[::1]:8000`** while
-the new one bound `127.0.0.1:8000` — `localhost` resolves to the IPv6 address first on
-this machine, so both curl and Vite's proxy reached the old one and the plan never
-appeared. Its `--reload` parent was gone but its worker still held the socket. Check
-*which* process owns the port, not only that one is listening.
-
-Left for a human: the real-phone pass, which is 06's open criterion rather than this
-one's.
-
-### After the two-axis review
-
-Fixed: the underline was dashed where the criterion and ADR-0007 both say *dotted*;
-clearing an Itinerary Item's text deleted the row, which one Backspace and a click away
-could do silently, so clearing now saves nothing and removal is the control beside it; a
-plan tool named after the tools had left the table fell through to the Live-data Tools to
-be refused, so the traveler was told "Checking a live source" on behalf of a write that
-was never made — the loop answers for any unknown name now; the peek strip tinted only for
-destination and dates, though on a phone with the sheet closed it is the only place a
-change can be noticed; `PATCH /trips/{id}/itinerary/{item_id}` accepted `day` and
-`part_of_day` that nothing sent; `PLAN_FIELDS`, `PlanField` and `PlanPatch` moved to
-`api/types.ts` where the API's vocabulary is, rather than being written out twice;
-`describe_briefly` moved beside its two siblings in `advisor/planning.py`; two names; and
-the empty Trip Plan is one line again.
-
-Ruled on rather than changed: **`fields.ts`, `EditableField` and the `field` parameters
-stay** — `CONTEXT.md` lists *field* on **Profile Fact**'s `_Avoid_` line, but the ticket
-uses it eighteen times for a Trip Plan scalar and so does ADR-0002, so the entry means "a
-Profile Fact is not a field", not "this word is banned"; `CONTEXT.md` now says which of
-the two it belongs to so the next agent does not undo it. Three switches over the same
-field names stay switches: they read, parse and copy, and a shared table would need three
-functions per field and would trade type safety for a shape. `api/trips.py` calls
-`db/trips.py` directly, the direction `api/conversations.py` already takes, because the
-traveler's edits have no rule to apply — only the advisor can start a Trip. Settling an
-Open Question by hand stays, argued above.
-
-Not fixable here: the edit-immunity test exercises the pure `merged()` with `editing`
-handed to it, and nothing tests the wiring that produces that argument, because the
-frontend suite is Node-only and component tests are out of scope by the spec. That wiring
-was driven by hand.
+Left for a human: the real-phone pass, which is 06's open criterion rather than this one's.

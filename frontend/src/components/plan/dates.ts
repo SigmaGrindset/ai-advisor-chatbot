@@ -1,14 +1,12 @@
 /**
  * The days of a Trip, said the way a traveler would say them.
  *
- * A Trip Plan keeps its dates as calendar days — `2026-05-12`, the day itself
- * — and its Itinerary Items as day *numbers*, so that moving a trip a week
- * later is one change to the start date rather than a rewrite of every item.
- * What day 2 actually falls on is arithmetic, and this is where it is done.
+ * A plan keeps dates as calendar days and Itinerary Items as day *numbers*,
+ * so moving a trip a week later is one change rather than a rewrite. What day
+ * 2 falls on is the arithmetic done here.
  *
- * Everything here works in UTC and formats in UTC. A calendar day is not an
- * instant: read `2026-05-12` in a timezone behind Greenwich and it becomes the
- * evening of the 11th, and the traveler is shown a date they did not type.
+ * Everything works and formats in UTC: a calendar day is not an instant, and
+ * `2026-05-12` read behind Greenwich becomes the evening of the 11th.
  */
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -53,10 +51,7 @@ export function showDate(day: string | null): string | null {
 
 /**
  * A Trip's dates in a line: "12–18 May 2026", "From 12 May 2026", or null when
- * neither end has been decided.
- *
- * The year is said once where both ends share it, because a traveler reading
- * their own dates back does not need telling twice.
+ * neither end has been decided. The year is said once where both share it.
  */
 export function showRange(startsOn: string | null, endsOn: string | null): string | null {
   const from = read(startsOn);

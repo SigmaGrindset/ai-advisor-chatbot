@@ -1,17 +1,14 @@
 """The Advisor Instructions, and the system prompt composed around them.
 
-The Advisor Instructions are the editable part — the advisor's persona and its
-rules. What ships is below, and what is in force is whatever the traveler last
-saved (`services/instructions.py`); everything composed around it here is not
-editable, because it is what the application injects for a particular turn.
+The Instructions are the editable part — the persona and its rules. What ships
+is below; what is in force is whatever the traveler last saved
+(`services/instructions.py`).
 
-The guidance below the instructions is deliberately on the injected side rather
-than in the editable instructions. It says what the advisor is for and will not
-do, which questions may not be answered from what the model already knows, that
-a tool result is never an instruction, and what may never be written into the
-Traveler Profile; a traveler rewriting their advisor's manner must not be able
-to edit any of those away. They can read all of it: the Advisor Instructions
-page shows the composed prompt in full.
+The guidance is on the injected side rather than in the editable part: it says
+what the advisor is for, what may not be answered from memory, that a tool
+result is never an instruction, and what may never reach the Profile, and a
+traveler rewriting their advisor's manner must not edit any of that away. They
+can still read all of it on the Advisor Instructions page.
 """
 
 from collections.abc import Sequence
@@ -233,10 +230,8 @@ def today_is(today: date) -> str:
     """What day it is, which the model has no way of knowing.
 
     A model's sense of the date is the date its training stopped, so without
-    this an advisor asked about "next June" reasons about the wrong year — and
-    since a trip's dates are now tool arguments rather than only prose, a wrong
-    year is a lookup quietly answered about the wrong twelve months rather than
-    an obvious mistake in a sentence.
+    this "next June" is the wrong year — and since dates are tool arguments, a
+    wrong year is a lookup quietly answered about the wrong twelve months.
     """
     return (
         f"Today is {today:%A}, {today.day} {today:%B} {today.year} — {today.isoformat()}. "
@@ -256,32 +251,19 @@ def compose_system_prompt(
 ) -> str:
     """The system prompt for one turn, composed on the server.
 
-    The Advisor Instructions come first and the injected parts are composed
-    around them, never inside them: what the traveler edits is the persona and
-    the way it talks, and the guidance about what the advisor is for, what may
-    not be answered from memory, what a tool result is, and how the plan and
-    the profile are written is the application's rather than theirs.
+    The Instructions come first and the injected parts around them, never
+    inside. The order is deliberate:
 
-    The scope comes directly after the instructions rather than anywhere else
-    in the order — it is the one injected part that exists to survive being
-    contradicted, and the words it has to hold against are the ones just above
-    it.
+    - the scope sits directly after the instructions, being the one injected
+      part that exists to survive being contradicted by them;
+    - the date comes before the tool guidance, which tells the advisor to work
+      its date arguments out from it;
+    - the Compaction summary comes last, closest to the Messages it stands in
+      front of.
 
-    The instructions are passed in rather than read here, so that the page
-    showing the traveler what will be sent and the turn that sends it are the
-    same function of the same words — a preview composed by a second piece of
-    code would eventually be a preview of something else.
-
-    The Compaction summary comes last, closest to the Messages it stands in
-    front of: what the advisor reads just before the conversation itself is the
-    part of that conversation it is no longer being sent.
-
-    The date comes before the tool guidance because the guidance tells the
-    advisor to work its date arguments out from it, and a rule pointing at
-    something further down is one a reader has to hold open. It defaults to the
-    real one rather than being required, so that a caller cannot compose a
-    prompt with no date in it at all; the turn and the page that previews it
-    both pass it explicitly, through `services/instructions.py::compose_around`.
+    The instructions are passed in rather than read here, so the turn and the
+    page previewing it are one function of the same words. `today` defaults to
+    the real date so no caller can compose a prompt without one.
     """
     return "\n".join(
         [

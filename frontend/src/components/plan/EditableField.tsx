@@ -3,22 +3,16 @@ import { useEffect, useRef, useState } from "react";
 /**
  * One part of the Trip Plan the traveler can change themselves.
  *
- * It carries a dotted underline at every width and under every pointer,
- * always. Which parts of a plan are the traveler's to change is not something
- * a touch screen can be asked to discover by hovering, and an interface that
- * only admits to being editable under a mouse has told half its travelers
- * nothing (ADR-0007).
+ * The dotted underline is there at every width and without hovering: an
+ * interface that only admits to being editable under a mouse has told half
+ * its travelers nothing (ADR-0007).
  *
- * Clicking it edits in place. Blur saves, Escape cancels, Enter saves — and
- * Escape is stopped here rather than left to bubble, because on a phone this
- * field is inside a sheet whose own Escape closes it, and one press should be
- * one thing.
+ * Blur saves, Enter saves, Escape cancels — stopped here rather than left to
+ * bubble, because on a phone this sits in a sheet whose own Escape closes it.
  *
- * The draft lives here, which is what makes a traveler's typing survive the
- * advisor patching the same field mid-sentence: what arrives goes into the
- * plan behind this field, never into the field. What the advisor wanted is
- * offered underneath as a suggestion instead — `merging.ts` decides that, and
- * this draws it.
+ * The draft lives here, which is what makes typing survive the advisor
+ * patching the same field mid-sentence: what arrives goes into the plan
+ * behind the field, and is offered underneath as a suggestion (`merging.ts`).
  */
 export function EditableField({
   field,
@@ -41,24 +35,20 @@ export function EditableField({
   label: string;
   /** What the editor opens with, and what a save is measured against. */
   value: string;
-  /** How it reads when it is not being edited. Empty for a field holding nothing. */
+  /** How it reads when it is not being edited. */
   shown: string;
-  /** What to say instead when it holds nothing — an invitation, not a dash. */
+  /** What to say when it holds nothing — an invitation, not a dash. */
   placeholder: string;
   kind?: "text" | "date" | "number";
   /**
-   * Which edge the value sits against. The facts at the top of the plan are
-   * a column of values read down the right; a line of the itinerary is a
-   * sentence, and a sentence that wraps reads from the left.
+   * The facts at the top of the plan are a column read down the right; a line
+   * of the itinerary is a sentence, and a wrapped sentence reads from the left.
    */
   align?: "left" | "right";
   /**
-   * How large it is set. Every field of the plan is a line of a record and
-   * reads at `body` — except the destination, which is the name of the whole
-   * journey and is the head of its own record rather than a line of it.
-   *
-   * The editor is set at the same size as the reading state, so a field the
-   * traveler clicks into does not resize under the click.
+   * `body` for a line of a record, `display` for the destination, which heads
+   * its own record. The editor is set at the same size as the reading state,
+   * so a field does not resize under the click.
    */
   size?: "body" | "display";
   /** True while the advisor's last change to this field is still lit. */
@@ -71,21 +61,19 @@ export function EditableField({
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
-  // Whether an editor is open, kept where a blur arriving after the editor
-  // has gone can still read it. State cannot answer that: the handler closed
-  // over the render before the one that put the editor away.
+  // Kept where a blur arriving after the editor has gone can still read it:
+  // that handler closed over the render before the one that closed it.
   const open = useRef(false);
   const editing = draft !== null;
-  // The face and the size, chosen once and spent on both states, so that the
-  // reading state and the editor are the same words in the same type.
+  // Chosen once and spent on both states, so reading and editing are the same
+  // words in the same type.
   const set =
     size === "display" ? "font-display text-display font-semibold" : "text-body";
 
   useEffect(() => {
     if (!editing) return;
     input.current?.focus();
-    // Selected rather than placed at the end: the commonest edit of a field
-    // that already says something is replacing it.
+    // Selected: the commonest edit of a field that says something is replacing it.
     input.current?.select();
   }, [editing]);
 
@@ -153,10 +141,8 @@ export function EditableField({
           label={label}
           value={suggestion}
           onTake={() => {
-            // The editor, if it is still open, is abandoned rather than
-            // saved: taking the advisor's value and saving the traveler's
-            // half-typed one in the same breath would race, and the traveler
-            // has just said which of the two they want.
+            // An open editor is abandoned rather than saved: the traveler has
+            // just said which of the two values they want.
             stop(false);
             onSave(suggestion);
             onDismiss();
@@ -169,12 +155,9 @@ export function EditableField({
 }
 
 /**
- * What the advisor wanted for a field the traveler had open.
- *
- * Quiet on purpose: it is a note under the field, not a dialog and not an
- * alert. Nothing was overwritten and nothing is waiting on an answer — the
- * traveler's own value is what the plan says, and this is only here in case
- * they would rather have the other one.
+ * What the advisor wanted for a field the traveler had open. A note rather
+ * than a dialog: nothing was overwritten and nothing waits on an answer — the
+ * traveler's value is what the plan says.
  */
 function Suggested({
   align,
@@ -199,10 +182,8 @@ function Suggested({
         The advisor suggested <span className="font-mono text-ink-muted">{value}</span>
       </span>
       <span className="flex gap-2">
-        {/* Pressing either of these must not take the focus out of the
-            field above and commit what is half-typed in it. Preventing the
-            default of the press is what keeps the field focused; the click
-            still arrives. */}
+        {/* Preventing the press's default keeps focus in the field above, so
+            neither of these commits what is half-typed there. */}
         <button
           type="button"
           className="rounded-control px-1 font-medium text-accent underline underline-offset-2 hover:text-accent-strong"

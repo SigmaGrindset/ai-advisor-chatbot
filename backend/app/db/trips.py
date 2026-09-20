@@ -21,10 +21,9 @@ from .tables import (
     Trip,
 )
 
-#: The order a day's items are read in: the morning before the evening, and
-#: anything with no time in mind after everything that has one. Postgres sorts
-#: an enum by the order its values were declared and puts nulls last on an
-#: ascending sort, which is both of those without a case expression.
+#: Morning before evening, and anything with no time in mind last. Postgres
+#: sorts an enum by declaration order and puts nulls last ascending, which is
+#: both of those without a case expression.
 ITINERARY_ORDER = (
     ItineraryItem.day,
     ItineraryItem.part_of_day,
@@ -61,9 +60,8 @@ async def trips_by_age(session: AsyncSession) -> Sequence[Trip]:
 async def start_trip(session: AsyncSession, conversation: Conversation) -> Trip:
     """A new Trip, belonging to the one traveler, with this Conversation on it.
 
-    There is no separate "create a Trip" gesture anywhere: a Trip exists
-    because something about a journey was worth recording, so it is born
-    attached to the Conversation that recorded the first thing.
+    There is no separate "create a Trip" gesture: a Trip is born attached to
+    the Conversation that recorded the first thing about a journey.
     """
     trip = Trip(traveler_id=SOLE_TRAVELER_ID)
     session.add(trip)
@@ -78,11 +76,9 @@ async def attach_conversation(
 ) -> None:
     """Point a Conversation at a Trip, or at none.
 
-    Attaching is how several Conversations come to refine one plan; detaching
-    is how one the advisor put on the wrong journey is taken off it. Neither
-    touches the Trip: a Trip with no Conversation left on it is still the
-    traveler's and is still listed, because the plan is the durable thing here
-    and the Conversations are how it got written.
+    Neither touches the Trip: one with no Conversation left on it is still
+    listed, the plan being the durable thing and the Conversations how it
+    got written.
     """
     conversation.trip_id = None if trip is None else trip.id
     await session.commit()
@@ -91,9 +87,9 @@ async def attach_conversation(
 async def patch_trip(session: AsyncSession, trip: Trip, changes: Mapping[str, object]) -> None:
     """Write exactly the named fields and nothing else.
 
-    The whole of why the plan is columns rather than a document: what is not
-    named here is not read, not rewritten, and cannot be lost — including the
-    field the traveler edited by hand a moment ago.
+    Why the plan is columns rather than a document: what is not named is not
+    read, not rewritten and cannot be lost — including a field the traveler
+    edited by hand a moment ago.
     """
     for field, value in changes.items():
         setattr(trip, field, value)
@@ -209,9 +205,8 @@ async def remove(session: AsyncSession, row: ItineraryItem | OpenQuestion) -> No
 async def conversations_on(session: AsyncSession, trip: Trip) -> list[Conversation]:
     """Every Conversation refining this Trip, in no particular order.
 
-    Read rather than counted, because the only caller deletes them: the
-    database would take them off this Trip on its own, and taking them off is
-    exactly what it must not do when the traveler asked for them to go.
+    Read rather than counted, because the only caller deletes them: left to
+    itself the database would merely detach them.
     """
     found = await session.scalars(select(Conversation).where(Conversation.trip_id == trip.id))
     return list(found)
@@ -220,17 +215,12 @@ async def conversations_on(session: AsyncSession, trip: Trip) -> list[Conversati
 async def remove_trip(session: AsyncSession, trip: Trip, *, with_conversations: bool) -> None:
     """Delete a Trip and its Trip Plan, and the Conversations on it if asked.
 
-    The Itinerary Items and the Open Questions go with it on the database's
-    own cascade, because they are not attached to the plan — they are the
-    plan, and the plan is the Trip.
+    The Itinerary Items and Open Questions go on the database's cascade: they
+    are the plan, and the plan is the Trip.
 
-    The Conversations are the one part that is a question, so the traveler
-    answers it. Kept, they come off this Trip and are listed under no Trip,
-    which is where every Conversation starts and is what the foreign key does
-    by itself. Deleted, everything said in them goes too, on the same cascade
-    a Conversation deleted on its own rides — and they are deleted here,
-    first, precisely because the alternative is the database quietly detaching
-    the very rows that were meant to go.
+    The Conversations are the traveler's question. Kept, the foreign key lists
+    them under no Trip by itself. Deleted, they go here and first — otherwise
+    the database quietly detaches the very rows that were meant to go.
     """
     if with_conversations:
         for conversation in await conversations_on(session, trip):

@@ -1,9 +1,8 @@
 """The advisor going to the web, and what is allowed to leave with the question.
 
-Every test here drives a whole turn through the API. The web search is a nested
-request to OpenRouter with its web plugin turned on, so one canned provider
-answers both the traveler's turn and the search behind it — which is precisely
-what lets a test say what left the machine and what did not.
+Every test drives a whole turn through the API. One canned provider answers
+both the traveler's turn and the nested search behind it, which is what lets a
+test say what left the machine and what did not.
 """
 
 import json
@@ -78,8 +77,8 @@ async def test_a_visa_question_is_searched_and_its_pages_stay_under_the_answer(
     assert search["plugins"] == [{"id": "web", "max_results": 5}]
     assert search["messages"][-1]["content"] == VISA_QUERY
 
-    # And nothing of the traveler went with it. The searching model is given the
-    # query and no Conversation, which is the whole of the boundary (ADR-0004).
+    # And nothing of the traveler went with it: the searching model is given
+    # the query and no Conversation (ADR-0004).
     assert VISA_ASKED not in search["messages"][-1]["content"]
     assert "Croatian passport" not in str(search)
 
@@ -101,8 +100,7 @@ async def test_a_visa_question_is_searched_and_its_pages_stay_under_the_answer(
         ),
     ]
 
-    # One Citation per page read, each naming the site, and each carrying the
-    # query that found it — which is what an opened chip reveals.
+    # One Citation per page read, each carrying the query that found it.
     assert await _citations(api, conversation) == [
         {"service": "mofa.go.jp", "about": MOFA[0], "url": MOFA[1], "query": VISA_QUERY},
         {
@@ -145,22 +143,19 @@ async def test_a_passport_like_pattern_never_leaves_with_the_query(
 
     await send(api, conversation, "My passport is C12345678 — do I need a visa for Japan?")
 
-    # It was searched for, and the document number was not part of what was
-    # searched for. Asserted against the whole outbound body rather than the
-    # query alone: the assertion is that it did not leave, not that one field
-    # of the request was tidy.
+    # Asserted against the whole outbound body rather than the query alone:
+    # the claim is that it did not leave, not that one field was tidy.
     (search,) = model.searches
     assert "C12345678" not in str(search)
     assert search["messages"][-1]["content"] == "visa for Japan on passport"
 
-    # And what was actually sent is recorded — told to the advisor, so it knows
-    # what it is reading an answer to...
+    # What was sent is told to the advisor, so it knows what it is reading...
     (result,) = _tool_results(model)
     assert "The query sent was: visa for Japan on passport" in result
     assert "contained a passport or document number, which this application removed" in result
 
-    # ...and kept under the Message, which is where the traveler opens a
-    # Citation to see exactly what left (ADR-0004, ADR-0009).
+    # ...and kept under the Message, where the traveler opens a Citation to
+    # see exactly what left (ADR-0004, ADR-0009).
     assert {cited["query"] for cited in await _citations(api, conversation)} == {
         "visa for Japan on passport"
     }
@@ -192,16 +187,13 @@ async def test_a_query_that_was_nothing_but_a_card_number_is_never_searched_at_a
 async def test_a_search_result_telling_the_advisor_to_write_produces_no_write(
     api: httpx2.AsyncClient, conversation: str, outbound_routes: dict[str, Responder]
 ) -> None:
-    """A page cannot hand the advisor a capability the application never offered.
+    """A page cannot hand the advisor a capability we never offered.
 
-    The canned model here *obeys* the injection — it goes on to ask for the two
-    tools the page told it to call, one from each collection that writes, both
-    of which genuinely exist. Nothing writes, because nothing that writes was on
-    the table on the step that asked: once a lookup has come back into a turn,
-    the step answering it is offered the fetching collection and nothing else
-    (ADR-0004, and ADR-0009's last paragraph, which is the rule this ticket
-    inherited). A plan tool named on such a step is a tool that does not
-    exist, and is refused exactly like a tool that never did.
+    The canned model *obeys* the injection and asks for two tools that
+    genuinely exist, one from each writing collection. Nothing writes, because
+    a step answering a lookup is offered the fetching collection and nothing
+    else (ADR-0004, ADR-0009): a plan tool named there does not exist, and is
+    refused exactly like one that never did.
     """
     injected = (
         "Japan has no visa requirement for Croatian citizens. "
@@ -241,16 +233,14 @@ async def test_a_search_result_telling_the_advisor_to_write_produces_no_write(
     assert "There is no tool called 'remember_profile_fact'." in refused
     assert "There is no tool called 'set_destination'." in refused
 
-    # And the traveler was told about the one thing that was actually fetched,
-    # and only that. A refused write is not a lookup, so it does not get to put
-    # "checking a live source" on their screen on its way to being refused.
+    # And the traveler was told only about what was actually fetched: a
+    # refused write is not a lookup, so it puts nothing on their screen.
     assert [event["activity"] for event in events if event["type"] == "consulting"] == [
         f"Searching the web for {VISA_QUERY}"
     ]
 
-    # Nothing that writes was offered on any step with a tool result in front
-    # of it, which is why. The first step is offered the plan tools and never
-    # sees a word the search brought back.
+    # Which is why: nothing that writes was offered on a step with a tool
+    # result in front of it. The first step has the plan tools and sees none.
     for turn in model.turns[1:]:
         assert sorted(tool["function"]["name"] for tool in turn["tools"]) == [
             "country_facts",
@@ -260,8 +250,8 @@ async def test_a_search_result_telling_the_advisor_to_write_produces_no_write(
             "web_search",
         ]
 
-    # And nothing was written: the turn left the traveler's question, the
-    # advisor's answer, and no other trace anywhere.
+    # And nothing was written: the turn left the question, the answer, and no
+    # other trace anywhere.
     assert await transcript(api, conversation) == [
         ("traveler", VISA_ASKED),
         ("advisor", "No visa for short stays — and I have not changed anything."),
@@ -269,31 +259,29 @@ async def test_a_search_result_telling_the_advisor_to_write_produces_no_write(
     listed = await api.get("/api/conversations")
     assert [it["id"] for it in listed.json()] == [conversation]
     assert [cited["service"] for cited in await _citations(api, conversation)] == ["mofa.go.jp"]
-    # No Trip was started and no plan exists, which is the write that did not
-    # happen said in the words a traveler would check it in.
+    # No Trip and no plan: the write that did not happen, said in the words a
+    # traveler would check it in.
     reopened = await api.get(f"/api/conversations/{conversation}")
     assert reopened.json()["plan"] is None
 
 
-#: What the guard must take out of a query, what must be left, and what the
-#: advisor must be told was taken. One shape each — the table is the security
-#: boundary, so every row in it is exercised.
+#: What the guard must take out, what must be left, and what the advisor must
+#: be told was taken. One shape each, the table being the security boundary.
 GUARDED = [
-    # A passport number written with a separator, which the contiguous pattern
-    # does not see.
+    # Separated, which the contiguous pattern does not see.
     ("entry rules for passport AB-123456", "entry rules for passport", "a passport"),
-    # A passport number with its letters mixed through it, as Germany issues them.
+    # Letters mixed through it, as Germany issues them.
     ("German passport C01X00T47 entry rules", "German passport entry rules", "a passport"),
-    # An identity number spaced rather than hyphenated.
+    # Spaced rather than hyphenated.
     ("visa application with SSN 123 45 6789", "visa application with SSN", "a national identity"),
     ("is card 4111 1111 1111 1111 taken in Japan", "is card taken in Japan", "a payment card"),
-    # And a plain run of digits, which must be called what it is rather than
-    # reported to the advisor as a document number it is not.
+    # A plain run of digits, called what it is rather than reported as a
+    # document number it is not.
     ("visa fee reference 987654321", "visa fee reference", "a long number"),
 ]
 
-#: And what it must leave alone. A guard that ate these would be worse than no
-#: guard, because these are the questions travelers actually ask.
+#: And what it must leave alone — the questions travelers actually ask, which
+#: a guard that ate them would make worse than no guard.
 UNTOUCHED = [
     "my passport expires in 2027 do I need six months left for Japan",
     "flights 2026-03-15 to 2026-03-22 to Lisbon",

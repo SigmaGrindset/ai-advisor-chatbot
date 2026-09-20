@@ -1,9 +1,6 @@
 /**
- * How an icon is drawn, everywhere.
- *
- * Two sizes and one stroke weight. An interface that draws icons at five
- * weights and seven sizes reads as an accumulation rather than a design, so
- * the choice is made once here and spread onto every glyph.
+ * How an icon is drawn, everywhere: two sizes and one stroke weight, chosen
+ * once so the interface reads as a design rather than an accumulation.
  *
  * Icons come from Lucide. The sparkle, bot, zap and wand are not used: the
  * advisor is established by how it writes, not by a star beside its name.

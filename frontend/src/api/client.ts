@@ -38,10 +38,8 @@ export async function listTrips(): Promise<TripPlan[]> {
 }
 
 /**
- * Move a Conversation to a Trip, or take it off the one it is on.
- *
- * It answers with the plan the Conversation refines from here — null when it
- * refines none — because that is what the pane beside it shows next.
+ * Move a Conversation to a Trip, or take it off the one it is on. Answers with
+ * the plan the pane beside it shows next, and null when there is none.
  */
 export async function attachConversation(
   conversationId: string,
@@ -59,11 +57,9 @@ export async function attachConversation(
 /**
  * Delete a Trip and its Trip Plan, and say what becomes of its Conversations.
  *
- * The plan goes either way — the Itinerary Items and Open Questions are the
- * plan rather than things hanging off it. The Conversations are the
- * traveler's choice, made in the confirmation they were just shown, and it is
- * sent as the word they chose rather than as a flag: what this request does
- * is worth being able to read in the request.
+ * The plan goes either way. What happens to the Conversations is the
+ * traveler's choice, sent as the word they chose rather than as a flag, so
+ * what the request does can be read in the request.
  */
 export async function deleteTrip(
   tripId: string,
@@ -77,10 +73,9 @@ export async function deleteTrip(
 /**
  * Changing the Trip Plan by hand.
  *
- * Every one of these answers with the whole plan, because every one of them
- * changed it and the pane is showing it — one round trip rather than a write
- * and a read. What they *write* is only what was named: a field left out of a
- * patch is not touched, and a field named as null is one the traveler emptied.
+ * Each answers with the whole plan — one round trip rather than a write and a
+ * read. What they *write* is only what was named: a field left out is not
+ * touched, and a field named as null is one the traveler emptied.
  */
 
 export async function changePlan(tripId: string, patch: PlanPatch): Promise<TripPlan> {
@@ -126,11 +121,9 @@ async function sent(url: string, method: string, body?: unknown): Promise<TripPl
 }
 
 /**
- * Call a Conversation something the traveler will recognise it by.
- *
- * It answers with the row as the list now reads it, rather than with nothing:
- * the name that is stored is the name trimmed and measured by the server, and
- * a rail showing what was typed instead would be showing its own guess at it.
+ * Call a Conversation something the traveler will recognise it by. Answers
+ * with the row as the list now reads it: what is stored is trimmed and
+ * measured by the server, and a rail showing what was typed would be guessing.
  */
 export async function renameConversation(
   id: string,
@@ -150,11 +143,8 @@ export async function deleteConversation(id: string): Promise<void> {
 }
 
 /**
- * The Traveler Profile, and the two ways it goes away.
- *
- * Deleting one fact answers with the profile as it stands afterwards, the same
- * way a change to the Trip Plan answers with the whole plan: the pane is
- * showing the list that was just deleted from.
+ * The Traveler Profile, and the two ways it goes away. Deleting one fact
+ * answers with the whole profile, as a plan change answers with the whole plan.
  */
 
 export async function readProfile(): Promise<ProfileFact[]> {
@@ -176,13 +166,10 @@ export async function clearEverything(): Promise<void> {
  * The Advisor Instructions, and the two ways they change.
  *
  * Each answers with the instructions *and* the whole prompt composed around
- * them, the same way a change to the Trip Plan answers with the whole plan:
- * the page shows both, and what has just changed is what it is showing.
+ * them, because the page shows both.
  *
- * The Conversation is named so that the Trip Plan composed into the preview is
- * the plan of the Conversation the traveler came from — what they are shown is
- * then what their very next message actually sends. Null when they are in no
- * Conversation yet, which composes the way a turn of one refining no Trip does.
+ * The Conversation is named so the plan composed into the preview is the one
+ * the traveler came from, making what they see what their next message sends.
  */
 
 export async function readInstructions(
@@ -206,7 +193,6 @@ export async function saveInstructions(
   );
 }
 
-/** Put the shipped Advisor Instructions back, as a version of their own. */
 export async function restoreInstructions(
   conversationId: string | null,
 ): Promise<AdvisorInstructions> {
@@ -242,11 +228,9 @@ export async function* say(
 }
 
 /**
- * Run a failed turn again, in place of the reply it never gave.
- *
- * The named Message is the one that turn left behind. The question it answers
- * is already recorded, so it is not sent again — which is the whole reason
- * this is a call of its own rather than saying the same words twice.
+ * Run a failed turn again, in place of the reply it never gave. The question
+ * is already recorded, so it is not sent again — which is why this is a call
+ * of its own rather than saying the same words twice.
  */
 export async function* runAgain(
   conversationId: string,
@@ -261,7 +245,6 @@ export async function* runAgain(
   );
 }
 
-/** A streamed turn, read event by event, however it was asked for. */
 async function* turn(response: Response): AsyncGenerator<TurnEvent> {
   if (!response.ok || !response.body) {
     yield { type: "failed", message: null, ...(await refusal(response)) };
@@ -307,12 +290,9 @@ function refused(response: Response): void {
 }
 
 /**
- * What the API said when it would not run a turn.
- *
- * A refusal the application composed says which kind of failure it is — a
- * missing key is the one the traveler can do something about, and it says so.
- * Anything else that comes back is the application declining the request,
- * which is nobody's configuration and so is reported as its own.
+ * What the API said when it would not run a turn. A refusal we composed says
+ * which kind of failure it is; anything else is the application declining, and
+ * is reported as its own.
  */
 async function refusal(response: Response): Promise<Failure> {
   try {

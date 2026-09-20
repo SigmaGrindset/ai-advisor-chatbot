@@ -10,16 +10,12 @@ import { Skeleton } from "../shell/Skeleton";
 import { valueOf } from "./fields";
 
 /**
- * The Trip Plan, drawn.
+ * The Trip Plan, drawn. It draws nothing around itself — the tab strip and
+ * heading are the record pane's, and where the pane goes is the shell's.
  *
- * It draws itself and nothing around itself: the tab strip and the heading
- * are the record pane's, and where the pane goes is the shell's. What it
- * shows is the shape of the trip at a glance — where, when, how many, how
- * much — then the days, then what is still undecided.
- *
- * Every value here is the traveler's to change, and says so permanently
- * rather than on hover (ADR-0007). What the advisor changed a moment ago is
- * lit and fading, so a plan moving while they read it says which part moved.
+ * Every value is the traveler's to change and says so permanently rather than
+ * on hover (ADR-0007). What the advisor changed a moment ago is lit and
+ * fading, so a plan moving while they read it says which part moved.
  */
 export function PlanPanel({
   plan,
@@ -57,9 +53,8 @@ export function PlanPanel({
   onSettle: (questionId: string) => void;
 }) {
   if (resuming) {
-    // The shape of the head of a plan: the destination standing at a
-    // masthead's height, then a label and a value on each line below, which
-    // is the row `Row` draws.
+    // The shape of a plan's head: the destination at a masthead's height,
+    // then a label and a value on each line below.
     return (
       <div className="flex flex-col gap-7" role="status" aria-label="Loading the trip plan">
         <div className="border-b border-line pb-5">
@@ -100,23 +95,11 @@ export function PlanPanel({
 
   return (
     <div className="flex flex-col gap-7">
-      {/* Where the journey goes, at the head of its own record rather than on
-          a line of it.
-          Every other part of a plan is a fact about a trip; the destination is
-          the trip's name, and a traveler opening this pane is looking for the
-          place before they are looking for anything about it. It is still the
-          same field as the rest — the same dotted underline, the same edit in
-          place, the same highlight when the advisor rewrites it — set larger
-          and given a rule to sit on, which is how a masthead differs from a
-          row.
-          It says "Where to?" and nothing else when the plan holds no
-          destination yet, because a trip nobody has named is the ordinary
-          state of a conversation that has only just begun.
-          The switcher above it carries the same word on a chip, and that is
-          not the same thing said twice: the chip is small, coloured and not
-          editable, and it answers *which Trip this Conversation is on*. This
-          answers *where the Trip goes*, and it is the thing that lights up
-          when the advisor decides. */}
+      {/* The destination is the trip's name rather than a fact about it, and
+          is what a traveler opens this pane looking for — so it is the same
+          field as the rest, set larger and given a rule to sit on.
+          The chip in the switcher above carries the same word but answers a
+          different question: which Trip this Conversation is on. */}
       <div className="border-b border-line pb-5">
         <EditableField
           {...field("destination")}

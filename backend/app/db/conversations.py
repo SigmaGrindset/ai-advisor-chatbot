@@ -15,17 +15,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .tables import SOLE_TRAVELER_ID, Conversation, Message, MessageRole, Trip
 
-#: How many other Conversations the advisor is told about. A bound rather than a
-#: rule about travel: the point of Compaction is a prompt that does not grow
-#: without end, and a traveler of two years' standing with two hundred
-#: Conversations would otherwise carry two hundred lines into every turn of every
-#: one of them. The most recently spoken in are the ones a trip is still being
-#: planned across.
+#: How many other Conversations the advisor is told about — a bound, so the
+#: prompt does not grow without end. The most recently spoken in are the ones
+#: a trip is still being planned across.
 MOST_RECENT_OTHERS = 10
 
-#: The moment of the last Message, or the Conversation's own beginning while it
-#: has none. Derived rather than stored, so there is one clock and no way for a
-#: recorded timestamp to drift from what was actually said.
+#: The moment of the last Message, or the Conversation's beginning while it has
+#: none. Derived rather than stored, so a timestamp cannot drift from what was
+#: actually said.
 LAST_ACTIVITY = func.coalesce(
     select(func.max(Message.created_at))
     .where(Message.conversation_id == Conversation.id)
@@ -42,8 +39,7 @@ async def conversations_by_activity(
     rows = await session.execute(
         select(Conversation, LAST_ACTIVITY.label("last_activity_at"))
         .where(Conversation.traveler_id == SOLE_TRAVELER_ID)
-        # By id second, so Conversations whose last activity falls in the same
-        # instant still come back in a settled order rather than an arbitrary one.
+        # By id second, so a tie in activity still comes back settled.
         .order_by(LAST_ACTIVITY.desc(), Conversation.id)
     )
     return [(conversation, last_activity_at) for conversation, last_activity_at in rows]
@@ -52,14 +48,13 @@ async def conversations_by_activity(
 async def last_activity_in(session: AsyncSession, conversation: Conversation) -> datetime:
     """When something was last said in this Conversation, or when it was started.
 
-    The same reckoning the list is ordered by, asked of the one row that has
-    just changed rather than of all of them.
+    The same reckoning the list is ordered by, asked of one row.
     """
     activity = await session.scalar(
         select(LAST_ACTIVITY).where(Conversation.id == conversation.id)
     )
-    # Coalesced in the database, so there is always one — narrowed here for the
-    # type checker, which knows only that a scalar select may find no row.
+    # Coalesced in the database, so there is always one; narrowed here for the
+    # type checker.
     return activity if activity is not None else conversation.created_at
 
 
@@ -68,16 +63,12 @@ async def conversations_apart_from(
 ) -> Sequence[tuple[str, str | None]]:
     """Every *other* Conversation that has been spoken in, named and placed.
 
-    A title and the destination of whatever Trip it refines — never a word of
-    what was said in it. The ones with no title are left out rather than listed
-    as unnamed: a Conversation has no title because nothing has been said in it
-    yet, and an empty one the traveler opened and wandered away from is not
-    another Conversation about their journey.
+    A title and its Trip's destination — never a word of what was said. Ones
+    with no title are left out: they have none because nothing has been said
+    in them, and an empty one is not another Conversation about the journey.
 
-    At most `MOST_RECENT_OTHERS` of them, so that what this adds to the prompt is
-    bounded however long the traveler has been coming back. With no Conversation
-    named — the Advisor Instructions page, opened from nowhere in particular —
-    every one of them is another one.
+    At most `MOST_RECENT_OTHERS`. With no Conversation named, every one of
+    them is another one.
     """
     apart = (
         select(Conversation.title, Trip.destination)
@@ -90,19 +81,18 @@ async def conversations_apart_from(
     if conversation is not None:
         apart = apart.where(Conversation.id != conversation.id)
     rows = await session.execute(apart)
-    # Narrowed for the type checker rather than filtered: the where clause above
-    # is what makes every title here a string.
+    # Narrowed for the type checker rather than filtered: the where clause is
+    # what makes every title here a string.
     return [(title, destination) for title, destination in rows if title is not None]
 
 
 async def fold_into_summary(
     session: AsyncSession, conversation: Conversation, *, summary: str, summarised: int
 ) -> None:
-    """Record what Compaction folded away, and how much of the Conversation it covers.
+    """Record what Compaction folded away, and how much it covers.
 
-    Only the Conversation row moves. Not a Message is touched, which is the
-    whole of what CONTEXT.md promises about Compaction: the transcript the
-    traveler reads is exactly as long afterwards as it was before.
+    Only the Conversation row moves; not a Message is touched, which is what
+    CONTEXT.md promises about Compaction.
     """
     conversation.summary = summary
     conversation.summarised_messages = summarised
@@ -118,11 +108,8 @@ async def begin_conversation(session: AsyncSession) -> Conversation:
 
 
 async def remove_conversation(session: AsyncSession, conversation: Conversation) -> None:
-    """Delete a Conversation and everything said in it.
-
-    There is no flag and no hidden row: the Messages go with it, on the
-    database's own cascade.
-    """
+    """Delete a Conversation and everything said in it: no flag and no hidden
+    row, the Messages going with it on the database's own cascade."""
     await session.delete(conversation)
     await session.commit()
 
@@ -158,14 +145,10 @@ async def record_message(
 ) -> Message:
     """Keep something that was said, and answer with it as it was kept.
 
-    Committed rather than left pending, because both callers need it to have
-    survived before they go on: the traveler's words before the model is
-    called, the advisor's before the browser is told they exist.
-
-    The Prompt Version is the one the turn composed its prompt from, and is
-    left out on a traveler Message, which no prompt produced. The failure is
-    what went wrong in the turn, and is left out on every Message whose turn
-    finished — including one that was recorded before the turn failed.
+    Committed rather than left pending: both callers need it to have survived
+    before they go on. The Prompt Version is the one the turn composed from,
+    left out on a traveler Message; the failure is left out on every Message
+    whose turn finished.
     """
     message = Message(
         conversation_id=conversation.id,
@@ -184,10 +167,8 @@ async def record_message(
 async def discard_message(session: AsyncSession, message: Message) -> None:
     """Take a Message back out of a Conversation.
 
-    The one thing this is for is running a failed turn again: the Message that
-    turn left behind is the reply it never gave, and the new turn is going to
-    give one. Nothing else in the application removes a single Message —
-    a Conversation goes whole or not at all.
+    Only for running a failed turn again. Nothing else removes a single
+    Message: a Conversation goes whole or not at all.
     """
     await session.delete(message)
     await session.commit()

@@ -33,9 +33,8 @@ from ..services.plans import read_plan, read_plans
 
 router = APIRouter(tags=["trips"])
 
-#: The same bounds the advisor's own tools are held to, named once. The
-#: traveler and the advisor write the same columns, so a limit that applied to
-#: one of them would be a limit on nothing.
+#: The same bounds the advisor's tools are held to. Both write the same
+#: columns, so a limit applying to one of them would be a limit on nothing.
 Destination = Annotated[str, Field(min_length=1, max_length=MAX_DESTINATION)]
 PartySize = Annotated[int, Field(ge=1, le=MAX_PARTY)]
 Money = Annotated[float, Field(ge=0)]
@@ -44,11 +43,9 @@ Day = Annotated[int, Field(ge=1, le=MAX_DAY)]
 Description = Annotated[str, Field(min_length=1, max_length=MAX_DESCRIPTION)]
 When = Annotated[str, Field(pattern=f"^({'|'.join(PARTS_OF_DAY)})$")]
 
-#: What becomes of a Trip's Conversations when the Trip goes. Two words rather
-#: than a flag, because a caller that forgets a flag gets `false` and reads as
-#: though it meant it, and the thing being defaulted here is whether a
-#: traveler's transcripts survive. Spelling it in the query string also makes
-#: the request say out loud what it is about to do.
+#: Two words rather than a flag: a caller that forgets a flag gets `false` and
+#: reads as though it meant it, and what is being defaulted is whether the
+#: traveler's transcripts survive.
 OnDeletingTrip = Literal["keep", "delete"]
 
 
@@ -139,9 +136,8 @@ class ItineraryItemPatch(BaseModel):
 async def list_trips(session: AsyncSession = Depends(get_session)) -> list[TripPlanView]:
     """Every Trip the traveler is planning, the most recently started first.
 
-    One read serves both places Trips are listed: the page that shows them all
-    with what is in each plan, and the switcher that moves a Conversation
-    between them.
+    One read serves both the page listing them and the switcher that moves a
+    Conversation between them.
     """
     return [TripPlanView.of(plan) for plan in await read_plans(session)]
 
@@ -154,21 +150,13 @@ async def delete_trip(
 ) -> Response:
     """Remove a Trip and its Trip Plan, for good.
 
-    Its Itinerary Items and Open Questions are the plan rather than things
-    hanging off it, so they go without being asked about. Its Conversations
-    are not: what was said in a thread is worth keeping even when the journey
-    it was about is not, and a traveler may equally have meant the whole
-    episode. So the interface asks, and the answer arrives here — `keep`
-    unless they said otherwise, because the irreversible reading of an
-    ambiguous request is the wrong default.
+    The Itinerary Items and Open Questions are the plan, so they go unasked.
+    The Conversations are not, so the interface asks and the answer arrives
+    here — `keep` unless they said otherwise, the irreversible reading of an
+    ambiguous request being the wrong default.
 
-    Kept, they are listed under no Trip afterwards and the advisor will start
-    a fresh Trip for one the moment it records something about a journey
-    again. That is the honest outcome of keeping a live thread and it is what
-    the interface says will happen, rather than a surprise two messages later.
-
-    Asking the traveler first is the interface's job, because by the time the
-    request arrives the decision has been made.
+    Kept, they are listed under no Trip and the advisor starts a fresh one the
+    moment it records something about a journey again.
     """
     trip = await _trip(session, trip_id)
     await trips.remove_trip(session, trip, with_conversations=conversations == "delete")

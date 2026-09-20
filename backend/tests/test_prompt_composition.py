@@ -1,16 +1,11 @@
 """What the advisor is shown, asked for without a database.
 
-Composing the prompt used to need a session, so the only way to see it was to
-run a turn and read what the canned model was sent. It is a function of the
-Messages now, which is the point of it having moved: the thing that decides
-what the advisor knows can be asked directly, and the answer read in one
-screen.
+The prompt is a function of the Messages, so what decides what the advisor
+knows can be asked directly rather than read out of a canned turn.
 
-What is asserted here is what holds of every prompt whatever is recorded. That
-the Trip Plan and the Traveler Profile are composed into one is asserted where
-a traveler would notice it instead — in `test_trip_plan.py` and
-`test_traveler_profile.py`, from a turn that learned something and a
-Conversation begun afterwards that already knew it.
+What is asserted here holds of every prompt whatever is recorded. That the
+plan and the profile are composed in is asserted where a traveler would notice
+it, in `test_trip_plan.py` and `test_traveler_profile.py`.
 """
 
 import uuid

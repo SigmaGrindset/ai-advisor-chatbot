@@ -1,20 +1,15 @@
 """Compaction: the older stretch of a Conversation, folded into a summary.
 
-A traveler who comes back to the same Conversation for weeks would otherwise
-have every word of it sent again on every turn — slower, dearer, and eventually
-too long to send at all. Compaction replaces the oldest Messages in the *prompt*
-with a running summary of them. It never touches the Conversation: the
-transcript the traveler scrolls back through is whole, and nothing in the
-interface says any of this happened (CONTEXT.md).
+Replaces the oldest Messages in the *prompt* with a running summary of them,
+so a Conversation returned to for weeks does not send every word every turn.
+It never touches the Conversation itself: the transcript is whole and nothing
+in the interface says this happened (CONTEXT.md).
 
-What decides it is a token budget rather than a Message count, because Messages
-are not the same size as each other — a reply that reports back a page the
-advisor read is worth twenty short ones, and a count would send it again every
-turn while cheerfully folding away the exchange that mattered.
+A token budget rather than a Message count, because Messages differ in size —
+a reply reporting back a page the advisor read is worth twenty short ones.
 
-Nothing here touches the database. It is handed what was said and answers with
-how much of it to fold; `services/compaction.py` is what writes the summary down
-and what the turn is then composed from.
+Nothing here touches the database; `services/compaction.py` writes the summary
+down and composes the turn from it.
 """
 
 from collections.abc import Sequence
@@ -30,31 +25,23 @@ from openai.types.chat import (
 from ..db.tables import Message, MessageRole
 from .utility import ask
 
-#: How many characters of English stand for a token, near enough. Counting for
-#: real would mean a tokeniser per model, and a tokeniser that disagreed with
-#: whichever provider OpenRouter routed to that day; what this number has to be
-#: right about is only *when* a Conversation has grown long, and four is the
-#: usual approximation for prose.
+#: Near enough for prose. A real count would mean a tokeniser per model, and
+#: all this has to be right about is *when* a Conversation has grown long.
 CHARS_PER_TOKEN = 4
 
-#: What each Message costs beyond its own words — the role and the framing the
-#: wire format puts around it. Small, but a long run of short exchanges is
-#: mostly framing.
+#: What each Message costs beyond its words — role and wire framing. Small, but
+#: a long run of short exchanges is mostly framing.
 TOKENS_PER_MESSAGE = 4
 
-#: When the Messages still being sent verbatim come to more than this, the
-#: oldest of them are folded away. Deliberately well under any model's context
-#: window: the point is a Conversation that stays quick and cheap for weeks,
-#: not one that is rescued at the last moment before it would have failed.
+#: Past this, the oldest verbatim Messages are folded away. Well under any
+#: model's context window: the point is staying quick and cheap for weeks, not
+#: being rescued just before the prompt would have failed.
 TRANSCRIPT_BUDGET = 6000
 
-#: How much of the recent end is left verbatim when that happens. Lower than
-#: the budget on purpose, so that crossing it folds a stretch worth summarising
-#: and then leaves the next several turns alone, rather than paying for a
-#: summarising call on every turn from here on. Above what a single traveler
-#: Message can run to — `api/conversations.py` bounds one at 8000 characters —
-#: because the Message they have just sent is the one thing that is never folded
-#: away, so a budget below it would be one nothing could bring the prompt under.
+#: How much of the recent end survives. Lower than the budget, so crossing it
+#: folds a stretch worth summarising and then leaves several turns alone rather
+#: than summarising every turn. Above the 8000-character bound on one traveler
+#: Message, which is never folded and would otherwise be unbringable under.
 KEPT_VERBATIM = 2000
 
 _SUMMARISING_INSTRUCTION = """\
@@ -78,13 +65,10 @@ Reply with the summary alone: no heading, no preamble, nothing else.
 def how_many_to_fold(said: Sequence[Message]) -> int:
     """How many of these Messages, oldest first, are to be folded away.
 
-    Zero while the stretch still fits, which is every turn of almost every
-    Conversation. Once it does not, enough of the oldest to bring what is left
-    back under `KEPT_VERBATIM` — and never the last Message, which is what the
-    traveler has just this moment said. So a Conversation of one enormous
-    Message folds nothing and goes out over budget, which is the right answer to
-    the only question there is: there is nothing in it but the thing they are
-    waiting on a reply to.
+    Zero while the stretch fits. Otherwise enough of the oldest to come back
+    under `KEPT_VERBATIM`, never including the last — so a Conversation of one
+    enormous Message folds nothing and goes out over budget, there being
+    nothing in it but what the traveler is waiting on a reply to.
     """
     remaining = sum(_tokens(message) for message in said)
     if remaining <= TRANSCRIPT_BUDGET:
@@ -105,12 +89,10 @@ async def summarise(
 ) -> str | None:
     """The summary that stands in for `earlier` and `folding` together.
 
-    The utility model writes it, because it is exactly the kind of small, unseen
-    work the cheaper model is configured for. None when the call disappoints in
-    any way, and the caller's answer to that is to fold nothing this turn: a
-    Conversation that is briefly too long to send cheaply is a far smaller
-    failure than one the advisor has lost the middle of — and folding Messages
-    into an empty summary would be losing them just as surely.
+    Written by the utility model, this being exactly the small unseen work it
+    is configured for. None when the call disappoints, and the caller then
+    folds nothing: a prompt briefly too long is a smaller failure than a
+    Conversation whose middle has been folded into an empty summary.
     """
     return await ask(
         model,
@@ -136,12 +118,9 @@ def describe(summary: str | None) -> str:
 def _summarising_prompt(
     earlier: str | None, folding: Sequence[Message]
 ) -> list[ChatCompletionMessageParam]:
-    # A Message whose turn failed is folded away with the rest and contributes
-    # nothing to what the summary says. It is half a sentence nobody finished,
-    # and a summary is a record of what was said — this is the same rule
-    # `advisor/prompt.py` keeps for what is still sent verbatim, kept here so
-    # that a Conversation growing long does not smuggle the half-sentence back
-    # in through the summary.
+    # A failed Message is folded away with the rest but contributes nothing:
+    # it is half a sentence nobody finished. The same rule `advisor/prompt.py`
+    # keeps, so a long Conversation cannot smuggle it back in via the summary.
     said = "\n\n".join(
         f"{_who(message)}: {message.content}" for message in folding if message.failure is None
     )

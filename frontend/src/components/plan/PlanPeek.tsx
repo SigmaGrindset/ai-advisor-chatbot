@@ -7,20 +7,15 @@ import { smallIcon } from "../../design/icons";
 /**
  * The peek state of the plan on a phone: where and when, above the composer.
  *
- * ADR-0006 asks for the plan to be in view at all times, and on a phone the
- * only thing that can be in view at all times beside the conversation is a
- * strip. This is it: destination and dates, where the traveler can see them
- * while they type, and where the highlight still fires where they are looking.
+ * ADR-0006 asks for the plan to stay in view, and a strip is the only thing
+ * that can on a phone — where they see it while typing, and where the
+ * highlight fires where they are looking.
  *
- * It is the way into the sheet rather than the sheet resting at its first
- * snap point. A bottom sheet here is a modal dialog — which is exactly what
- * gives it a focus trap and a working back gesture — and a modal sheet
- * resting permanently over the composer would make the composer unusable,
- * which is the opposite of what a peek state is for.
+ * The way *into* the sheet rather than the sheet at its first snap point: a
+ * bottom sheet here is a modal dialog, and one resting permanently over the
+ * composer would make the composer unusable.
  *
- * Nothing at all until there is something worth peeking at. A permanent strip
- * saying what will one day be there takes a line of the transcript for
- * nothing, on the screen with none to spare.
+ * Nothing at all until there is something worth peeking at.
  */
 export function PlanPeek({
   plan,
@@ -36,9 +31,8 @@ export function PlanPeek({
   const when = showRange(plan.starts_on, plan.ends_on);
   if (plan.destination === null && when === null) return null;
 
-  // Any change at all, not only the two things the strip itself shows. On a
-  // phone with the sheet closed this is the only place a change can be
-  // noticed: the tab that would otherwise be marked is inside the sheet.
+  // Any change, not only the two things the strip shows: with the sheet
+  // closed this is the only place one can be noticed.
   const changed = lit.size > 0;
 
   return (

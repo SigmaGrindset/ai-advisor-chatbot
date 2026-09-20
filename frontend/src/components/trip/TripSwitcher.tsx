@@ -10,17 +10,13 @@ import { TripChip } from "./TripChip";
 /**
  * Which Trip this Conversation is refining, and the way to say otherwise.
  *
- * The advisor decides what a Conversation is about and can decide wrong — it is
- * shown the Trips and picks one, or starts another (ADR-0002) — so the one
- * correction the traveler needs is right where the mistake shows: at the head
- * of the plan that turned out to belong to a different journey.
+ * The advisor picks a Trip and can pick wrong (ADR-0002), so the correction
+ * sits where the mistake shows: at the head of the plan.
  *
- * It opens in place rather than over anything. On a phone this control is
- * inside the record sheet, and a menu floating out of a modal dialog is a
- * second layer to escape from; a list that pushes the plan down is one. The
- * Conversation list's row actions do float, and for the opposite reason: that
- * rail scrolls, so a panel opened inside it would be cut off by it, and the
- * rows under the one being asked about would be shoved down the list.
+ * It opens in place rather than over anything. On a phone this is inside the
+ * record sheet, and a menu floating out of a modal dialog is a second layer
+ * to escape from. The Conversation list's row actions float for the opposite
+ * reason: that rail scrolls, so a panel inside it would be cut off.
  */
 export function TripSwitcher({
   plan,
@@ -36,10 +32,8 @@ export function TripSwitcher({
 }) {
   const [open, setOpen] = useState(false);
 
-  // Nothing to move between. A traveler planning their first journey has one
-  // Trip at most, and a control offering to take them off it before the
-  // advisor has written anything down is an invitation to undo the only thing
-  // that has happened.
+  // Nothing to move between: offering to take a first-time traveler off their
+  // only Trip is an invitation to undo the only thing that has happened.
   if (trips.length === 0) return null;
 
   const choose = (tripId: string | null) => {
@@ -52,9 +46,8 @@ export function TripSwitcher({
       className="flex flex-col gap-1"
       onKeyDown={(pressed) => {
         if (pressed.key !== "Escape" || !open) return;
-        // Both, and for two different reasons: the sheet this can be inside
-        // closes on Escape from a handler further up, and the dialog itself
-        // closes on the key's own default action. One press is one thing.
+        // Both: the sheet this sits in closes on Escape from a handler
+        // further up, and the dialog closes on the key's own default action.
         pressed.preventDefault();
         pressed.stopPropagation();
         setOpen(false);
@@ -89,11 +82,8 @@ export function TripSwitcher({
 
       {open && (
         <div className="flex flex-col gap-1 rounded-control border border-line bg-canvas p-1">
-          {/* Said where the choosing happens, because this control writes. A
-              chip and a chevron read as a way of looking at another Trip, and
-              what it actually does is move this Conversation onto one — which
-              a traveler should be told before they press, not by watching the
-              plan beside them change. */}
+          {/* Said where the choosing happens, because this control writes: a
+              chip and a chevron read as a way of *looking at* another Trip. */}
           <p className="px-2 pt-1 font-mono text-micro uppercase text-ink-subtle">
             Move this conversation to
           </p>
@@ -114,9 +104,8 @@ export function TripSwitcher({
               </li>
             ))}
 
-            {/* Taking a Conversation off a Trip is the other half of putting
-                it on one: an aside about somewhere else does not belong to
-                the journey the advisor attached it to. */}
+            {/* The other half of putting one on a Trip: an aside about
+                somewhere else does not belong to the journey. */}
             <li className="flex">
               <Choice chosen={plan === null} onChoose={() => choose(null)}>
                 <span className="truncate text-meta text-ink-muted">Not on a trip</span>

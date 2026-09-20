@@ -1,49 +1,31 @@
 /**
- * What the application's API talks about.
- *
- * The resources themselves, kept apart from the calls that fetch them because
- * most of what reads a Conversation never fetches one: a component is handed
- * what it draws. Separating them is about what a file is for, not about what
- * ships — these are types, so nothing of them survives compilation either way.
+ * The resources the API talks about, kept apart from the calls that fetch
+ * them: most of what reads a Conversation is handed one rather than fetching it.
  */
 
 export type MessageRole = "traveler" | "advisor";
 
 /** Where something in an advisor Message was fetched from. */
 export type Citation = {
-  /** The service's own name, or the site's, as the traveler would recognise it. */
+  /** The service's own name, as the traveler would recognise it. */
   service: string;
-  /** What was looked up there, in words. */
   about: string;
-  /**
-   * The exact request that produced it, so they can go and look. Null when
-   * there is nowhere to go: a web search that came back citing no page still
-   * has the query it sent to answer for.
-   */
+  /** Null when there is nowhere to go, as for a search that cited no page. */
   url: string | null;
-  /**
-   * The exact query a web search sent, and null on every other Citation. It is
-   * what a traveler opens a search Citation to see — the search query is the
-   * one thing this application sends out in the traveler's own words, and it
-   * is checked before it goes.
-   */
+  /** The query a web search sent, and null on every other Citation. */
   query: string | null;
 };
 
 /**
- * Whose problem a failed turn is.
- *
- * Four rather than a sentence on its own, because the reader of a failure is
- * deciding what to do about it: set something, pay something, wait, or report
- * a bug. `configuration` and `credit` are theirs to fix, `upstream` is nobody's
- * and worth trying again, and `application` is ours.
+ * Whose problem a failed turn is: the first two are the traveler's to fix,
+ * `upstream` is nobody's and worth trying again, and `application` is ours.
  */
 export type FailureKind = "configuration" | "credit" | "upstream" | "application";
 
 /** Why a turn did not answer, as the traveler is told about it. */
 export type Failure = {
   kind: FailureKind;
-  /** What happened and what would change it, addressed to whoever is reading. */
+  /** What happened and what would change it. */
   detail: string;
 };
 
@@ -53,21 +35,17 @@ export type Message = {
   content: string;
   created_at: string;
   /**
-   * The Prompt Version whose Advisor Instructions produced this Message, so
-   * that an advisor which started answering differently partway through a
-   * Conversation can be explained rather than wondered at. Null on a traveler
+   * The Prompt Version that produced this Message, so an advisor which starts
+   * answering differently partway through can be explained. Null on a traveler
    * Message, which no prompt produced.
    */
   prompt_version_id: string | null;
   cost_usd: number | null;
-  /** Empty unless the turn that produced this Message looked something up. */
   citations: Citation[];
   /**
-   * Why the turn that produced this Message stopped, and null when it did not.
-   * An advisor Message carrying one holds whatever had arrived of the reply,
-   * which may be nothing at all — the marker is what tells a turn that died
-   * from an advisor with nothing to say, and what puts the question back on
-   * screen with a way to ask it again after a reload.
+   * Why the turn stopped. A Message carrying one holds whatever had arrived of
+   * the reply, which may be nothing: the marker is what tells a turn that died
+   * from an advisor with nothing to say, and it survives a reload.
    */
   failure: Failure | null;
 };
@@ -78,11 +56,7 @@ export type ConversationSummary = {
   /** Null until the first exchange has been named. */
   title: string | null;
   last_activity_at: string;
-  /**
-   * The Trip this Conversation is refining, and null while it is refining
-   * none. The row carries it so the list can say which journey each one
-   * belongs to without reading each Conversation to find out.
-   */
+  /** Carried on the row so the list can mark each one without reading it. */
   trip_id: string | null;
 };
 
@@ -100,51 +74,35 @@ export type Conversation = {
 export type ConversationRead = Conversation & { plan: TripPlan | null };
 
 /**
- * The Advisor Instructions, and the prompt they are composed into.
- *
- * Both together, because the second is only true of the first: a page showing
- * a composed prompt beside instructions it was not composed from would be
- * showing the traveler something that is not sent.
+ * The Advisor Instructions, and the prompt they are composed into. Both
+ * together, because the second is only true of the first.
  */
 export type AdvisorInstructions = {
   /** The editable part: the advisor's persona and its rules. */
   instructions: string;
-  /**
-   * The Prompt Version these instructions are. Every Message they produce
-   * records it, which is what makes a change in behaviour explicable.
-   */
+  /** Recorded on every Message, which makes a change in behaviour explicable. */
   version_id: string;
-  /**
-   * The system prompt exactly as the next message will send it — the
-   * instructions with the tool guidance, the Trip Plan and the Traveler
-   * Profile composed around them.
-   */
+  /** The system prompt exactly as the next message will send it. */
   composed: string;
-  /** Whether what is in force is the shipped default, which cannot be restored further. */
+  /** Whether what is in force is the shipped default. */
   is_default: boolean;
 };
 
 /**
- * What a Profile Fact is about.
- *
- * The first three the traveler has exactly one of, which is how a correction
- * lands as a correction; `note` is the collection for everything a fixed set
- * could not anticipate.
+ * What a Profile Fact is about. The traveler has exactly one of the first
+ * three, which is how a correction lands as a correction; `note` collects
+ * everything a fixed set could not anticipate.
  */
 export type ProfileSubject = "nationality" | "home_city" | "companions" | "note";
 
 /**
- * One thing the advisor durably knows about the traveler.
- *
- * Addressable on its own, because deleting one of them has to leave every
- * other exactly as it was — that is the whole of what makes the Traveler
- * Profile something a traveler can read rather than something they are told
- * about.
+ * One thing the advisor durably knows about the traveler. Addressable on its
+ * own, so deleting one leaves every other exactly as it was.
  */
 export type ProfileFact = {
   id: string;
   subject: ProfileSubject;
-  /** The fact itself, in the words the traveler would recognise. */
+  /** In the words the traveler would recognise. */
   detail: string;
 };
 
@@ -168,9 +126,8 @@ export type OpenQuestion = { id: string; question: string };
  * The structured, durable record of a Trip. A Trip has exactly one, and
  * several Conversations may refine it.
  *
- * Every field is nullable because a plan is born the moment the first thing
- * about the trip is worth recording and knows nothing else yet. The dates are
- * kept as the calendar days they are, `YYYY-MM-DD`, never as instants.
+ * Every field is nullable: a plan is born the moment the first thing about the
+ * trip is worth recording. Dates are calendar days, `YYYY-MM-DD`, not instants.
  */
 export type TripPlan = {
   trip_id: string;

@@ -1,21 +1,16 @@
 """The Traveler Profile tools: what the advisor calls when it learns something.
 
-The second collection that writes, beside the Trip Plan tools next door, and
-held to the same rule: these write and never fetch, and the loop dispatches
-them down the branch that has no tool result in front of it. That is what
-makes it structurally impossible for a page the advisor read to put something
-into the traveler's profile (ADR-0004, ADR-0010).
+The second collection that writes, held to the same rule as the Trip Plan
+tools next door: these write and never fetch, which is what makes it
+structurally impossible for a page the advisor read to put something into the
+profile (ADR-0004, ADR-0010).
 
-A fact is recorded under a subject, and three of the four subjects are ones a
-traveler has exactly one of. Recording a nationality when a nationality is
-already there *replaces* it, so a correction made in conversation updates what
-is stored rather than standing a contradiction beside it. That rule is the
-application's rather than the advisor's: a profile that only stayed consistent
-while the model was careful would not be one (ADR-0001).
+Three of the four subjects are ones a traveler has exactly one of, so
+recording a nationality *replaces* the one there. That rule is ours rather
+than the advisor's: a profile that stayed consistent only while the model was
+careful would not be one (ADR-0001).
 
-Nothing in here touches the database. A call is read into a typed change, and
-`services/profile.py` is what knows how to apply one — the same line the rest
-of `advisor/` sits on.
+Nothing here touches the database; `services/profile.py` applies a change.
 """
 
 import uuid
@@ -27,14 +22,11 @@ from openai.types.chat import ChatCompletionToolParam
 
 from .calls import Tool, Unusable, read_call, words, whole
 
-#: How long a fact may run. A Profile Fact is a line about the traveler, not a
-#: paragraph about them.
+#: A Profile Fact is a line about the traveler, not a paragraph.
 MAX_DETAIL = 200
 
-#: What a Profile Fact can be about. The first three are the fixed set the
-#: advisor is asked for by name, because they are what it otherwise asks the
-#: traveler for twice; `note` is the collection for everything a fixed set
-#: could not anticipate — a constraint, a preference, a way they like to travel.
+#: The first three are asked for by name, being what the advisor otherwise
+#: asks the traveler for twice; `note` collects everything else.
 NATIONALITY = "nationality"
 HOME_CITY = "home_city"
 COMPANIONS = "companions"
@@ -81,10 +73,8 @@ ProfileChange = Remember | Forget
 class Learned:
     """What became of a change to the profile.
 
-    `told` is the tool result, in the application's own voice — not wrapped in
-    the untrusted markers a Live-data Tool result wears, for the same reason a
-    plan tool's result is not: this is the application's account of a write it
-    made itself.
+    `told` is the tool result in our own voice, unwrapped by untrusted markers
+    for the reason a plan tool's result is: it is our account of our own write.
     """
 
     told: str
@@ -96,8 +86,8 @@ class Learned:
 class Profile(Protocol):
     """Whatever can actually apply a change to the Traveler Profile.
 
-    Implemented above this layer, where the database is. Declared here so the
-    loop can be handed one without `advisor/` learning what a session is.
+    Implemented above this layer, where the database is, so the loop can be
+    handed one without `advisor/` learning what a session is.
     """
 
     async def change(self, asked: ProfileChange) -> Learned: ...
@@ -159,9 +149,8 @@ def offered() -> list[ChatCompletionToolParam]:
 async def change(profile: Profile, name: str, arguments: str) -> Learned:
     """Read one call and apply it, answering with what to tell the advisor.
 
-    Never raises. A call carrying arguments that are not what the tool takes
-    becomes something the advisor is told about and can correct, rather than
-    something that ends the turn.
+    Never raises: bad arguments become something the advisor is told about and
+    can correct, rather than something that ends the turn.
     """
     asked = read_call(_BY_NAME, name, arguments)
     if isinstance(asked, Unusable):

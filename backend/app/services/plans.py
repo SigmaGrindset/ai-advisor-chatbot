@@ -1,14 +1,12 @@
 """The Trip Plan: read for the prompt, and written by the tools that patch it.
 
-The advisor's side of this lives in `advisor/planning.py` and knows nothing
-about storage: a tool call is read there into a typed change, and this is what
-knows how to apply one. What comes back is what the advisor is told, and which
-parts of the plan moved — which is all the interface needs to highlight them.
+`advisor/planning.py` reads a tool call into a typed change and knows nothing
+about storage; this applies one, and answers with what the advisor is told and
+which parts moved.
 
-A Conversation gets a Trip by the first patch starting one. There is no
-"create a Trip" gesture anywhere, because there is no moment in a conversation
-where a traveler would make one: a Trip exists because something about a
-journey turned out to be worth recording.
+A Conversation gets a Trip by its first patch starting one. There is no
+"create a Trip" gesture, because there is no moment in a conversation where a
+traveler would make one.
 """
 
 from collections.abc import Sequence
@@ -75,10 +73,9 @@ async def read_plan(session: AsyncSession, trip: Trip) -> TripPlan:
 async def read_plans(session: AsyncSession) -> list[TripPlan]:
     """Every Trip the traveler has, each with its plan, most recently first.
 
-    Whole plans rather than a summary of each: the page that lists Trips shows
-    what is in one, and the switcher beside the Conversation labels them from
-    the same read. A second, thinner shape for a Trip Plan would be a second
-    thing to keep true.
+    Whole plans rather than summaries: the Trips page shows what is in one and
+    the switcher labels them from the same read, and a second, thinner shape
+    would be a second thing to keep true.
     """
     return [await read_plan(session, trip) for trip in await trips.trips_by_age(session)]
 
@@ -115,9 +112,8 @@ class TripPlanning:
         trip = await trips.trip_of(self._session, self._conversation)
         started = trip is None
         if trip is None:
-            # Taking something off a plan that does not exist is not a reason
-            # to bring one into existence. Only a change that records
-            # something starts a Trip.
+            # Taking something off a plan that does not exist is no reason to
+            # bring one into being: only a change that records something does.
             if isinstance(asked, (RemoveItineraryItem, SettleOpenQuestion)):
                 return Changed(
                     told=(
@@ -130,10 +126,8 @@ class TripPlanning:
         changed = await self._applied(trip, asked)
         if not started:
             return changed
-        # Said once, on the turn it happens. The advisor otherwise has no way
-        # of knowing whether it is adding to a plan or beginning one, and a
-        # traveler who is told "I have started a plan for this" twice has been
-        # told something untrue the second time.
+        # Said once, on the turn it happens: the advisor otherwise cannot tell
+        # whether it is adding to a plan or beginning one.
         return Changed(
             told=f"{changed.told} This conversation had no Trip, so one was started for it.",
             fields=changed.fields,
@@ -153,8 +147,8 @@ class TripPlanning:
             return Changed(told="This conversation is already attached to that Trip.")
         await trips.attach_conversation(self._session, self._conversation, trip)
         plan = await read_plan(self._session, trip)
-        # The whole plan, not a field of it: what the advisor was working from
-        # a moment ago was a different Trip's, or none at all.
+        # The whole plan: what the advisor was working from a moment ago was a
+        # different Trip's, or none at all.
         return Changed(
             told=(
                 "This conversation is now attached to that Trip, and its plan is the one "
@@ -200,10 +194,9 @@ class TripPlanning:
     async def _scalars(self, trip: Trip, wanted: dict[str, object], told: str) -> Changed:
         """Write the named fields, and only the ones that would actually move.
 
-        A field already holding what it was asked to hold is left alone rather
-        than written with the same value: the traveler watches changed fields
-        light up, and a field lighting up for a change that was not one sends
-        them looking for something that did not happen.
+        A field already holding what it was asked for is left alone: the
+        traveler watches changed fields light up, and one lighting up for a
+        change that was not one sends them looking for nothing.
         """
         moved = {field: value for field, value in wanted.items() if getattr(trip, field) != value}
         if not moved:

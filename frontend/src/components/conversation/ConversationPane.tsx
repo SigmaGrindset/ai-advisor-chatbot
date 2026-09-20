@@ -38,83 +38,66 @@ export function ConversationPane({
   onShowRecord,
   peek,
 }: {
-  /** The Conversation being read, or null before the traveler has begun one. */
   conversation: Conversation | null;
   /**
    * True until the first read has come back. A Conversation and no
-   * Conversation look identical before either has arrived, and the greeting
-   * is only true of the second — so neither is drawn until it is known which
-   * one this is.
+   * Conversation look identical before either arrives, and the greeting is
+   * only true of the second, so neither is drawn until it is known which.
    */
   resuming: boolean;
   /** The reply as it is being written, if one is arriving into this Conversation. */
   arriving: string | null;
-  /** What this turn is fetching right now, and null when it is fetching nothing. */
   consulting: string | null;
   /**
-   * The last turn in this Conversation, if it failed without reaching the
-   * server. A turn that reached it left a Message carrying its own failure,
-   * and that one is drawn in the transcript where it happened.
+   * The last turn, if it failed without reaching the server. One that reached
+   * it left a Message carrying its own failure, drawn where it happened.
    */
   unrecorded: Unrecorded | null;
-  /**
-   * What had arrived of a reply the traveler stopped, and null if they
-   * stopped none. Empty when they stopped one before it had written anything.
-   */
+  /** What had arrived of a reply the traveler stopped. */
   stopped: string | null;
-  /** Something that went wrong around the Conversation rather than in a turn. */
   failure: string | null;
   draft: string;
   /** True while a turn is in flight, whichever Conversation it belongs to. */
   sending: boolean;
   onDraft: (draft: string) => void;
   onSend: () => void;
-  /** How to stop this Conversation's reply, and null when it has none. */
   onStop: (() => void) | null;
-  /** Run the failed turn this Message is what is left of, again. */
   onRetry: (failed: Message) => void;
   /** Ask a question again, when nothing of the turn was kept to run. */
   onAskAgain: (asking: Unrecorded) => void;
   /**
-   * How to reach what this width has folded away, and null at a width that
-   * has folded nothing away. The controls are the shell's, drawn here because
-   * the header is the only thing on a phone with room for them.
+   * How to reach what this width has folded away. The shell's controls, drawn
+   * here because on a phone the header is the only thing with room for them.
    */
   onShowConversations: (() => void) | null;
   onShowRecord: (() => void) | null;
   /**
-   * The peek state of the Trip Plan, which is the shell's and lives here
-   * because here is where the composer is — ADR-0006 asks for destination and
-   * dates to stay in view *above the composer* while the traveler types.
-   * Null at a width that has the plan on the page already.
+   * The shell's Trip Plan peek, which lives here because the composer does:
+   * ADR-0006 wants destination and dates in view above it while they type.
    */
   peek: React.ReactNode;
 }) {
   const transcript = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
   // Whether the foot is where the traveler is reading, for the control that
-  // offers them the way back. It starts true because a Conversation opens at
-  // its end. What the view actually does is decided by `atFoot` below.
+  // offers the way back. Starts true because a Conversation opens at its end;
+  // what the view actually does is decided by `atFoot` below.
   const [following, setFollowing] = useState(true);
 
   const replying = arriving !== null;
-  // What the traveler is shown of the arriving reply, which trails what has
-  // arrived of it so that a burst of fragments reads as writing rather than
-  // as text landing in lumps. Only the drawing is paced: everything that
-  // acts on the reply — the live region below, the Message it becomes — is
-  // given the whole of what actually arrived.
+  // Trails what has arrived so a burst of fragments reads as writing rather
+  // than as text landing in lumps. Only the drawing is paced — the live region
+  // and the Message it becomes are given the whole of what arrived.
   const reply = useWriting(arriving);
   const said = conversation?.messages ?? [];
   const last = said[said.length - 1];
-  // The last of a reply is still being drawn after the last of it has
-  // arrived, and the Message it became stands aside until that is done.
-  // Swapping it in on time would put the held-back end of the reply onto the
-  // page in one piece, which is the one place the pacing would show.
+  // A reply is still being drawn after the last of it has arrived, so the
+  // Message it became stands aside until that is done; swapping it in on time
+  // would put the held-back end onto the page in one piece.
   //
-  // Only the Message this reply became waits, and it is recognised by
-  // carrying what has been drawn so far: a turn that was stopped or that
-  // failed before the advisor wrote anything leaves something else last, and
-  // that has its own account of itself to give and does not wait for this.
+  // Recognised by carrying what has been drawn so far: a turn that was stopped
+  // or failed before the advisor wrote leaves something else last, which has
+  // its own account to give and does not wait.
   const standingIn =
     arriving === null &&
     reply.writing &&
@@ -122,36 +105,31 @@ export function ConversationPane({
     last.content.startsWith(reply.text);
   const shown = standingIn ? said.slice(0, -1) : said;
 
-  // Read during the render, which is the transcript as it stands *before* this
-  // update reaches the page — the only moment that can say whether the
-  // traveler was at the foot before the arriving reply made it taller. A
-  // layout effect is already too late: by the time one runs the reply has
-  // grown the transcript and every position looks scrolled away from. The
-  // scroll listener cannot answer it either, because a browser delivers one
-  // coalesced scroll event per frame, and a frame that contains both the
-  // traveler's wheel and the view following the reply reports only the foot.
+  // Read during the render — the transcript as it stands *before* this update
+  // reaches the page, which is the only moment that can say whether the
+  // traveler was at the foot before the reply made it taller. A layout effect
+  // is too late (the reply has already grown it), and a scroll listener cannot
+  // answer either: one coalesced event per frame reports only the foot.
   const view = transcript.current;
   const atFoot = view === null || atBottom(view);
 
   useLayoutEffect(() => {
-    // Follow the reply only for a traveler who was at the foot when it grew.
-    // One who had scrolled up to re-read something keeps their place.
+    // Follow the reply only for a traveler who was at the foot when it grew;
+    // one who scrolled up to re-read something keeps their place.
     if (!atFoot) return;
     toFoot(view);
   });
 
   useEffect(() => {
-    // A different Conversation opens at its own end, whatever was true of the
-    // one before it.
+    // A different Conversation opens at its own end.
     rejoin();
   }, [conversation?.id]);
 
   /**
    * Go to the foot, where the reply is, and follow it from there.
    *
-   * Gently when the traveler asked to go there, and at once when the
-   * Conversation changed under them — a Conversation opening at its end has
-   * no distance to travel that anybody watched.
+   * Gently when the traveler asked, and at once when the Conversation changed
+   * under them — that one has no distance to travel that anybody watched.
    */
   function rejoin(gently = false) {
     setFollowing(true);
@@ -164,9 +142,9 @@ export function ConversationPane({
     said.length === 0 && arriving === null && unrecorded === null && stopped === null;
 
   return (
-    // `tabIndex` so that focus actually lands here when the skip link is
-    // followed: a browser moves focus to the target of a fragment link only
-    // if the target can hold it, and a landmark cannot by default.
+    // `tabIndex` so focus lands here when the skip link is followed: a browser
+    // only moves focus to a fragment target that can hold it, and a landmark
+    // cannot by default.
     <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col outline-none">
       <header className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-3 sm:px-6 sm:py-4">
         {onShowConversations !== null && (
@@ -182,10 +160,8 @@ export function ConversationPane({
         )}
 
         <h1 className="flex min-w-0 flex-1 items-center truncate font-display text-title font-semibold text-ink">
-          {/* "New conversation" is what a Conversation with no title is called,
-              and before the read comes back nothing knows whether this is one.
-              The heading stands in at a title's height so the header does not
-              change height when the real one lands. */}
+          {/* Stands in at a title's height, so the header does not change
+              height when the real one lands. */}
           {resuming ? (
             <Skeleton className="h-4 w-48" />
           ) : (
@@ -210,9 +186,8 @@ export function ConversationPane({
         <div
           ref={transcript}
           onScroll={(scrolled) => setFollowing(atBottom(scrolled.currentTarget))}
-          // Contained, so a flick past the end of the transcript does not
-          // carry on into whatever is behind it and does not rubber-band the
-          // page itself.
+          // Contained, so a flick past the end does not carry on into what is
+          // behind it or rubber-band the page.
           className="h-full overflow-y-auto overscroll-contain px-4 py-8 sm:px-6"
         >
           <div className="mx-auto flex max-w-reading flex-col gap-8">
@@ -221,8 +196,7 @@ export function ConversationPane({
             {!resuming && untouched && (
               <FirstRun
                 onStarter={(prompt) => {
-                  // Filled, not sent: the opening is a starting point, and the
-                  // traveler is the one who decides it is right.
+                  // Filled, not sent: the traveler decides it is right.
                   onDraft(prompt);
                   field.current?.focus();
                 }}
@@ -240,19 +214,16 @@ export function ConversationPane({
                   <NotAnswered
                     failure={message.failure}
                     // Only the last turn can be run again: a reply arriving
-                    // above questions the traveler has since asked would
-                    // answer one they have moved on from. An older failure
-                    // keeps its marker and says what happened, which is what
-                    // it was kept for.
+                    // above questions since asked would answer one they have
+                    // moved on from. An older failure keeps its marker.
                     onRetry={message.id === last?.id ? () => onRetry(message) : null}
                   />
                 )}
               </MessageView>
             ))}
 
-            {/* Above the reply it is holding up, so the pause reads as the
-                advisor going and looking rather than as a hang. It goes when
-                the lookup does, which is before the answer lands. */}
+            {/* Above the reply it holds up, so the pause reads as the advisor
+                going and looking rather than as a hang. */}
             {consulting !== null && <Consulting activity={consulting} />}
 
             {(arriving !== null || standingIn) && (
@@ -315,12 +286,10 @@ export function ConversationPane({
         />
       </div>
 
-      {/* Mounted from the start and empty, because a live region that arrives
-          already holding its text is commonly not announced at all. Each
-          sentence is added as a node of its own rather than replacing the
-          last, both because `additions` is what a reader is watching for and
-          because two turns running say "The advisor is replying." — the same
-          string written twice is not a change anybody would report. */}
+      {/* Mounted from the start and empty: a live region arriving with its
+          text already in it is commonly not announced. Each sentence is its
+          own node rather than replacing the last, because `additions` is what
+          a reader watches for and the same string twice is not a change. */}
       <div aria-live="polite" aria-relevant="additions" className="sr-only">
         {announcements.map((announcement) => (
           <p key={announcement.at}>{announcement.text}</p>
@@ -333,14 +302,10 @@ export function ConversationPane({
 /**
  * What a screen reader is told about a reply it cannot watch arrive.
  *
- * The reply is read out as it is written, a sentence at a time, because
- * following the answer as it arrives is the whole of what streaming is for
- * and a traveler using a screen reader is owed the same thing as one watching
- * the caret. Each sentence is *added* to the region rather than replacing
- * what is there, which is what makes a reader read it rather than abandon the
- * last one; the markup is dropped first, since "hash hash" is not a word
- * anybody said. A turn that failed is not announced here — its error is an
- * alert of its own, and saying it twice is worse than saying it once.
+ * Read out a sentence at a time as it is written, each one *added* rather than
+ * replacing what is there so the reader speaks it instead of abandoning the
+ * last. Markup is dropped first — "hash hash" is not a word anybody said. A
+ * failed turn is not announced here; its error is an alert of its own.
  */
 function useAnnouncement({
   replying,
@@ -359,14 +324,13 @@ function useAnnouncement({
   /** Add something to be read out, after whatever is still being read. */
   const say = (text: string) =>
     setAnnouncements((said) =>
-      // Only the tail is kept: what a reader has already spoken is of no use
-      // to anyone, and an hour of Conversation is not a thing to hold in a
-      // hidden element.
+      // Only the tail is kept: an hour of Conversation is not a thing to hold
+      // in a hidden element.
       [...said, { at: (said[said.length - 1]?.at ?? 0) + 1, text }].slice(-KEPT),
     );
 
-  // How much of this reply has been read out already, so that a fragment
-  // arriving does not start it again from the beginning.
+  // How much has been read out already, so an arriving fragment does not start
+  // the reply again from the beginning.
   const announced = useRef(0);
   const began = useRef(false);
 
@@ -391,11 +355,9 @@ function useAnnouncement({
     }
   }, [replying, arriving]);
 
-  // What is on screen at the moment the reply stops moving, which is not what
-  // the effect below closed over when the reply started. Written in an effect
-  // of its own rather than during the render, and declared first, because
-  // effects run in the order they are written: by the time the one below
-  // reads this, this commit has already put the finished reply in it.
+  // What is on screen when the reply stops moving, which is not what the
+  // effect below closed over when it started. Declared first because effects
+  // run in order: by the time the one below reads this, it holds the finish.
   const now = useRef({ stopped, reply });
   useEffect(() => {
     now.current = { stopped, reply };
@@ -428,17 +390,15 @@ const KEPT = 8;
 /**
  * A turn that did not answer, and the way to have another go at it.
  *
- * The label above the sentence is the whole of what this ticket is for: an
- * evaluator staring at a machine that will not answer needs to know within a
- * second whether they forgot a key, ran out of credit, or found a bug, and
- * "something went wrong" tells them none of the three.
+ * The label above the sentence says whether a key is missing, credit ran out
+ * or this is a bug — "something went wrong" tells none of the three.
  */
 function NotAnswered({
   failure,
   onRetry,
 }: {
   failure: Failure;
-  /** How to run it again, and null on a turn that is not the one to run. */
+  /** Null on a turn that is not the one to run. */
   onRetry: (() => void) | null;
 }) {
   return (
@@ -480,23 +440,16 @@ function Consulting({ activity }: { activity: string }) {
 /**
  * The greeting and the openings, drawn. Why they exist is in `firstRun.ts`.
  *
- * An index and a rule each, read down — not a grid of cards. Four bordered
- * boxes in a two-by-two is the shape every chat application opens with, and
- * it is the wrong shape besides: the four openings are not four choices of
- * equal weight to be compared across, they are a list to be read down and
- * abandoned as soon as one of them is close enough. A list is read down in
- * one movement; a grid asks the eye to scan two axes to find that out.
- *
- * Nothing here is a card, so nothing here needs a border, a fill and a
- * shadow to be told apart from the page. A hairline between each is enough,
- * and the whole set costs the first screen four rules instead of four boxes.
+ * An index and a rule each, read down — not a grid of cards. The openings are
+ * a list to abandon as soon as one is close enough, not four choices of equal
+ * weight to compare across, and a hairline between each is enough to separate
+ * them without a border, a fill and a shadow.
  */
 function FirstRun({ onStarter }: { onStarter: (prompt: string) => void }) {
   return (
     <section className="flex flex-col gap-8 pt-2">
-      {/* Balanced rather than ragged: the greeting is the largest thing on the
-          first screen anyone sees, and a last line holding one word is the
-          thing they would notice about it. */}
+      {/* Balanced rather than ragged: this is the largest thing on the first
+          screen, and a last line holding one word is what they would notice. */}
       <p className="max-w-[24ch] font-display text-display text-balance text-ink">{GREETING}</p>
 
       <ul className="flex flex-col border-b border-line">
@@ -504,9 +457,8 @@ function FirstRun({ onStarter }: { onStarter: (prompt: string) => void }) {
           <li key={starter.asks}>
             <button
               type="button"
-              // Pulled out past the measure and padded back in, so the row the
-              // pointer is on lights up with a margin around the words rather
-              // than clipping them at the edge of the highlight.
+              // Pulled out past the measure and padded back in, so the lit row
+              // has a margin around the words rather than clipping them.
               className="group -mx-3 flex w-[calc(100%+1.5rem)] items-baseline gap-4 border-t border-line px-3 py-3.5 text-left pressable-row hover:bg-sunken"
               onClick={() => onStarter(starter.prompt)}
             >
@@ -517,11 +469,9 @@ function FirstRun({ onStarter }: { onStarter: (prompt: string) => void }) {
                 <span className="text-heading font-medium text-ink">{starter.label}</span>
                 <span className="text-meta text-ink-muted">{starter.prompt}</span>
               </span>
-              {/* Where the question is going, which is the composer rather
-                  than the advisor: these fill the field, they do not send.
-                  Drawn only under a pointer that is on the row, because four
-                  arrows down the first screen is four times the same
-                  instruction. */}
+              {/* Where the question is going: the composer, not the advisor.
+                  Only under the pointer, because four arrows down the first
+                  screen is four times the same instruction. */}
               <ArrowDownLeft
                 {...smallIcon}
                 className="ms-auto shrink-0 self-center text-ink-subtle opacity-0 transition-opacity group-hover:opacity-100"
@@ -544,39 +494,33 @@ function MessageView({
 }: {
   role: Message["role"];
   content: string;
-  /** Where this Message's fetched claims came from. Empty when it fetched none. */
   citations?: Citation[];
-  /** True while this Message is still being written into the Conversation. */
   writing?: boolean;
-  /** Anything belonging to this Message rather than to the transcript. */
   children?: React.ReactNode;
 }) {
   const traveler = role === "traveler";
   return (
-    // Full width and set as prose. The two voices are told apart by the face
-    // they are set in rather than by a bubble, so a long itinerary has the
-    // whole measure to be read across.
+    // Full width and set as prose. The two voices are told apart by their
+    // face rather than by a bubble, so a long itinerary has the whole measure.
     <article className="flex flex-col gap-2">
       <h2 className="font-mono text-micro uppercase text-ink-subtle">
         {traveler ? "You" : "Advisor"}
       </h2>
       {traveler ? (
-        // Their own words, shown back exactly as typed. Markdown is what the
-        // advisor writes, not what the traveler is made to write.
+        // Their own words, exactly as typed: Markdown is the advisor's to
+        // write, not the traveler's.
         <p className="whitespace-pre-wrap font-display text-title font-medium text-ink">
           {content}
         </p>
       ) : (
-        // A turn that failed before the advisor had written anything leaves an
-        // empty Message, and what there is to show is the failure under it.
-        // A reply that has not written its first word yet is not that: it is
-        // still arriving, and the caret is what says so.
+        // A turn that failed before the advisor wrote leaves an empty Message,
+        // and the failure under it is what there is to show. A reply still
+        // arriving is not that — the caret says so.
         (content !== "" || writing) && <Prose text={content} writing={writing} />
       )}
       <Citations citations={citations} />
-      {/* Under the reply and under its sources, so what the traveler takes
-          away is the whole of what the advisor said. A reply still being
-          written has nothing settled to take. */}
+      {/* Under the reply and its sources, so what is taken away is the whole
+          of it. A reply still being written has nothing settled to take. */}
       {!traveler && !writing && content !== "" && <CopyReply text={content} />}
       {children}
     </article>
@@ -587,21 +531,16 @@ function MessageView({
  * The reply, taken away — into an itinerary, a note, a message to whoever else
  * is going.
  *
- * What it copies is the reply as the advisor wrote it, Markdown and all,
- * rather than the text the page happens to be showing: pasted into anything
- * that reads Markdown the headings and lists come back, and pasted into a
- * plain field it is still a reply somebody can read.
- *
- * The confirmation is the button itself, because the traveler who pressed it
- * is looking at it: the icon becomes a tick for a moment. A clipboard can also
- * refuse — an insecure origin, a browser that will not hand it over — and a
- * button that quietly does nothing is worse than one that says it could not.
+ * Copies the Markdown the advisor wrote rather than the text on screen, so the
+ * headings and lists come back wherever it lands. The confirmation is the
+ * button itself, which the traveler is already looking at; a clipboard can
+ * refuse, and a button that quietly does nothing is worse than one that says so.
  */
 function CopyReply({ text }: { text: string }) {
   const [said, setSaid] = useState<"copy" | "copied" | "refused">("copy");
   const settling = useRef<number | undefined>(undefined);
-  // Dropped on the way out, so a Conversation closed just after a press does
-  // not come back to a Message that is no longer on the page.
+  // Dropped on the way out, so a press just before closing does not come back
+  // to a Message that has left the page.
   useEffect(() => () => window.clearTimeout(settling.current), []);
 
   async function copy() {
@@ -618,9 +557,8 @@ function CopyReply({ text }: { text: string }) {
   const refused = said === "refused";
   const label = said === "copied" ? "Copied" : refused ? "Could not copy" : "Copy";
   return (
-    // Pulled back by its own padding, so the icon sits on the same line the
-    // reply above it is set to rather than a few pixels inside it. Positioned,
-    // because the Tip hangs off it.
+    // Pulled back by its own padding so the icon sits on the reply's line
+    // rather than inside it. Positioned, because the Tip hangs off it.
     <div className="relative -ms-1.5 flex w-fit items-center">
       <button
         type="button"
@@ -637,9 +575,8 @@ function CopyReply({ text }: { text: string }) {
         )}
       </button>
       <Tip label={label} refused={refused} />
-      {/* Said rather than drawn: the tick is only a confirmation to somebody
-          who can see it, and nothing else on the page changes to prove the
-          press landed. */}
+      {/* Said rather than drawn: the tick confirms nothing to somebody who
+          cannot see it, and nothing else changes to prove the press landed. */}
       <span role="status" className="sr-only">
         {said === "copy" ? "" : label}
       </span>
@@ -651,30 +588,22 @@ function CopyReply({ text }: { text: string }) {
 const SAID_FOR = 2000;
 
 /**
- * The word for a control that is drawn as an icon, in this application's own
- * materials.
+ * The word for an icon control, in this application's own materials.
  *
- * A native `title` is the operating system's tooltip: its own grey, its own
- * corners, its own half-second of delay, drawn from nothing this application
- * decided. One of those under a reply is the only thing on the screen that
- * did not come out of `tokens.css`, and it looks it.
+ * A native `title` is the operating system's tooltip and would be the one
+ * thing on screen not out of `tokens.css`. This is cut from the same paper as
+ * every other floating thing here, and arrives the way a panel does.
  *
- * So it is cut from the paper every other floating thing here is cut from — a
- * surface, a hairline and the floating shadow — lettered like every other
- * label in the interface, and it arrives the way a panel arrives.
- *
- * It carries no role and is hidden from the accessibility tree: the control
- * it belongs to is already named, and a tooltip that is also that name is the
- * name said twice. It answers the pointer and the keyboard both, and a finger
- * neither — a touch screen has no hover, which is why nothing in this
- * application is ever said *only* in here.
+ * Hidden from the accessibility tree — the control it belongs to is already
+ * named. It answers pointer and keyboard but not touch, which is why nothing
+ * here is ever said *only* in a Tip.
  */
 function Tip({ label, refused = false }: { label: string; refused?: boolean }) {
   return (
     <span
       aria-hidden="true"
-      // Hidden rather than faded out, so each hover starts the arrival again
-      // and a tooltip is never left lying over the transcript.
+      // Hidden rather than faded, so each hover starts the arrival again and
+      // no tooltip is left lying over the transcript.
       className={`pointer-events-none absolute bottom-full start-0 mb-1.5 hidden animate-panel whitespace-nowrap rounded-control border border-line bg-surface px-2 py-1 font-mono text-micro uppercase shadow-floating peer-hover:block peer-focus-visible:block ${
         refused ? "text-error" : "text-ink-muted"
       }`}

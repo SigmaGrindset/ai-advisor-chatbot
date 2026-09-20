@@ -8,18 +8,13 @@ import { factSaid, inReadingOrder, SUBJECT_LABELS } from "./listing";
 /**
  * The Traveler Profile, drawn, and the control that leaves nothing behind.
  *
- * It draws itself and nothing around itself: the tab strip and the heading are
- * the record pane's, and where the pane goes is the shell's.
- *
- * Everything the advisor durably knows is listed here in plain language, one
- * fact at a time, each with the way to delete it — which is the whole of what
- * ADR-0001 made the profile a structured list of facts for, and what ADR-0004
- * promises a traveler who has handed over a nationality and a home city.
+ * Everything the advisor durably knows, in plain language, one fact at a time
+ * and each with the way to delete it — what ADR-0001 made the profile a list
+ * of facts for, and what ADR-0004 promises.
  *
  * The clear-everything control shares the panel because this is where a
- * traveler comes to ask what is kept about them. It is not about the profile
- * alone and says so: what it deletes is every Conversation and every Trip as
- * well.
+ * traveler comes to ask what is kept about them. It says that it deletes
+ * every Conversation and Trip as well.
  */
 export function ProfilePanel({
   profile,
@@ -36,9 +31,8 @@ export function ProfilePanel({
   return (
     <div className="flex flex-col gap-7">
       {profile.length === 0 ? (
-        // The ordinary state of a first visit, so it says what will fill it —
-        // and says up front that nothing arrives here the traveler cannot take
-        // straight back out.
+        // The ordinary state of a first visit, so it says what will fill it,
+        // and that nothing arrives here they cannot take straight back out.
         <p className="text-meta text-ink-subtle">
           The advisor has not recorded anything about you yet. As you talk it keeps what
           will still be true of your next trip — your nationality, where you travel from,
@@ -77,11 +71,9 @@ export function ProfilePanel({
 }
 
 /**
- * Leaving nothing behind.
- *
- * Asked once before it happens, with named controls rather than an undo nobody
- * is offered — the same two-step the Conversation list deletes a row with,
- * because this is that decision about everything at once.
+ * Leaving nothing behind. Asked once first, with named controls — the same
+ * two-step the Conversation list deletes a row with, this being that decision
+ * about everything at once.
  */
 function Erasing({ onClear }: { onClear: () => void }) {
   const [confirming, setConfirming] = useState(false);

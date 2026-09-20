@@ -1,22 +1,16 @@
 """Asking the utility model for one short piece of prose.
 
-Two small jobs the traveler never sees go to the cheaper model configured beside
-the conversation one — naming a Conversation after its first exchange
-(`titles.py`) and writing the rolling Compaction summary (`compaction.py`) — and
-both want exactly the same thing of it: one unstreamed completion, and whatever
-it wrote, or nothing.
+Two small jobs the traveler never sees — naming a Conversation (`titles.py`)
+and writing the Compaction summary (`compaction.py`) — want the same thing of
+the cheaper model: one unstreamed completion, and whatever it wrote, or
+nothing.
 
-"Or nothing" covers both ways the call can disappoint, because to either caller
-they are one way: a call that did not come back, and a call that came back
-saying nothing. Neither is worth failing a turn over, so nothing is raised here.
-What to do instead is the caller's, and the two answer it differently — a
-Conversation falls back to the traveler's own first words, and Compaction folds
-nothing away and tries again next turn.
+Nothing covers both ways the call can disappoint, neither of which is worth
+failing a turn over, so nothing is raised here. What to do instead is the
+caller's, and the two answer it differently.
 
-The nested web search is not one of these, even though it too runs on the
-utility model: it is asked for its sources as much as its prose, it carries the
-web plugin and its own timeout, and a failure there becomes a tool result the
-advisor explains. It stays in `searching.py`.
+The nested web search runs on the same model but stays in `searching.py`: it
+is asked for sources as much as prose, and carries its own plugin and timeout.
 """
 
 import logging

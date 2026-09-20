@@ -1,11 +1,9 @@
 /**
  * What a traveler who has never been here before is shown.
  *
- * The greeting is interface, not a Message. It is composed here and drawn by
- * the transcript, and it is never sent anywhere and never persisted, so a
- * Conversation contains only things that were actually said in it. The
- * consequence is that it is also never in the advisor's prompt — the advisor
- * has not greeted anyone, the application has.
+ * The greeting is interface, not a Message: never sent and never persisted,
+ * so a Conversation holds only what was actually said in it and the advisor's
+ * prompt never carries a greeting the advisor did not give.
  */
 
 export const GREETING =
@@ -23,13 +21,10 @@ export type Starter = {
 };
 
 /**
- * Four openings, chosen to show what the advisor can actually do.
- *
- * Three of them are questions no model can answer from memory — entry rules
- * change, a rate is this morning's, and the weather on a week next June is
- * either forecast or measured but never recalled — so the first thing a
- * traveler sees is the advisor going and looking. The fourth is open, because
- * the application is not a lookup service.
+ * Four openings, chosen to show what the advisor can actually do. Three are
+ * questions no model can answer from memory, so the first thing a traveler
+ * sees is the advisor going and looking; the fourth is open, because this is
+ * not a lookup service.
  */
 export const STARTERS: readonly Starter[] = [
   {

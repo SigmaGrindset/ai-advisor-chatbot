@@ -1,16 +1,12 @@
 """A Conversation that has gone on for weeks.
 
-Everything here is driven through the API the way the browser drives it, and
-what is asserted is what a traveler would notice: that a long Conversation goes
-on working, that scrolling back through it still shows every word they said, and
-that nothing anywhere mentions any of this. What the advisor is told about the
-*other* Conversations the traveler has going is in `test_many_conversations.py`,
-beside the rest of what keeping several of them apart means.
+Driven through the API the way the browser drives it, asserting what a
+traveler would notice: that a long Conversation goes on working, that
+scrolling back still shows every word, and that nothing mentions any of this.
 
-The budget is crossed by saying long things rather than by reaching in and
-lowering it. What that costs is three messages instead of one; what it buys is
-a test that fails if `TRANSCRIPT_BUDGET` is ever raised past what a real
-Conversation reaches.
+The budget is crossed by saying long things rather than by lowering it, which
+costs three messages instead of one and buys a test that fails if
+`TRANSCRIPT_BUDGET` is ever raised past what a real Conversation reaches.
 """
 
 from typing import Any

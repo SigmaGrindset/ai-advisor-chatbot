@@ -1,39 +1,29 @@
 /**
  * The colour a Trip is known by, wherever it is mentioned.
  *
- * Trips are not assigned colours; they are recognised by them. The colour is
- * derived from the Trip's identity, so the same Trip looks the same in the
- * conversation list, on a chip beside a Message and in the Trip Plan, with
- * nothing stored and nothing to keep in step.
+ * Derived from the Trip's identity rather than assigned, so the same Trip
+ * looks the same everywhere with nothing stored and nothing to keep in step.
+ * Identity chooses the hue alone; lightness and chroma are fixed, so no Trip
+ * draws a colour nobody can read.
  *
- * Hue is the only thing the identity chooses. Lightness and chroma are fixed,
- * which is what makes every Trip's chip equally pale and its label equally
- * readable, rather than one Trip happening to draw a colour nobody can read.
- *
- * These are the one set of colours in the application that a stylesheet
- * cannot hold, because there is no list of them to write down — there are as
- * many as the traveler has Trips. So this is the one place that has to be
- * told which theme is showing, and it is told rather than asked: the two
- * recipes below are the light and the dark, and a Trip keeps its hue across
- * the move. The same journey is the same colour with the lamp off.
+ * There are as many of these as the traveler has Trips, so no stylesheet can
+ * hold them — which makes this the one place that has to be told which theme
+ * is showing. A Trip keeps its hue across the move.
  */
 
 import type { Scheme } from "./theme";
 
 /** The three colours a Trip chip is drawn with, as `#rrggbb`. */
 export type TripPastel = {
-  /** The chip's fill. */
   background: string;
-  /** The hairline that separates the fill from whatever is behind it. */
   border: string;
-  /** The label on the fill. */
   ink: string;
 };
 
 /**
- * Twelve hues, far enough apart to be told apart at chip size. A continuous
- * hue would let two Trips land three degrees from each other and look
- * identical without being identical, which is worse than an honest repeat.
+ * Twelve hues, far enough apart to tell apart at chip size. A continuous hue
+ * would let two Trips land three degrees apart and look identical without
+ * being identical, which is worse than an honest repeat.
  */
 const HUES = 12;
 const FIRST_HUE = 15;
@@ -42,15 +32,10 @@ const FIRST_HUE = 15;
 type Recipe = { lightness: number; chroma: number };
 
 /**
- * On paper: a pale wash, a hairline a little deeper, and a label dark enough
- * to read on the wash.
- *
- * In the dark the recipe turns over, as the surfaces do — the wash is a deep
- * one and the label is the pale thing on it. Not the same numbers inverted:
- * chroma comes down on the fill, because a saturated dark fill on a near-black
- * rail reads as a colour sample rather than as a chip, and comes down on the
- * label too, because a bright saturated small text is the one thing on a dark
- * screen that vibrates.
+ * On paper: a pale wash, a deeper hairline, a label dark enough to read on it.
+ * In the dark the recipe turns over, but not by inverting the numbers — chroma
+ * comes down on the fill, which would otherwise read as a colour sample on a
+ * near-black rail, and on the label, which would otherwise vibrate.
  */
 const RECIPES: Record<Scheme, { fill: Recipe; hairline: Recipe; label: Recipe }> = {
   light: {
@@ -87,7 +72,7 @@ function hash(text: string): number {
 
 /**
  * Oklch to sRGB, so the recipe above can be stated in perceptual terms and
- * still come out as a colour every browser and every test can read.
+ * still come out as a colour every browser and test can read.
  */
 function oklchToHex(lightness: number, chroma: number, hue: number): string {
   const radians = (hue * Math.PI) / 180;

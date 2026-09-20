@@ -1,16 +1,12 @@
 /**
  * The fields of a Trip Plan, read as text and written back from it.
  *
- * Everything the traveler edits, they edit as text in a field, so there is a
- * reading in each direction: what a field holds, for an editor to open with,
- * and what typing means, for a patch to carry. Both are here so the two
- * cannot drift — a field that reads `2400` and saves `2,400` is a field that
- * rewrites itself every time it is opened.
+ * A reading in each direction, kept together so the two cannot drift: a field
+ * that reads `2400` and saves `2,400` rewrites itself every time it opens.
  *
- * Writing back is deliberately conservative. Text that is not a value at all
- * — letters in the party size, half a date from a date field mid-entry — is
- * not a request to empty the field, so it patches nothing. Emptying is a
- * thing the traveler does on purpose, by clearing the field.
+ * Writing back is conservative. Text that is not a value at all — letters in
+ * the party size, half a date mid-entry — is not a request to empty the
+ * field, so it patches nothing. Emptying is done by clearing the field.
  */
 
 import { PLAN_FIELDS, type PlanField, type PlanPatch, type TripPlan } from "../../api/types";
@@ -20,11 +16,9 @@ export function isScalar(field: string): field is PlanField {
 }
 
 /**
- * What a field holds, as text — which is both what an editor opens with and
- * what a suggestion offers.
- *
- * An empty string for a field that holds nothing, and null for a field this
- * plan has not got: an Itinerary Item that has since been removed.
+ * What a field holds, as text: what an editor opens with and what a
+ * suggestion offers. Empty for a field holding nothing, null for one this
+ * plan has not got — an Itinerary Item since removed.
  */
 export function valueOf(plan: TripPlan, field: string): string | null {
   switch (field) {
@@ -67,8 +61,7 @@ export function asPatch(field: PlanField, typed: string): PlanPatch {
       return Number.isInteger(many) && many >= 1 ? { party_size: many } : {};
     }
     case "budget_amount": {
-      // Whatever separators they reached for. A budget typed as 2,400 is a
-      // budget of 2400, not a refusal to read it.
+      // A budget typed as 2,400 is a budget of 2400, not a refusal to read it.
       const amount = Number(text.replace(/[\s,]/g, ""));
       return Number.isFinite(amount) && amount >= 0 ? { budget_amount: amount } : {};
     }

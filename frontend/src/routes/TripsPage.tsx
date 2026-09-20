@@ -16,23 +16,14 @@ import { tripPastel } from "../design/tripPastel";
  * Every Trip the traveler is planning, in one place.
  *
  * The Trip Plan is not a page — it belongs beside the Conversation producing
- * it (ADR-0006) — but the *set* of Trips is, because it is the one thing in
- * this application that is about none of the open Conversations in
- * particular. It is where a traveler planning two journeys at once finds out
- * that they are, and which Conversations went where.
+ * it (ADR-0006) — but the *set* of Trips is, being the one thing here about
+ * none of the open Conversations in particular. Each is shown with its plan
+ * and the Conversations refining it, so several about one journey read as a
+ * group; the ones on no Trip sit at the foot, where every Conversation starts.
  *
- * Each Trip is shown with what its plan holds and the Conversations refining
- * it, because that is what makes several Conversations about one journey read
- * as a group rather than as a list that happens to repeat a word. The ones on
- * no Trip are shown at the foot under a heading of their own: every
- * Conversation starts there, and one the advisor has not placed is not a Trip
- * of one.
- *
- * It is also the only place a Trip can be deleted, for the same reason: what
- * a traveler is deciding when they delete one is which journeys they are
- * still planning, and that is a question about all of them at once. A control
- * for it beside the plan — which is beside a Conversation — would ask it in
- * the middle of the answer.
+ * It is also the only place a Trip can be deleted, for the same reason: that
+ * decision is about all of them at once, and a control beside the plan would
+ * ask it in the middle of the answer.
  */
 export function TripsPage({
   trips,
@@ -47,12 +38,7 @@ export function TripsPage({
   conversations: ConversationSummary[];
   /** The Conversation being read, which is marked wherever it is listed. */
   currentId: string | null;
-  /**
-   * What went wrong here, if something did. Deleting a Trip is the one thing
-   * this page does rather than shows, so it is the one thing that can fail on
-   * it — and a deletion that quietly did not happen is worse than one that
-   * says so, because the trip is still on the page either way.
-   */
+  /** Deleting a Trip is the one thing this page does, so the one that can fail. */
   failure: string | null;
   /** Open a Conversation, which is also the way back to it. */
   onOpen: (id: string) => void;
@@ -61,8 +47,7 @@ export function TripsPage({
   onBack: () => void;
 }) {
   const { trips: gatherings, unattached } = gathered(trips, conversations);
-  // The Trip whose deletion is being confirmed, if one is. One at a time: a
-  // page with two open questions on it is a page with two half-made decisions.
+  // One at a time: two open questions is two half-made decisions.
   const [confirming, setConfirming] = useState<string | null>(null);
 
   return (
@@ -71,9 +56,7 @@ export function TripsPage({
       tabIndex={-1}
       className="flex min-w-0 flex-1 flex-col outline-none"
       onKeyDown={(pressed) => {
-        // Escape puts the question away, the same as it does over the
-        // Conversation list. The panel is a `manual` popover, which is the
-        // kind with no dismissal of its own.
+        // A `manual` popover has no dismissal of its own, as in the list.
         if (pressed.key === "Escape" && confirming !== null) {
           pressed.stopPropagation();
           setConfirming(null);
@@ -174,20 +157,14 @@ function Trip({
   const running = nights(plan.starts_on, plan.ends_on);
   const { scheme } = useTheme();
   return (
-    // A rule and room, not a box. A Trip is a heading with things under it —
-    // its facts, then the Conversations writing them — and a border drawn
-    // round that says only that it ends, which the next heading says anyway.
-    // The white fill said even less: on this canvas the two are a shade
-    // apart, so the card was a hairline pretending to be a surface.
+    // A rule and room, not a box: a border round a heading with things under
+    // it says only that it ends, which the next heading says anyway.
     <article className="flex flex-col gap-3 border-t border-line pt-6 pb-7">
       <div className="flex min-w-0 items-center gap-2">
         <h2 className="flex min-w-0 flex-1 items-center gap-2.5 font-display text-title font-semibold text-ink">
-          {/* The Trip's own colour, which is what its chip is drawn in wherever
-              a Conversation mentions it. Said in a swatch rather than a second
-              chip, because a heading that repeats itself in two type sizes is
-              not two facts. Squared off rather than round: the chip is the pill
-              in this application, and a second pill at a third the size reads
-              as a small chip rather than as a mark. */}
+          {/* The Trip's own colour. A swatch rather than a second chip: a
+              heading repeating itself in two type sizes is not two facts, and
+              a smaller pill would read as a chip rather than a mark. */}
           <span
             aria-hidden="true"
             className="size-3 shrink-0 rounded-[3px]"
@@ -253,21 +230,15 @@ export type OnDeletingTrip = "keep" | "delete";
 /**
  * Deleting a Trip, and the one question that has to be asked first.
  *
- * Two things go without asking, because they are not attached to the plan —
- * they *are* the plan: the Itinerary Items and the Open Questions. The
- * Conversations are the question. A traveler deleting a trip they have given
- * up on may well want the talk that went into it gone too, and a traveler
- * tidying a journey they recorded twice certainly does not — and neither
- * answer can be guessed from the gesture, because both are the same gesture.
+ * The Itinerary Items and Open Questions go without asking; they *are* the
+ * plan. The Conversations are the question, and neither answer can be guessed
+ * from the gesture, because both are the same gesture.
  *
- * So it is a checkbox rather than two buttons or two menu items: one decision
- * is being made, with a detail attached to it, and the detail is easier to
- * read as a sentence that is either true or false than as a second verb. It
- * starts unticked, and the line under it says what each answer means —
- * including that a kept Conversation is still a live one, and will start a
- * fresh plan the next time the advisor records something about a journey in
- * it. That is a surprise worth spending a line on here rather than leaving
- * the traveler to meet two messages later.
+ * A checkbox rather than two buttons: one decision with a detail attached,
+ * easier to read as a sentence that is true or false than as a second verb.
+ * The line under it says what each answer means, including that a kept
+ * Conversation will start a fresh plan — a surprise worth a line here rather
+ * than two messages later.
  */
 function DeleteTrip({
   name,
@@ -278,9 +249,7 @@ function DeleteTrip({
   onClose,
   onDelete,
 }: {
-  /** What this Trip is called, which is how the control is labelled. */
   name: string;
-  /** What the panel is called, so the control can point at what it opens. */
   panelId: string;
   /** How many Conversations are on this Trip, which is what is at stake. */
   refining: number;
@@ -289,14 +258,13 @@ function DeleteTrip({
   onClose: () => void;
   onDelete: (conversations: OnDeletingTrip) => void;
 }) {
-  // Unticked every time the question is asked, because it unmounts with the
-  // panel. Keeping a decision the traveler made about a different Trip, or
-  // about this one a minute ago, would be an answer they did not give.
+  // Unticked every time the question is asked, since it unmounts with the
+  // panel: keeping an answer given about another Trip is not an answer.
   const [going, setGoing] = useState(false);
   const { trigger, panel, landing } = useAnchoredPanel({
     open: confirming,
     // The panel grows a line when the checkbox changes what it says, so it is
-    // measured and placed again for the size it now is.
+    // measured and placed again.
     showing: going,
     onClose,
   });
@@ -322,16 +290,10 @@ function DeleteTrip({
           popover="manual"
           role="group"
           aria-label={`Delete ${name}`}
-          // The same sheet of paper the Conversation list lays over itself.
-          // `inset-auto` and `m-0` undo what a browser gives a popover of its
-          // own accord, which is a panel centred in the window; the corner it
-          // actually goes in is measured by `anchoredPanel`.
-          //
-          // One fixed width rather than one measured from the words in it. The
-          // line under the checkbox says a different thing for each answer, so
-          // a panel sized to its contents would change width under the cursor
-          // at the moment of the tick — the traveler would have moved the
-          // thing they were reading by reading it.
+          // `inset-auto` and `m-0` undo the browser's own centring; the corner
+          // it goes in is measured by `anchoredPanel`. Fixed width rather than
+          // measured from its words: the line under the checkbox differs per
+          // answer, so a fitted panel would move under the cursor on the tick.
           className="fixed inset-auto m-0 flex w-72 max-w-[calc(100vw-1rem)] flex-col gap-1 rounded-panel border border-line bg-surface p-1 text-meta shadow-floating"
         >
           <p className="px-2 pt-1 font-mono text-micro uppercase text-ink-subtle">
@@ -340,9 +302,8 @@ function DeleteTrip({
 
           {refining > 0 && (
             <>
-              {/* A label wrapping its own control, so the words are as
-                  pressable as the box — a target this small asked for on a
-                  phone is a target nobody hits (ADR-0007). */}
+              {/* A label wrapping its control, so the words are as pressable
+                  as the box: a target this small is one nobody hits (ADR-0007). */}
               <label className="flex cursor-pointer items-center gap-2 rounded-control px-2 py-1.5 text-ink hover:bg-sunken">
                 <input
                   type="checkbox"
@@ -352,9 +313,8 @@ function DeleteTrip({
                 />
                 Delete its {counted(refining, "conversation")} too
               </label>
-              {/* Said of one Conversation or of several, because a trip has
-                  either and "them" about a single thread is a sentence
-                  written for the common case rather than for this one. */}
+              {/* Said of one or of several: "them" about a single thread is a
+                  sentence written for the common case, not for this one. */}
               <p className="px-2 pb-1 text-micro text-ink-subtle">
                 {going
                   ? `Everything said in ${refining === 1 ? "it" : "them"} goes with the plan.`
@@ -373,11 +333,9 @@ function DeleteTrip({
             >
               Delete
             </button>
-            {/* Focus lands here rather than on the delete beside it, and on
-                the checkbox above it. The question is only being asked
-                because deleting cannot be taken back, and a question asked
-                for that reason should answer itself the safe way for whoever
-                presses the key they were already pressing. */}
+            {/* Focus lands here rather than on Delete or the checkbox: a
+                question asked because it cannot be taken back should answer
+                itself the safe way. */}
             <button
               ref={landing}
               type="button"

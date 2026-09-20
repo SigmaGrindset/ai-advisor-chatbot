@@ -1,30 +1,25 @@
 /**
  * What happens to the Trip Plan on screen when the advisor patches it.
  *
- * Ordinarily: it becomes the plan that arrived. The one exception is the field
- * the traveler has open and is typing into. That field keeps what the traveler
- * has, the rest of the patch lands as usual, and what the advisor wanted for it
- * is kept aside as a suggestion rather than thrown away or written over.
+ * Ordinarily it becomes the plan that arrived; the exception is the field the
+ * traveler has open. That keeps their value, and what the advisor wanted is
+ * kept aside as a suggestion rather than written over.
  *
- * Their *typing* is safe either way — a draft lives in the field, not in the
- * plan. What this protects is the value underneath it: cancel with Escape and
- * a traveler must come back to what they had, not to what arrived while they
- * were looking at it, and blur must save what they typed rather than lose the
- * race with a patch.
+ * Their typing is safe either way — a draft lives in the field. What this
+ * protects is the value underneath: Escape must come back to what they had,
+ * and blur must save what they typed rather than lose a race with a patch.
  *
- * Separated from the panel because it is the part with an opinion in it. Which
- * of two writers wins a field is a decision; drawing a plan is not.
+ * Separated from the panel because which of two writers wins a field is a
+ * decision, and drawing a plan is not.
  */
 
 import type { TripPlan } from "../../api/types";
 import { valueOf } from "./fields";
 
 /**
- * What the traveler is editing, and null when they are editing nothing.
- *
- * A scalar field by its own name, an Itinerary Item by its identifier — the
- * same names the server sends back as having changed, so the two sides are
- * talking about the same things without a mapping between them.
+ * What the traveler is editing: a scalar by its name, an Itinerary Item by
+ * its identifier — the same names the server sends back as having changed, so
+ * the two sides need no mapping between them.
  */
 export type Editing = string | null;
 
@@ -39,11 +34,8 @@ export type Merged = {
 
 /**
  * The plan to show once a patch has arrived, and anything it wanted for a
- * field that was not its to take.
- *
- * `changed` is what the patch says it moved. A field the traveler has open
- * that the patch did not move is not a conflict — the patch is simply about
- * something else, and there is nothing to tell them.
+ * field that was not its to take. A field the traveler has open that the
+ * patch did not move is not a conflict.
  */
 export function merged(
   showing: TripPlan | null,
@@ -51,16 +43,16 @@ export function merged(
   changed: readonly string[],
   editing: Editing,
 ): Merged {
-  // Nothing open, nothing to show yet, or a different Trip altogether — in
-  // which case whatever was being edited was being edited on another plan.
+  // Nothing open, nothing to show yet, or a different Trip — in which case
+  // whatever was open was open on another plan.
   if (editing === null || showing === null || showing.trip_id !== incoming.trip_id) {
     return { plan: incoming, suggestions: [] };
   }
 
   const mine = valueOf(showing, editing);
   const theirs = valueOf(incoming, editing);
-  // An Itinerary Item the advisor removed while the traveler was editing it.
-  // There is no field left to be immune: the row is gone.
+  // An Item the advisor removed while it was being edited: the row is gone,
+  // so there is no field left to be immune.
   if (mine === null || theirs === null) return { plan: incoming, suggestions: [] };
 
   return {

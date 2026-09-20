@@ -1,33 +1,16 @@
 """The Live-data Tools: what the advisor calls when it must not guess.
 
-Five capabilities, of two kinds. Four are keyless public services — Open-Meteo
-for the weather now and for the weather over the days of a trip, Frankfurter
-for exchange rates, and the World Bank for a country's basics — none of which
-needs a second credential, which is the constraint the whole choice was made
-under (ADR-0003, and ADR-0008 for why the country one is not the one ADR-0003
-named). The fifth is a web search, which is a nested model call rather than an
-HTTP GET and lives in `searching.py`.
+Four keyless public services — Open-Meteo twice, Frankfurter, the World Bank
+(ADR-0003) — plus a web search, which is a nested model call and lives in
+`searching.py`.
 
-The two weather tools are two tools because they answer two different
-sentences: one reports a reading taken, the other a forecast made or a decade
-of Junes averaged, and a single tool returning any of the three would be one
-the advisor could quote without knowing which it had.
-
-Four of the five take arguments a traveler's words cannot fit into, which is
-what makes personal data structurally unable to travel with a lookup rather
-than merely unlikely to (ADR-0004). The one string the weather tools take is a
-place *label*: it is shown to the traveler while the lookup runs, it is refused
-if it carries a digit, and it is never part of the request. The search query is
-the single exception — a search needs words — and it is the single thing the
-guard in `privacy/queries.py` reads before it is allowed to leave.
-
-A call is read before it is made, because knowing what is about to be fetched
-is what lets the traveler be told what is happening while it happens, and
-because a call the application will not make must be stopped before it is made
-rather than after. What comes back from outside is wrapped in delimiters
-marking it as data rather than as anything anyone is asking for, and a lookup
-that fails becomes the result the advisor explains rather than an exception
-that collapses the turn.
+Their arguments are coordinates and standards-body codes, which a traveler's
+words cannot fit into (ADR-0004). The exceptions are the place label, shown to
+the traveler and never sent, and the search query, which `privacy/queries.py`
+guards. A call is read before it is made, so the traveler can be told what is
+happening and a call we will not make is stopped first. What comes back is
+wrapped in untrusted markers, and a failed lookup becomes a result the advisor
+explains rather than an exception.
 """
 
 import json
@@ -48,20 +31,17 @@ from . import searching
 
 logger = logging.getLogger(__name__)
 
-#: Short, because a traveler is watching a status line while this runs. Longer
-#: than this and the honest answer is that the source did not answer.
+#: Short, because a traveler is watching a status line while this runs.
 LIVE_DATA_TIMEOUT = httpx2.Timeout(4.0, connect=2.0)
 
-#: The call, and one retry. A source that has failed twice in a row inside one
-#: turn is not going to answer on a third try worth waiting for.
+#: The call, and one retry. A third is not worth the wait.
 ATTEMPTS = 2
 
-#: How long a place label may be. A place name is a label, not prose.
+#: A place name is a label, not prose.
 MAX_PLACE = 60
 
-#: What a tool result is wrapped in. The Advisor Instructions say that anything
-#: between these is data fetched from elsewhere and never an instruction —
-#: see `instructions.TOOL_GUIDANCE`.
+#: Anything between these is data and never an instruction — see
+#: `instructions.TOOL_GUIDANCE`.
 UNTRUSTED_OPEN = "<<<UNTRUSTED_TOOL_RESULT>>>"
 UNTRUSTED_CLOSE = "<<<END_UNTRUSTED_TOOL_RESULT>>>"
 
@@ -70,18 +50,14 @@ UNTRUSTED_CLOSE = "<<<END_UNTRUSTED_TOOL_RESULT>>>"
 class Citation:
     """Where a fetched claim came from, kept with the Message it went into."""
 
-    #: The service's own name, or the site's, as the traveler would recognise it.
+    #: The service's own name, as the traveler would recognise it.
     service: str
-    #: What was looked up there, in words.
     about: str
-    #: The exact request that produced it, so the traveler can go and look.
-    #: None when there is nowhere to go: a search that came back citing nothing
-    #: is still a search that happened, and still has a query to answer for.
+    #: The request that produced it, so the traveler can go and look. None when
+    #: there is nowhere to go — a search that cited nothing still happened.
     url: str | None
-    #: The exact query that was sent, on a Citation a web search left behind,
-    #: and None on every other. It is the only record of what left the machine
-    #: in words, so it is kept with the Message rather than only logged
-    #: (ADR-0004, ADR-0009).
+    #: The query a web search sent, and None on every other Citation. The only
+    #: record of what left the machine in words (ADR-0004, ADR-0009).
     query: str | None = None
 
     def recorded(self) -> dict[str, str | None]:
@@ -111,8 +87,8 @@ class Errand:
     service: str
     url: str
     params: Mapping[str, str]
-    #: How to read the service's answer. Anything it cannot make sense of it
-    #: raises, and the lookup fails the same way a timeout does.
+    #: Reads the service's answer. Raises on anything it cannot make sense of,
+    #: and the lookup then fails the same way a timeout does.
     read: Callable[[Any], Found]
 
 
@@ -120,17 +96,15 @@ class Errand:
 class Search:
     """A web search, with the query the guard has already finished with.
 
-    There is no field on here holding what the model originally asked for. What
-    the guard took out of a query is gone by the time this exists, so there is
-    nowhere further down for it to leak from.
+    What the model originally asked for is not kept, so there is nowhere
+    further down for it to leak from.
     """
 
     activity: str
     #: What will actually be sent — the guard's answer, not the model's ask.
     query: str
-    #: What kinds of thing the guard took out, in words, and empty when it took
-    #: nothing. The advisor is told, so it can tell the traveler why an answer
-    #: is about slightly less than they asked about.
+    #: What kinds of thing the guard took out, in words, so the advisor can say
+    #: why the answer covers slightly less than was asked.
     removed: tuple[str, ...]
 
 
@@ -142,8 +116,8 @@ class Unusable:
     complaint: str
 
 
-#: A read call, ready to be run or already refused. Every one of them carries an
-#: `activity`, because the traveler is told what is happening either way.
+#: A read call, ready to be run or already refused. All carry an `activity`:
+#: the traveler is told what is happening either way.
 Lookup = Errand | Search | Unusable
 
 
@@ -151,16 +125,12 @@ Lookup = Errand | Search | Unusable
 class ToolResult:
     """A finished lookup: what the model is shown, and what to cite for it."""
 
-    #: What goes into the prompt, whole. Anything in here that came from outside
-    #: is already wrapped in the untrusted markers; anything the application has
-    #: to say about its own call sits outside them.
+    #: What goes into the prompt, whole. Anything from outside is already
+    #: wrapped in the untrusted markers; our own account of the call is not.
     content: str
-    #: Empty when the lookup found nothing to stand behind. A web search leaves
-    #: one per page it read, so this is a sequence rather than the single
-    #: Citation a keyless lookup leaves.
+    #: One per page a search read, and empty when there was nothing to stand behind.
     citations: Sequence[Citation] = ()
-    #: What the lookup itself cost, when it was a call somebody charged for.
-    #: Only the nested search is; the keyless three are free.
+    #: What the lookup cost. Only the nested search costs anything.
     usage: CompletionUsage | None = None
 
 
@@ -188,17 +158,13 @@ class LiveDataTool:
 class LiveDataTools:
     """The Live-data Tools, as one thing the loop can offer and call.
 
-    Takes the application's one outbound HTTP client, like every other outbound
-    caller does (ADR-0004), so a test that swaps that client out has the real
-    request building and response reading under it. The model client comes in
-    the same way and for the same reason: the web search is a nested call to
-    OpenRouter, and it leaves through the one egress like everything else.
+    Takes the application's one outbound HTTP client and its model client, like
+    every other outbound caller (ADR-0004), so tests that swap them out still
+    exercise the real request building and response reading.
 
-    Everything offered from here fetches. Nothing offered from here writes —
-    the tools that change the Traveler Profile or the Trip Plan are a different
-    collection, arriving in tickets 11 and 09, and keeping them apart is what
-    makes it structurally impossible for something a tool fetched to cause a
-    write on its own (ADR-0004).
+    Everything offered here fetches; nothing here writes. The tools that change
+    the Profile or the Plan are a separate collection, which is what makes it
+    structurally impossible for a fetch to cause a write (ADR-0004).
     """
 
     def __init__(
@@ -209,19 +175,16 @@ class LiveDataTools:
         self._utility_model = utility_model
 
     def offers(self, name: str) -> bool:
-        """Whether this call is one of ours rather than a plan tool's, or nobody's."""
         return name in _BY_NAME
 
     def offered(self) -> list[ChatCompletionToolParam]:
-        """What the model is told it can call."""
         return [tool.offered() for tool in CATALOGUE]
 
     def read(self, name: str, arguments: str) -> Lookup:
         """What this call is asking for, before anything is fetched.
 
-        Never raises. A call naming a tool that does not exist, or carrying
-        arguments that are not what the tool takes, becomes something the
-        advisor is told about rather than something that ends the turn.
+        Never raises: an unknown tool or unreadable arguments become something
+        the advisor is told about rather than something that ends the turn.
         """
         tool = _BY_NAME.get(name)
         if tool is None:
@@ -268,8 +231,7 @@ class LiveDataTools:
                 ),
             )
 
-        # Deliberately not what was being looked up: the log is not a second
-        # copy of the conversation.
+        # Not what was looked up: the log is not a second copy of the conversation.
         logger.warning("A live lookup failed: %s — %s", lookup.service, trouble)
         return ToolResult(
             content=_untrusted(f"This lookup failed: {lookup.service} was asked and {trouble}.")
@@ -278,22 +240,17 @@ class LiveDataTools:
     async def _searched(self, lookup: Search) -> ToolResult:
         """The web, searched through the nested call in `searching.py`.
 
-        What the application has to say about its own call — the query it
-        actually sent, and anything the guard took out on the way — sits
-        *outside* the untrusted envelope, and only what came back from the web
-        goes inside it. The advisor is told that everything inside those markers
-        is never an instruction; the application's own account of what it did is
-        the frame for reading the rest, and marking it never-an-instruction
-        would be telling the advisor to disbelieve the one part of the result
-        that is true by construction.
+        Our own account of the call — the query sent, and what the guard took
+        out — sits *outside* the untrusted envelope; only what came back from
+        the web goes inside. Marking our own account never-an-instruction would
+        tell the advisor to disbelieve the one part that is true by construction.
         """
         try:
             searched = await searching.search(
                 self._model, model_name=self._utility_model, query=lookup.query
             )
         except APIError as failure:
-            # Deliberately not the query: the log is not a second copy of the
-            # conversation, and the query is already recorded where it belongs.
+            # Not the query: it is already recorded on the Citation.
             logger.warning("A web search failed: %s", type(failure).__name__)
             return ToolResult(
                 content=f"{_sent(lookup)}\nThe search did not answer.",
@@ -317,9 +274,7 @@ def _read_weather(given: Mapping[str, Any]) -> Errand | Unusable:
             activity="Checking current weather",
             complaint="The weather lookup needs a latitude and a longitude as numbers.",
         )
-    # The label is for the traveler's eyes only and goes nowhere near the
-    # request below. Where there is nothing usable to call the place, the
-    # coordinates name it — which is the honest thing to show anyway.
+    # For the traveler's eyes only; it goes nowhere near the request below.
     place = _label(given.get("place")) or f"{latitude:g}, {longitude:g}"
     return Errand(
         activity=f"Checking current weather in {place}",
@@ -335,8 +290,7 @@ def _read_weather(given: Mapping[str, Any]) -> Errand | Unusable:
     )
 
 
-#: What "current weather" means here. Asked for by name so the answer is the
-#: same shape every time rather than whatever the service defaults to.
+#: Asked for by name so the answer is the same shape every time.
 _WEATHER_FIELDS = (
     "temperature_2m",
     "apparent_temperature",
@@ -372,8 +326,7 @@ def _weather_found(answered: Any, place: str) -> Found:
     )
 
 
-#: The WMO codes Open-Meteo answers with, in words. Without this the advisor
-#: would be handed a number and left to remember what it stands for.
+#: The WMO codes Open-Meteo answers with, in words rather than as a number.
 _WEATHER_CODES = {
     0: "clear sky",
     1: "mainly clear",
@@ -412,13 +365,10 @@ _WEATHER_CODES = {
 def _read_outlook(given: Mapping[str, Any]) -> Errand | Unusable:
     """The weather over a stretch of days, which is two different questions.
 
-    Near enough and there is a forecast to fetch. Far enough out and there is
-    not one to fetch anywhere, because nobody makes one — so the question
-    becomes what those dates have actually been like, which is a different
-    fetch from a different service answering a different sentence. Which of the
-    two it is, is decided here rather than by the advisor, because the horizon
-    is a fact about the service and not something the advisor should have to
-    carry in its head.
+    Near enough and there is a forecast; further out nobody makes one, so the
+    question becomes what those dates have historically been like. Which of the
+    two is decided here, because the horizon is a fact about the service rather
+    than something the advisor should carry in its head.
     """
     latitude = _degrees(given.get("latitude"), limit=90.0)
     longitude = _degrees(given.get("longitude"), limit=180.0)
@@ -439,8 +389,7 @@ def _read_outlook(given: Mapping[str, Any]) -> Errand | Unusable:
         )
     if ends < starts:
         starts, ends = ends, starts
-    # Same label rules as the current-weather tool, and for the same reason: it
-    # is shown to the traveler and is no part of the request (ADR-0004).
+    # Shown to the traveler, no part of the request (ADR-0004).
     place = _label(given.get("place")) or f"{latitude:g}, {longitude:g}"
 
     today = date.today()
@@ -460,24 +409,18 @@ def _read_outlook(given: Mapping[str, Any]) -> Errand | Unusable:
     return _typical(latitude, longitude, place, starts, ends)
 
 
-#: How far ahead Open-Meteo forecasts, counting today as the first day. Asked
-#: for a day past this it refuses the whole request rather than answering with
-#: what it has, which is why the horizon is worked out here before asking.
+#: How far ahead Open-Meteo forecasts, counting today. Asked for a day past
+#: this it refuses the whole request, so the horizon is worked out before asking.
 FORECAST_REACH = timedelta(days=15)
 
-#: The longest stretch one outlook covers. A trip longer than this is asked
-#: about in parts; past a month the answer stops being something a traveler
-#: reads and the averages stop describing a single season.
+#: The longest stretch one outlook covers; a longer trip is asked about in parts.
 MAX_OUTLOOK = timedelta(days=30)
 
-#: How many years of observation "usually" is drawn from. One year is weather
-#: rather than climate — the same June that averaged 25°C across ten years ran
-#: four degrees hotter in one of them — and ten is enough for the spread to
-#: mean something without the request growing past a second.
+#: Years of observation "usually" is drawn from. One year is weather rather
+#: than climate; ten makes the spread mean something without a slow request.
 TYPICAL_YEARS = 10
 
-#: How much rain in a day counts as a day it rained. Below this is the damp
-#: morning nobody changes their plans for.
+#: Rain in a day worth the name, in mm.
 RAINY_DAY = 1.0
 
 
@@ -501,9 +444,7 @@ def _forecast(
     )
 
 
-#: What a day of the forecast is, asked for by name so the answer is the same
-#: shape every time. A high, a low, whether it rains and how hard it blows —
-#: what somebody deciding what to pack is actually asking.
+#: A high, a low, rain and wind — what somebody packing is actually asking.
 _FORECAST_FIELDS = (
     "weather_code",
     "temperature_2m_max",
@@ -518,9 +459,8 @@ def _forecast_found(answered: Any, place: str, starts: date, ends: date, asked: 
     daily = answered["daily"]
     units = answered.get("daily_units", {})
     days = [_forecast_day(daily, units, at) for at in range(len(daily["time"]))]
-    # The traveler asked about a stretch running past where forecasting stops.
-    # Saying so is the difference between an answer that is short and an answer
-    # that is quietly wrong about how much of the trip it covered.
+    # Say when the stretch ran past where forecasting stops, so the answer is
+    # short rather than quietly wrong about how much of the trip it covered.
     beyond = (
         ""
         if asked <= ends
@@ -570,13 +510,12 @@ def _typical(
 ) -> Errand:
     """What these dates have been like, for dates no forecast reaches.
 
-    One request covering whole years, rather than one per year: the days that
-    are not the ones asked about are thrown away in `_typical_found`, which
-    costs about a hundred kilobytes and buys the whole thing staying a single
-    `Errand` that fails and retries like every other lookup here.
+    One request covering whole years rather than one per year, with the unasked
+    days thrown away in `_typical_found`. Costs about a hundred kilobytes and
+    keeps this a single `Errand` that retries like every other lookup here.
     """
-    # A stretch that runs over new year ends in the year after it starts, so
-    # the ten windows it is measured against start a year further back.
+    # A stretch running over new year ends in the year after it starts, so its
+    # ten windows start a year further back.
     wraps = (ends.month, ends.day) < (starts.month, starts.day)
     last = date.today().year - 1
     first = last - TYPICAL_YEARS + 1
@@ -596,8 +535,7 @@ def _typical(
     )
 
 
-#: Less than the forecast asks for, because an average of the wind over ten
-#: Junes is not something anybody packs for.
+#: Less than the forecast asks for: nobody packs for ten Junes of averaged wind.
 _TYPICAL_FIELDS = (
     "temperature_2m_max",
     "temperature_2m_min",
@@ -627,8 +565,8 @@ def _typical_found(
         lows.append(low)
         fell.append(rain)
     if not highs:
-        # Read the same way a timeout is: the lookup failed, and the advisor
-        # says it could not check rather than inventing a season.
+        # Read the same way a timeout is, so the advisor says it could not
+        # check rather than inventing a season.
         raise ValueError("the archive answered with none of the days asked about")
 
     degrees = units.get("temperature_2m_max", "")
@@ -652,9 +590,8 @@ def _typical_found(
 def _calendar_days(starts: date, ends: date) -> set[tuple[int, int]]:
     """The days of the year a stretch covers, without the year.
 
-    What makes the filter work across a new year without a special case, and
-    what quietly drops 29 February in the nine years out of ten it did not
-    happen.
+    Lets the filter work across a new year without a special case, and drops
+    29 February in the years it did not happen.
     """
     days = set()
     walk = starts
@@ -681,8 +618,8 @@ def _nth(daily: Mapping[str, Any], field: str, at: int) -> Any:
 def _span(starts: date, ends: date) -> str:
     """A stretch of days as a traveler writes one, for a status line.
 
-    Built rather than formatted, because the one format code that would do it
-    without a leading zero is not the same code on every platform.
+    Built by hand: the format code that drops the leading zero differs by
+    platform.
     """
     if starts == ends:
         return f"{starts.day} {starts:%B}"
@@ -715,9 +652,9 @@ def _rate_found(answered: Any, base: str, quote: str) -> Found:
     rate = answered["rates"][quote]
     published = answered["date"]
     return Found(
-        # Said in the result rather than left to the advisor to remember: the
-        # figure is the ECB's daily reference rate, and an answer that implies
-        # a live market quote is wrong even when the number is right (ADR-0003).
+        # Said in the result rather than left to the advisor to remember: an
+        # answer implying a live market quote is wrong even when the number
+        # is right (ADR-0003).
         content=(
             f"1 {base} = {rate} {quote}. This is the European Central Bank's daily "
             f"reference rate, published on {published}. It is not a live market quote, "
@@ -747,7 +684,7 @@ def _read_country_facts(given: Mapping[str, Any]) -> Errand | Unusable:
 
 
 def _country_found(answered: Any) -> Found:
-    # The World Bank answers with a page of results: a header, then the rows.
+    # A page of results: a header, then the rows.
     facts = answered[1][0]
     name = facts["name"]
     parts = [
@@ -769,11 +706,10 @@ def _country_found(answered: Any) -> Found:
 def _read_web_search(given: Mapping[str, Any]) -> Search | Unusable:
     """What this search will actually be, once the guard has read the query.
 
-    The guard runs here rather than at the moment of the call, because this is
-    where the query stops being what the model asked for and becomes what the
-    application is going to send: the status line, the Citation and the request
-    all say the same thing afterwards, and there is no version of the query
-    further down that still has the traveler's document number in it.
+    The guard runs here rather than at the call, because this is where the
+    query stops being the model's ask and becomes what we send: afterwards the
+    status line, the Citation and the request all say the same thing, and no
+    version further down still holds the traveler's document number.
     """
     asked = given.get("query")
     if not isinstance(asked, str) or asked.strip() == "":
@@ -793,9 +729,8 @@ def _read_web_search(given: Mapping[str, Any]) -> Search | Unusable:
             ),
         )
     return Search(
-        # The whole of the sent query, not a shortened one: a traveler watching
-        # this is watching the one thing this application sends out in their own
-        # words, and the guard has already bounded its length.
+        # The whole query, not a shortened one: this is the one thing we send
+        # out in the traveler's own words, and the guard has bounded its length.
         activity=f"Searching the web for {guarded.query}",
         query=guarded.query,
         removed=guarded.removed,
@@ -803,11 +738,10 @@ def _read_web_search(given: Mapping[str, Any]) -> Search | Unusable:
 
 
 def _sent(lookup: Search) -> str:
-    """What the application did, in its own voice and outside the envelope.
+    """What we did, in our own voice and outside the envelope.
 
-    The query that actually left, and what the guard took out of it on the way.
-    An advisor that could not tell what was searched for would happily report an
-    answer to a question nobody asked.
+    An advisor that could not tell what was searched for would happily report
+    an answer to a question nobody asked.
     """
     sent = f"A web search was made. The query sent was: {lookup.query}"
     if not lookup.removed:
@@ -841,9 +775,8 @@ def _cited(lookup: Search, pages: Sequence[searching.Page]) -> tuple[Citation, .
 def _pageless(lookup: Search, about: str) -> Citation:
     """The record of a search that left nothing to link to.
 
-    Still a Citation, and still kept under the Message. A search that answered
-    with nothing is a search that happened, and what was sent to make it happen
-    has to be somewhere the traveler can go and read it.
+    Still a Citation: a search that answered with nothing still happened, and
+    what was sent has to be somewhere the traveler can read it.
     """
     return Citation(service="Web search", about=about, url=None, query=lookup.query)
 
@@ -872,9 +805,8 @@ def _degrees(value: object, *, limit: float) -> float | None:
 def _alpha_code(value: object, *, letters: int) -> str | None:
     """A standards-body code, or None. That many letters and nothing else, ever.
 
-    ISO 4217 for a currency, ISO 3166-1 alpha-2 for a country. Both are closed
-    alphabets, which is exactly what stops either argument carrying anything a
-    traveler said.
+    ISO 4217 for a currency, ISO 3166-1 alpha-2 for a country — closed
+    alphabets, which is what stops either argument carrying a traveler's words.
     """
     if not isinstance(value, str):
         return None
@@ -885,15 +817,13 @@ def _alpha_code(value: object, *, letters: int) -> str | None:
 def _label(value: object) -> str | None:
     """A place name fit to show, or None when what arrived was not one.
 
-    The one string any of these tools takes, and it goes nowhere: it names the
-    lookup in the status line and in the Citation. A label carrying a digit is
-    refused outright, so a number the traveler happened to mention cannot end
-    up on their screen wearing the name of a place.
+    Names the lookup in the status line and the Citation, and goes nowhere
+    else. A label carrying a digit is refused, so a number the traveler
+    mentioned cannot reach their screen wearing the name of a place.
 
-    It stays the model's claim about the coordinates rather than a fact —
-    nothing here can tell whether those coordinates are Lisbon. That is why the
-    Citation carries the request itself, coordinates and all: the traveler can
-    check the claim against what was actually asked.
+    It stays the model's claim about the coordinates — nothing here can tell
+    whether they are Lisbon — which is why the Citation carries the request
+    itself for the traveler to check against.
     """
     if not isinstance(value, str):
         return None
@@ -906,10 +836,9 @@ def _label(value: object) -> str | None:
 def _day(value: Any) -> date | None:
     """One calendar day, exactly as the tool says to write it, or nothing.
 
-    Held to ten characters rather than left to `fromisoformat`, which on this
-    version will also take a whole timestamp and a handful of other spellings.
-    A tool that accepts more than it documents is a tool whose arguments are
-    not the narrow thing ADR-0004 rests on.
+    Held to ten characters because `fromisoformat` also takes whole timestamps
+    and other spellings, and a tool accepting more than it documents is not the
+    narrow thing ADR-0004 rests on.
     """
     if not isinstance(value, str):
         return None
@@ -925,9 +854,8 @@ def _day(value: Any) -> date | None:
 def _untrusted(content: str) -> str:
     """A tool result, marked as data rather than as anything anyone is asking for.
 
-    The markers are stripped out of the content first, so a service that
-    answers with a closing marker cannot end the envelope early and write in
-    the advisor's own voice outside it.
+    Markers are stripped from the content first, so a service answering with a
+    closing marker cannot end the envelope early and write outside it.
     """
     inside = content.replace(UNTRUSTED_OPEN, "").replace(UNTRUSTED_CLOSE, "")
     return f"{UNTRUSTED_OPEN}\n{inside}\n{UNTRUSTED_CLOSE}"
@@ -936,9 +864,8 @@ def _untrusted(content: str) -> str:
 def no_such_tool(name: str) -> str:
     """What the model is told when it asks for something not on the table.
 
-    One wording, because a tool that never existed and a tool that has been
-    withdrawn for the rest of the turn (ADR-0010) are the same answer: there
-    is no such thing to call. A model that could tell the two apart could tell
+    One wording for both a tool that never existed and one withdrawn for the
+    rest of the turn (ADR-0010): a model that could tell them apart could tell
     that the capability it wants is nearby.
     """
     return f"There is no tool called {name!r}."
@@ -950,11 +877,10 @@ def _unreadable(complaint: str) -> Unusable:
 
 
 def _settled(failure: httpx2.HTTPError) -> bool:
-    """Whether asking again could plausibly answer any differently.
+    """Whether asking again could plausibly answer differently.
 
-    A timeout, a dropped connection or a service briefly overloaded could. A
-    404 for a country code that does not exist will be a 404 again, and asking
-    twice only makes the traveler wait twice for the same no.
+    A timeout or a briefly overloaded service could; a 404 for a country code
+    that does not exist will not, and retrying only doubles the wait.
     """
     if not isinstance(failure, httpx2.HTTPStatusError):
         return False
@@ -997,8 +923,8 @@ CATALOGUE: Sequence[LiveDataTool] = (
                 "place": {
                     "type": "string",
                     "maxLength": MAX_PLACE,
-                    # Declared as well as enforced, so what the model is offered
-                    # is the same narrow thing `_label` will accept.
+                    # Declared as well as enforced, so the model is offered the
+                    # same narrow thing `_label` will accept.
                     "pattern": "^[^0-9]+$",
                     "description": (
                         "What to call the place while the traveler waits, such as "

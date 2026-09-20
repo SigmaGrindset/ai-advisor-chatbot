@@ -1,13 +1,10 @@
 /**
  * Which parts of the Trip Plan the advisor has just changed.
  *
- * The plan changes while the traveler is reading it, and a field that moved
- * without saying so is a field they have to go and find. So a changed field
- * lights up and fades — long enough to catch an eye that was on the
- * conversation, short enough that the plan is not a christmas tree a minute
- * later. Under a reduced-motion preference the fade is suppressed with every
- * other transition and the field simply appears lit and then is not; the
- * traveler is still told.
+ * A field that moved without saying so is one the traveler has to go and
+ * find, so a changed field lights and fades — long enough to catch an eye on
+ * the conversation, short enough not to leave a christmas tree. Under reduced
+ * motion the fade goes with every other transition; the traveler is still told.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -24,9 +21,8 @@ export type Highlight = {
 
 export function useHighlight(): Highlight {
   const [lit, setLit] = useState<ReadonlySet<string>>(() => new Set());
-  // One timer per field rather than one for the batch: two patches a second
-  // apart are two things to notice, and a shared timer would put the second
-  // one out early.
+  // One timer per field rather than per batch: a shared one would put the
+  // second of two patches out early.
   const fading = useRef(new Map<string, number>());
 
   useEffect(

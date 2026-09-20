@@ -1,16 +1,12 @@
 """Compaction applied: what a turn is sent, once the Conversation is long.
 
-`advisor/compaction.py` decides how much of a stretch to fold and writes the
-summary that replaces it; this is what reads the Conversation, asks for that,
-records the answer, and hands back the Messages that are still sent whole.
+`advisor/compaction.py` decides how much to fold and writes the summary; this
+reads the Conversation, asks for that, records the answer, and hands back the
+Messages still sent whole.
 
-It runs at the top of every turn, before the prompt is composed, rather than
-after the reply has gone out. A Conversation that has crossed the budget then
-never sends the long prompt even once — which is the point of the budget, and
-would not be true of folding the transcript away afterwards.
-
-Nothing it does is visible. The Messages stay where they are, the traveler
-scrolls back through all of them, and no event says any of this happened.
+It runs before the prompt is composed rather than after the reply goes out, so
+a Conversation over the budget never sends the long prompt even once. Nothing
+it does is visible: the Messages stay, and no event says it happened.
 """
 
 from collections.abc import Sequence
@@ -30,16 +26,14 @@ async def compact(
     model: AsyncOpenAI,
     settings: Settings,
 ) -> Sequence[Message]:
-    """The Messages of this Conversation to send verbatim, folding first if need be.
+    """The Messages of this Conversation to send verbatim, folding if need be.
 
-    What comes back is the recent end of the transcript; whatever was folded
-    away is in the Conversation's rolling summary, which the system prompt is
-    composed from afterwards.
+    What comes back is the recent end; what was folded is in the rolling
+    summary the system prompt is composed from afterwards.
 
-    A summarising call that fails folds nothing and answers with the whole
-    stretch. The turn is then dearer than it should be and works perfectly,
-    which is the right way round: the alternative is an advisor missing the
-    middle of a conversation it is in.
+    A failed summarising call folds nothing and answers with the whole
+    stretch: a turn dearer than it should be beats an advisor missing the
+    middle of the conversation it is in.
     """
     said = await messages_in(session, conversation)
     sending = said[conversation.summarised_messages :]

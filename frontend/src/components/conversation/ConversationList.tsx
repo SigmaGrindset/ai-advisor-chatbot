@@ -18,9 +18,7 @@ import { TripChip } from "../trip/TripChip";
 
 /**
  * The row whose actions are showing, and whether it has been asked to delete.
- *
- * One row at a time: opening a second row's actions closes the first, so the
- * list never has two half-finished decisions in it.
+ * One row at a time, so the list never holds two half-finished decisions.
  */
 export type RowActions = { id: string; confirming: boolean };
 
@@ -42,22 +40,15 @@ export function ConversationList({
 }: {
   conversations: ConversationSummary[];
   /**
-   * True until the first read has come back. An empty list is the ordinary
-   * state of a first visit and it says so, which is the wrong thing to say to
-   * somebody whose forty Conversations are still in flight.
+   * True until the first read has come back. The empty state says what will
+   * fill the list, which is the wrong thing to say to somebody whose forty
+   * Conversations are still in flight.
    */
   resuming: boolean;
-  /**
-   * Every Trip the traveler has, which is what the rows are marked from. A
-   * row knows the identifier of its Trip; what that Trip is called and what
-   * colour it is known by are the plan's.
-   */
+  /** What the rows are marked from: a row knows only its Trip's identifier. */
   trips: TripPlan[];
-  /** The Conversation being read, if any of them is. */
   currentId: string | null;
-  /** The row whose actions are open, if one of them is. */
   actions: RowActions | null;
-  /** The Conversation whose name the traveler is editing, if they are. */
   renaming: string | null;
   onStart: () => void;
   onOpen: (id: string) => void;
@@ -66,9 +57,7 @@ export function ConversationList({
   onRenaming: (id: string | null) => void;
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
-  /** Leave for the page that lists every Trip. */
   onTrips: () => void;
-  /** Leave for the page that says how the advisor behaves. */
   onInstructions: () => void;
 }) {
   const byId = new Map(trips.map((trip) => [trip.trip_id, trip]));
@@ -77,11 +66,9 @@ export function ConversationList({
       aria-label="Conversations"
       className="flex h-full min-h-0 w-full flex-col bg-sunken"
       onKeyDown={(pressed) => {
-        // Escape puts a row's menu away. Handled here rather than left to the
-        // browser because the panel is a `manual` popover, which is the kind
-        // that has no dismissal of its own — and stopped here because inside a
-        // sheet the dialog would otherwise take the same press and close the
-        // whole list. One press is one thing.
+        // A `manual` popover has no dismissal of its own, and the press is
+        // stopped so the sheet around it does not also close. One press is
+        // one thing.
         if (pressed.key === "Escape" && actions !== null) {
           pressed.stopPropagation();
           onActions(null);
@@ -89,11 +76,9 @@ export function ConversationList({
       }}
     >
       <div className="flex flex-col gap-4 px-4 pt-5 pb-4">
-        {/* The wordmark, and no glyph beside it. A compass next to the words
-            "Travel Advisor" is the picture the words already are — and it was
-            drawn in the accent, which this application spends on interaction
-            alone (see `tokens.css`): a mark that cannot be pressed had taken
-            the one colour that means something can be. */}
+        {/* The wordmark, and no glyph beside it: the accent is spent on
+            interaction alone (`tokens.css`), and a mark that cannot be pressed
+            had taken the one colour that means something can be. */}
         <p className="font-display text-title font-semibold tracking-tight text-ink">
           Travel Advisor
         </p>
@@ -107,11 +92,8 @@ export function ConversationList({
           New conversation
         </button>
 
-        {/* Navigation lives here, where the traveler already goes to move
-            between things — the rail on a laptop, the left sheet everywhere
-            narrower. The Trip Plan itself is never navigated to (ADR-0006);
-            the two pages are the two things about no Conversation in
-            particular — every Trip at once, and what the advisor is told. */}
+        {/* Navigation lives where the traveler already goes to move between
+            things. The Trip Plan itself is never navigated to (ADR-0006). */}
         <div className="flex flex-col items-start gap-1">
           <button
             type="button"
@@ -133,13 +115,12 @@ export function ConversationList({
         </div>
       </div>
 
-      {/* Contained, so that flicking this list past its end scrolls neither
-          the transcript behind it nor the page itself. */}
+      {/* Contained, so flicking past the end scrolls neither the transcript
+          behind it nor the page. */}
       <ul className="flex flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain px-2 pb-4">
         {resuming &&
-          // A row apiece, at a row's height, so the rail fills rather than
-          // jumps. The widths differ because Conversation titles do, and four
-          // identical bars read as a graphic rather than as a list arriving.
+          // At a row's height, so the rail fills rather than jumps. The widths
+          // differ because titles do: identical bars read as a graphic.
           LOADING_ROWS.map((width, at) => (
             <li key={at} className="px-3 py-2.5">
               <Skeleton className={`h-3.5 ${width}`} />
@@ -147,8 +128,7 @@ export function ConversationList({
           ))}
 
         {!resuming && conversations.length === 0 && (
-          // An empty list is the ordinary state of a first visit, so it says
-          // what will fill it rather than leaving the rail looking broken.
+          // Says what will fill it, rather than leaving the rail looking broken.
           <li className="px-3 py-2 text-meta text-ink-subtle">
             Conversations you start appear here.
           </li>
@@ -165,11 +145,8 @@ export function ConversationList({
             <li key={conversation.id}>
               <div
                 className={`flex items-center gap-1 rounded-control pr-1 ${
-                  // A row being typed into is raised like the open one, and
-                  // presses like nothing at all: the give under a press is for
-                  // things that go somewhere when pressed, and a row that sank
-                  // a pixel under a click into its own text field would be
-                  // answering a click that was never aimed at it.
+                  // Raised like the open row but with no give under a press:
+                  // a click into its own text field is not aimed at the row.
                   editing
                     ? "bg-surface shadow-raised"
                     : `pressable-row ${open ? "bg-surface shadow-raised" : "hover:bg-canvas"}`
@@ -195,11 +172,9 @@ export function ConversationList({
                     <span className={`max-w-full truncate ${open ? "font-medium" : ""}`}>
                       {named}
                     </span>
-                    {/* Which journey this Conversation is about, in that Trip's
-                        own colour, so several of them about one journey read as
-                        a group without being read at all. One on no Trip carries
-                        nothing: every Conversation begins that way, and a rail
-                        of "no trip" marks says nothing about any of them. */}
+                    {/* In that Trip's colour, so several about one journey read
+                        as a group without being read. One on no Trip carries
+                        nothing: every Conversation begins that way. */}
                     {onTrip !== undefined && <TripChip plan={onTrip} />}
                   </button>
                 )}
@@ -212,8 +187,7 @@ export function ConversationList({
                   onConfirm={() => onActions({ id: conversation.id, confirming: true })}
                   onClose={() => onActions(null)}
                   onRename={() => {
-                    // The panel has said all it has to say; what it asked for
-                    // happens in the row itself.
+                    // What the panel asked for happens in the row itself.
                     onActions(null);
                     onRenaming(conversation.id);
                   }}
@@ -225,11 +199,8 @@ export function ConversationList({
         })}
       </ul>
 
-      {/* Below the list rather than up with the navigation, and after it in
-          the document, because it is not somewhere to go — it is a setting,
-          and it is the only one the application has. The list above it
-          scrolls and this does not, so it stays on the floor of the rail
-          however many Conversations are stacked above it. */}
+      {/* Below the navigation and after it in the document: it is a setting
+          rather than somewhere to go. It does not scroll with the list. */}
       <div className="shrink-0 border-t border-line px-4 pt-3 pb-4">
         <ThemeToggle />
       </div>
@@ -240,24 +211,14 @@ export function ConversationList({
 /**
  * What can be done to one Conversation, in a panel over the list.
  *
- * The actions live behind one permanently visible control rather than behind
- * hovering the row or swiping it. A pointer is an affordance a touch screen
- * has not got, and a swipe is one nothing tells the traveler about — and would
- * fight the sheet this list sits in on a phone besides (ADR-0007).
+ * Behind a permanently visible control rather than hover or swipe: a touch
+ * screen has no pointer, and a swipe would fight the sheet this sits in on a
+ * phone (ADR-0007). A panel rather than a second storey on the row, which
+ * would push every Conversation under it down the rail.
  *
- * What the control opens is a small panel beside it rather than more row. A
- * row that grows a second storey pushes every Conversation under it down the
- * rail, so the cost of looking at one row's actions was paid by all the others
- * — and a traveler reading the list lost their place in it to a question they
- * had not answered yet. A panel is drawn over the list and costs it nothing.
- *
- * It is a `popover`, which is the only way out of this list: the rail scrolls,
- * so a panel drawn inside it is clipped by it, and the frame the application
- * sits in is translated, so a `fixed` panel would be measured from the frame
- * rather than from the window. The browser's top layer is above and outside
- * both. Being one — where it goes, what puts it away, where the focus lands —
- * is `shell/anchoredPanel`; Escape is the list's, above. What is left here is
- * what this panel is actually for.
+ * It is a `popover` because the rail scrolls (so a panel inside is clipped)
+ * and the frame is translated (so `fixed` measures from the frame). Placement
+ * and focus are `shell/anchoredPanel`; Escape is the list's, above.
  */
 function RowMenu({
   name,
@@ -269,9 +230,7 @@ function RowMenu({
   onRename,
   onDelete,
 }: {
-  /** What this Conversation is called, which is how the control is labelled. */
   name: string;
-  /** What the panel is called, so the control can point at what it opens. */
   panelId: string;
   /** This row's actions, while they are the ones showing. */
   showing: RowActions | null;
@@ -279,7 +238,6 @@ function RowMenu({
   /** Ask first. Deleting a Conversation cannot be taken back. */
   onConfirm: () => void;
   onClose: () => void;
-  /** Hand the naming of this Conversation back to the row it is written on. */
   onRename: () => void;
   onDelete: () => void;
 }) {
@@ -287,8 +245,8 @@ function RowMenu({
   const confirming = showing?.confirming ?? false;
   const { trigger, panel, landing } = useAnchoredPanel({
     open,
-    // The panel asks one of two things and is a different size for each, so
-    // the switch between them is a placement and a focus of its own.
+    // The two questions are different sizes, so each gets its own placement
+    // and focus.
     showing: confirming,
     onClose,
   });
@@ -314,12 +272,8 @@ function RowMenu({
           popover="manual"
           role="group"
           aria-label={`Actions for ${name}`}
-          // A sheet of paper laid over the list: opaque, its own hairline, and
-          // the one shadow in the system that says something is floating
-          // rather than merely raised. `inset-auto` and `m-0` undo what a
-          // browser gives a popover of its own accord, which is a panel
-          // centred in the window; the corner it actually goes in is measured
-          // and set above.
+          // `inset-auto` and `m-0` undo the browser's own centring; the corner
+          // it actually goes in is measured and set above.
           className="fixed inset-auto m-0 w-max min-w-44 max-w-64 rounded-panel border border-line bg-surface p-1 text-meta shadow-floating"
         >
           {confirming ? (
@@ -335,11 +289,9 @@ function RowMenu({
                 >
                   Delete
                 </button>
-                {/* Focus lands on this one rather than on the delete beside
-                    it. The question is only being asked because deleting
-                    cannot be taken back, and a question asked for that reason
-                    should answer itself the safe way for whoever presses the
-                    key they were already pressing. */}
+                {/* Focus lands here rather than on Delete: a question asked
+                    because it cannot be taken back should answer itself the
+                    safe way. */}
                 <button
                   ref={landing}
                   type="button"
@@ -351,10 +303,8 @@ function RowMenu({
               </div>
             </div>
           ) : (
-            // The actions, named by what they do and nothing else. "Delete
-            // conversation" in a panel that already says whose actions these
-            // are is the same word twice, and two labels of that length read
-            // as a paragraph of controls rather than as a choice of two.
+            // Named by what they do and nothing else: the panel already says
+            // whose actions these are.
             <div className="flex flex-col gap-0.5">
               <button
                 ref={landing}
@@ -382,15 +332,11 @@ function RowMenu({
 }
 
 /**
- * A Conversation's name in the list, while the traveler is changing it.
- *
- * The row's own title becomes the field. Renaming is not a dialog and not a
- * second place to look: what they are changing is the words they pressed
- * Rename next to, so those are the words under the cursor.
+ * A Conversation's name in the list, while the traveler is changing it. The
+ * row's own title becomes the field rather than a dialog opening elsewhere.
  *
  * Blur saves, Enter saves, Escape cancels — the same three as every editable
- * part of the Trip Plan (`plan/EditableField.tsx`), because a traveler learns
- * that once and this application should only teach it once.
+ * part of the Trip Plan (`plan/EditableField.tsx`).
  */
 function RenameField({
   title,
@@ -398,7 +344,7 @@ function RenameField({
   onRename,
   onClose,
 }: {
-  /** The name it has, and null for a Conversation nothing has named yet. */
+  /** Null for a Conversation nothing has named yet. */
   title: string | null;
   /** What it is called in the list, which an unnamed one's field stands in as. */
   name: string;
@@ -407,25 +353,18 @@ function RenameField({
 }) {
   const [draft, setDraft] = useState(title ?? "");
   const field = useRef<HTMLInputElement>(null);
-  // Whether this is still the traveler's to close, kept where a handler that
-  // runs after it has been closed can still read it. State cannot answer
-  // that: the handler closed over the render before the one that closed it.
+  // A handler running after this closed still has to read it, and state
+  // cannot answer: it closed over the render before the one that closed it.
   const open = useRef(true);
 
-  // Before the frame is painted, and so a layout effect: the panel that was
-  // pressed to get here puts focus back on the control that opened it as it
-  // goes, and an ordinary effect would land after that — one painted frame
-  // with the ring on the wrong control and a field nobody can type in.
+  // A layout effect, because the panel pressed to get here puts focus back on
+  // its own trigger as it goes: an ordinary effect would land after that.
   useLayoutEffect(() => {
     field.current?.focus();
-    // Selected rather than left with a cursor at the end: renaming something
-    // that already has a name is usually replacing it.
+    // Selected, since renaming something already named usually replaces it.
     field.current?.setSelectionRange(0, field.current.value.length, "backward");
-    // And wound back to the first word. Focusing a field whose text is longer
-    // than it is scrolls it to the end, and a name too long for a rail this
-    // narrow would open on its last few words — which is not what the
-    // traveler pressed Rename beside. Backwards above and here together:
-    // the cursor is at the front, so nothing scrolls it away again.
+    // Wound back to the first word: focusing a field whose text overflows it
+    // scrolls to the end, which is not what they pressed Rename beside.
     if (field.current !== null) field.current.scrollLeft = 0;
   }, []);
 
@@ -434,10 +373,8 @@ function RenameField({
     open.current = false;
     const chosen = draft.trim();
     onClose();
-    // Nothing is not a name. A field cleared to empty leaves the Conversation
-    // the name it had — and leaves an unnamed one unnamed, so the advisor can
-    // still name it after the next exchange rather than being locked out of a
-    // Conversation the traveler opened this on and wandered away from.
+    // Nothing is not a name: a field cleared to empty leaves the name it had,
+    // and leaves an unnamed one for the advisor to name after the next exchange.
     if (saving && chosen !== "" && chosen !== title) onRename(chosen);
   }
 
@@ -460,9 +397,8 @@ function RenameField({
           stop(false);
         }
       }}
-      // Set at the size everything typed into is set at rather than at the
-      // row's own, which is smaller: iOS zooms the page when a focused field
-      // is under 16px, and the rail is a sheet on a phone (ADR-0007).
+      // At the size everything typed into is set at, not the row's smaller
+      // one: iOS zooms the page for a focused field under 16px (ADR-0007).
       className="w-full min-w-0 rounded-control border border-line-strong bg-surface px-1.5 py-0.5 text-input text-ink outline-none placeholder:text-ink-subtle focus:outline-2 focus:outline-offset-1 focus:outline-focus"
     />
   );

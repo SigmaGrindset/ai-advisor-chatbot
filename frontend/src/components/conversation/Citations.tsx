@@ -3,20 +3,15 @@ import type { Citation } from "../../api/types";
 /**
  * Where an answer's fetched claims came from, kept under the answer.
  *
- * Numbered and closed. A traveler under an answer wants to know that there
- * *is* a source before they want to know which one, so the chip carries the
- * number and the service's name and nothing else; the exact request only
- * matters to somebody who has decided to go and check it, and they are the
- * ones who open it.
+ * Numbered and closed: a reader wants to know there *is* a source before
+ * which one, so the chip carries the number and the service's name alone.
  *
- * What opening one reveals is the whole of what the application did to get
- * that claim: what was looked up, where, and — for a web search — the exact
- * query that was sent. A search is the one place the traveler's own words
- * leave this application, so the words that left are shown back to them.
+ * Opening one reveals the whole of what we did to get that claim — including,
+ * for a web search, the exact query sent. A search is the one place the
+ * traveler's own words leave, so the words that left are shown back.
  *
  * `details` rather than state of our own: the platform already knows how to
- * open and close one, how to say so to a screen reader, and how to let a
- * keyboard do it.
+ * open one, say so to a screen reader, and let a keyboard do it.
  */
 export function Citations({ citations }: { citations: Citation[] }) {
   if (citations.length === 0) return null;
@@ -40,9 +35,8 @@ export function Citations({ citations }: { citations: Citation[] }) {
               {citation.url !== null && (
                 <a
                   href={citation.url}
-                  // Somewhere the application does not control, so it opens away
-                  // from the Conversation carrying no referrer and no handle
-                  // back onto this window.
+                  // Somewhere we do not control, so it opens away carrying no
+                  // referrer and no handle back onto this window.
                   target="_blank"
                   rel="noopener noreferrer nofollow"
                   className="font-mono text-micro break-all text-accent underline decoration-1 underline-offset-2 transition-colors hover:text-accent-strong"
@@ -51,11 +45,9 @@ export function Citations({ citations }: { citations: Citation[] }) {
                 </a>
               )}
               {citation.query !== null && (
-                // The exact words that left the machine, shown exactly as they
-                // left it. A traveler opening a search Citation is checking
-                // what was sent on their behalf, so this is the sent query
-                // rather than the one the advisor asked for — anything shaped
-                // like a document number has already been taken out of it.
+                // The exact words that left the machine: the sent query rather
+                // than the one the advisor asked for, since anything shaped
+                // like a document number has already been taken out.
                 <p className="flex flex-col gap-0.5">
                   <span className="font-mono text-micro uppercase text-ink-subtle">
                     Query sent

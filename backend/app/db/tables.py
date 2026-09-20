@@ -33,9 +33,8 @@ def _values(enum: type[StrEnum]) -> Sequence[str]:
     return [member.value for member in enum]
 
 
-#: The application has exactly one traveler, implicitly — there are no accounts.
-#: Every other table still carries a real traveler reference, so supporting more
-#: than one later is a middleware change rather than a migration.
+#: One traveler, implicitly — there are no accounts. Every table still carries
+#: a real reference, so supporting more is a middleware change, not a migration.
 SOLE_TRAVELER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
 
@@ -43,11 +42,8 @@ class Traveler(Base):
     __tablename__ = "traveler"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
-    #: The next number to list a Profile Fact of this Traveler under, counted
-    #: here for the same reason a Trip counts its own — see `Trip.next_item_ref`.
-    #: An advisor working from the profile it was shown at the top of the turn
-    #: must not be able to delete whatever has taken the place of something it
-    #: deleted a moment ago.
+    #: The next number to list a Profile Fact under, counted here so a number
+    #: is never handed out twice — see `Trip.next_item_ref`.
     next_fact_ref: Mapped[int] = mapped_column(
         Integer, nullable=False, default=1, server_default=text("1")
     )
@@ -59,10 +55,9 @@ class Traveler(Base):
 class FactSubject(StrEnum):
     """What a Profile Fact can be about.
 
-    Three the traveler has exactly one of, and one collection for everything a
-    fixed set could not anticipate. The difference is the whole of how a
-    correction lands: recording a nationality again replaces the nationality
-    that was there, rather than standing a contradiction beside it.
+    Three the traveler has exactly one of, and one collection for the rest.
+    That is how a correction lands: recording a nationality again replaces the
+    one there rather than standing a contradiction beside it.
     """
 
     NATIONALITY = "nationality"
@@ -74,15 +69,13 @@ class FactSubject(StrEnum):
 class ProfileFact(Base):
     """One entry in the Traveler Profile.
 
-    A row of its own rather than a column on the Traveler, because the traveler
-    reads them back one at a time and deletes them one at a time (ADR-0001,
-    ADR-0004). A profile kept as a document would make "delete this line" a
+    A row of its own because the traveler reads them and deletes them one at a
+    time (ADR-0001, ADR-0004); as a document, "delete this line" would be a
     read-modify-write of everything the advisor knows.
     """
 
     __tablename__ = "profile_fact"
-    #: The advisor refers to a fact by its number, because that is what it can
-    #: point at in a prompt it is shown every turn.
+    #: The advisor points at a fact by its number in the prompt.
     __table_args__ = (UniqueConstraint("traveler_id", "ref", name="profile_fact_ref"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -93,7 +86,7 @@ class ProfileFact(Base):
     subject: Mapped[FactSubject] = mapped_column(
         Enum(FactSubject, name="fact_subject", values_callable=_values), nullable=False
     )
-    #: The fact itself, in the words the traveler would recognise it in.
+    #: In the words the traveler would recognise it in.
     detail: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.clock_timestamp(), nullable=False
@@ -103,21 +96,15 @@ class ProfileFact(Base):
 class PromptVersion(Base):
     """A saved revision of the Advisor Instructions.
 
-    A row per revision rather than one column written over in place, because
-    every advisor Message records the version that produced it: a traveler who
-    changed how their advisor answers halfway through a Conversation can still
-    tell which replies came from which instructions, and a single mutable row
-    would have thrown that away at the moment of the edit.
+    A row per revision rather than one written over in place, because every
+    advisor Message records the version that produced it.
 
-    Only the editable part is stored. What is composed around it — the tool
-    guidance, the Trip Plan, the Traveler Profile — is the application's own
-    and is whatever `advisor/instructions.py` says it is at the time of the
-    turn, so a version is never a stale copy of rules nobody edited.
+    Only the editable part is stored; what is composed around it is whatever
+    `advisor/instructions.py` says at the time of the turn, so a version is
+    never a stale copy of rules nobody edited.
 
-    The instructions in force are the last of these to be saved. None is ever
-    deleted on its own — a version a Message points at is part of the
-    explanation of that Message — and they go with the Traveler when
-    everything does.
+    The instructions in force are the last saved. None is deleted on its own —
+    a version a Message points at explains that Message.
     """
 
     __tablename__ = "prompt_version"
@@ -126,18 +113,13 @@ class PromptVersion(Base):
     traveler_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("traveler.id", ondelete="cascade"), nullable=False
     )
-    #: Which revision this is, counted by the database. The one in force is
-    #: the highest, and it is this rather than `created_at` that says so.
-    #: A timestamp answers "which was written last" only as well as the clock
-    #: under it behaves, and it needs a tiebreaker — which for a random
-    #: identifier means an edit and the words it replaced settled by a coin
-    #: toss. Which instructions the advisor is given is not a question to
-    #: answer by inference from a clock.
+    #: Counted by the database, and the highest is the one in force. Not
+    #: `created_at`: which instructions the advisor is given is not a question
+    #: to answer by inference from a clock, nor to tie-break at random.
     revision: Mapped[int] = mapped_column(Integer, Identity(), nullable=False)
-    #: The advisor's persona and its rules, in the traveler's own words once
-    #: they have edited them.
+    #: The advisor's persona and its rules.
     instructions: Mapped[str] = mapped_column(Text, nullable=False)
-    #: When it was saved, which is provenance rather than order.
+    #: Provenance rather than order.
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.clock_timestamp(), nullable=False
     )
@@ -146,15 +128,13 @@ class PromptVersion(Base):
 class Trip(Base):
     """One journey the traveler is planning, and its one Trip Plan.
 
-    The Trip *is* the plan: destination, dates, party and budget are columns
-    here rather than keys in a document, and the Itinerary Items and Open
-    Questions are their own tables below. That is what ADR-0002's field-level
-    patching needs — a single JSON document would make every patch a
-    read-modify-write of the whole plan, and a manual edit made between two
-    turns would be read back and written over by the next one.
+    The Trip *is* the plan: columns rather than keys in a document, which is
+    what ADR-0002's field-level patching needs. As one JSON document, every
+    patch would be a read-modify-write, and a manual edit between two turns
+    would be written over by the next one.
 
-    Every column is nullable because a Trip is born the moment the advisor
-    learns the first thing about it, and knows nothing else yet.
+    Every column is nullable: a Trip is born the moment the advisor learns the
+    first thing about it.
     """
 
     __tablename__ = "trip"
@@ -168,17 +148,14 @@ class Trip(Base):
     ends_on: Mapped[date | None] = mapped_column(Date, nullable=True)
     #: How many people are travelling, the traveler included.
     party_size: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
-    #: What the whole trip is meant to cost, in the currency beside it. The two
-    #: are separate columns rather than one string because a figure the
-    #: traveler can be shown adding up has to be a number.
+    #: Two columns rather than one string: a figure the traveler can be shown
+    #: adding up has to be a number.
     budget_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     #: ISO 4217, upper case.
     budget_currency: Mapped[str | None] = mapped_column(Text, nullable=True)
-    #: The next number to list an Itinerary Item and an Open Question of this
-    #: Trip under. Counted here rather than from the entries themselves so a
-    #: number is never handed out twice: an advisor working from the plan it
-    #: was shown at the top of the turn must not be able to remove whatever
-    #: has taken the place of something it removed a moment ago.
+    #: Counted here rather than from the entries, so a number is never handed
+    #: out twice: an advisor working from the plan it was shown at the top of
+    #: the turn must not remove whatever replaced what it removed a moment ago.
     next_item_ref: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     next_question_ref: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(
@@ -197,16 +174,12 @@ class PartOfDay(StrEnum):
 class ItineraryItem(Base):
     """One thing planned for a particular day of a Trip.
 
-    The day is a number rather than a date, so that moving a Trip a week later
-    is one patch to `starts_on` rather than a rewrite of every item. What day 2
-    falls on is arithmetic the interface does when there is a start date to do
-    it from.
+    The day is a number rather than a date, so moving a Trip a week later is
+    one patch to `starts_on` rather than a rewrite of every item.
     """
 
     __tablename__ = "itinerary_item"
-    #: The advisor refers to an item by its number within its Trip, because a
-    #: UUID in a prompt is thirty-six characters of noise per item and the
-    #: advisor has to be shown all of them every turn.
+    #: A number rather than a UUID: the advisor is shown all of them every turn.
     __table_args__ = (UniqueConstraint("trip_id", "ref", name="itinerary_item_ref"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -216,8 +189,7 @@ class ItineraryItem(Base):
     ref: Mapped[int] = mapped_column(Integer, nullable=False)
     #: Day 1 is the first day of the Trip.
     day: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    #: Null for something planned for the day without a time in mind, which is
-    #: what the traveler adds when they add one themselves.
+    #: Null for a day with no time in mind, which is what the traveler adds.
     part_of_day: Mapped[PartOfDay | None] = mapped_column(
         Enum(PartOfDay, name="part_of_day", values_callable=_values), nullable=True
     )
@@ -253,31 +225,23 @@ class Conversation(Base):
     traveler_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("traveler.id", ondelete="cascade"), nullable=False
     )
-    #: The Trip this thread is refining, and null until something in it is
-    #: worth planning. Several Conversations point at one Trip (ADR-0002), so
-    #: deleting one of them leaves the Trip and its plan where they are.
+    #: Null until something in it is worth planning. Several Conversations
+    #: point at one Trip (ADR-0002), so deleting one leaves the Trip alone.
     trip_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("trip.id", ondelete="set null"), nullable=True
     )
-    #: Named after its first exchange, so it is recognisable in the list. Null
-    #: until there has been an exchange to name it after.
+    #: Named after its first exchange. Null until there has been one.
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
-    #: The rolling summary Compaction keeps: the older stretch of this
-    #: Conversation in prose, standing in for those Messages in the prompt once
-    #: sending them whole costs more than they are worth. Null until the
-    #: Conversation has grown long enough for there to be an older stretch.
+    #: The rolling summary Compaction keeps, standing in for the older stretch
+    #: in the prompt once sending it whole costs more than it is worth.
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    #: How many of this Conversation's Messages, counting from the first, the
-    #: summary stands in for. The rest are still sent verbatim. A count rather
-    #: than a marker on each Message because Messages are only ever appended,
-    #: and because Compaction is a fact about the Conversation rather than
-    #: about any Message in it — the traveler still reads every one of them.
+    #: How many Messages from the first the summary stands in for; the rest are
+    #: sent verbatim. A count rather than a marker on each Message, because
+    #: Messages are only appended and the traveler still reads every one.
     summarised_messages: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default=text("0")
     )
-    #: clock_timestamp() for the same reason Message uses it: now() is the
-    #: transaction timestamp, so Conversations started inside one transaction
-    #: would share a timestamp and lose their order.
+    #: clock_timestamp() for the reason Message uses it, below.
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.clock_timestamp(), nullable=False
     )
@@ -303,37 +267,26 @@ class Message(Base):
         Enum(MessageRole, name="message_role", values_callable=_values), nullable=False
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    #: Where anything fetched during this turn came from — one entry per
-    #: source, in the order they were fetched, and a web search leaves one per
-    #: page it read. Empty on a traveler Message and on an advisor Message that
-    #: looked nothing up.
+    #: One entry per source fetched this turn, in order; a web search leaves
+    #: one per page it read. Empty when the turn looked nothing up.
     citations: Mapped[list[dict[str, str | None]]] = mapped_column(
         JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
     )
-    #: The Prompt Version whose Advisor Instructions produced this Message.
-    #: Null on a traveler Message, which no prompt produced — the same way a
-    #: traveler Message carries no cost and no Citations — and null again once
-    #: the version has gone with everything else the traveler deleted.
+    #: Null on a traveler Message, which no prompt produced, and null again
+    #: once the version has gone with everything else the traveler deleted.
     prompt_version_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("prompt_version.id", ondelete="set null"), nullable=True
     )
-    #: What OpenRouter charged for the turn that produced this Message, from its own
-    #: figures rather than a later poll of the account. Null on a traveler Message,
-    #: and on an advisor Message whose provider reported no cost.
+    #: What OpenRouter charged, from its own figures rather than a later poll.
     cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(18, 10), nullable=True)
-    #: Why the turn that produced this Message did not finish — its kind and what
-    #: the traveler is told — and null on every Message whose turn did. A turn
-    #: that fails leaves an advisor Message carrying whatever had arrived of the
-    #: reply, which is empty when nothing had; the marker is what tells that
-    #: apart from an advisor that answered with nothing to say. Kept here rather
-    #: than in the browser's memory, because a traveler who reloads must still
-    #: find their question, what became of it, and the way to ask it again.
-    #: Two keys in one column rather than two columns, for the same reason
-    #: `citations` is one: they are written together or not at all.
+    #: Why the turn did not finish — its kind and what the traveler is told.
+    #: A failed turn leaves an advisor Message holding whatever had arrived of
+    #: the reply, and this marker is what tells an empty one apart from an
+    #: advisor with nothing to say. Kept here rather than in the browser so a
+    #: reload still finds the question and the way to ask it again.
     failure: Mapped[dict[str, str] | None] = mapped_column(JSONB, nullable=True)
-    #: clock_timestamp() rather than now(): now() is the transaction timestamp, so
-    #: Messages written inside one transaction — as the test harness does — would
-    #: share a timestamp and lose their order.
+    #: clock_timestamp() rather than now(): now() is the transaction timestamp,
+    #: so Messages written inside one transaction would lose their order.
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.clock_timestamp(), nullable=False
     )

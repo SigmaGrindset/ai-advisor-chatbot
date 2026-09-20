@@ -59,10 +59,9 @@ async def test_a_field_level_patch_leaves_every_other_field_as_it_was(
 ) -> None:
     """The whole reason the plan is rows rather than a document (ADR-0002).
 
-    A plan is filled in, the traveler changes one field by hand, and then the
-    advisor patches a different one. Nothing else moves — including the field
-    the traveler had just typed, which a whole-document write would have read
-    back stale and put straight back.
+    The traveler changes one field by hand, then the advisor patches another.
+    Nothing else moves, including the field they just typed, which a
+    whole-document write would have read back stale and put straight back.
     """
     outbound_routes["openrouter.ai"] = _asking(
         ("set_destination", {"destination": "Lisbon"}),

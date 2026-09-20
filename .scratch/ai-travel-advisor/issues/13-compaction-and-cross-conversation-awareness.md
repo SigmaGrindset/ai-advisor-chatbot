@@ -24,8 +24,7 @@ other threads exist without being told.
 
 ## Comments
 
-All eight criteria are done. **107 backend tests** (was 100), mypy clean over 61 files; the
-frontend is untouched and still 105 tests in 15 files, `tsc` silent, build clean.
+All eight criteria are done.
 
 **Nothing in the frontend changed, on purpose.** "Not surfaced in the interface in any way"
 is cheapest to keep by never telling the browser: no event, no field on any view.
@@ -46,46 +45,22 @@ briefly dearer beats an advisor missing the middle of the conversation it is in.
 are only appended, so the count cannot go stale, and Compaction stays a fact about the
 Conversation rather than something done to a Message the traveler still reads in full. The
 last Message is never folded — it is the one they are waiting on a reply to — so
-`KEPT_VERBATIM` sits above the 8000 characters a Message is bounded at, or the prompt would
-have a floor nothing could bring it under.
+`KEPT_VERBATIM` sits above the 8000 characters a Message is bounded at.
 
 **"So large tool results are accounted for" does not bite here.** Tool results are never
-persisted; only the advisor's final prose is. What still varies wildly in size is a Message
-— a reply reporting back a page the advisor read is worth twenty short ones — so the
-trigger is a token budget for that reason rather than the ticket's.
+persisted; only the advisor's final prose is. What still varies wildly in size is a Message,
+so the trigger is a token budget for that reason rather than the ticket's.
 
 **Other Conversations are known by name and Trip, never by content** — **ADR-0013**, because
 "one-line summaries" could as easily have been read as a generated gist, which costs a call
 per Conversation per turn and undoes the separation the traveler asked for. At most the ten
-most recently spoken in, so this part of the prompt is bounded however long they have been
-coming back.
+most recently spoken in, so this part of the prompt is bounded.
 
 Both new records joined `compose_around`, the one assembly the turn and the Advisor
 Instructions page already shared, so the page still shows what the next Message sends
-character for character.
+character for character. **The schema changed** — see `HANDOFF.md` §5.
 
-**The schema changed**: a database from before this ticket has neither new column, and
-`create_all` never adds one. `docker compose down -v` (done), or:
-
-```sql
-alter table conversation add column if not exists summary text;
-alter table conversation add column if not exists summarised_messages integer not null
-  default 0;
-```
-
-**The two-axis review changed five things.** Standards: "thread" had leaked past the
-glossary into a test name and several docstrings; `over_budget` returned a count while
-reading as a predicate, and is now `how_many_to_fold`; a public `estimate_tokens` with one
-caller was inlined; summarising and naming were the same ten lines twice, now
-`advisor/utility.py`; and the two cross-Conversation tests moved to
-`test_many_conversations.py`. Spec: the other-Conversations list was unbounded, and is now
-capped with a test. Two findings were reported and left: the tuple `conversations_apart_from`
-answers with is `OtherConversation` unnamed, but `db/` deliberately does not know the
-advisor's shapes; and the Advisor Instructions page renders "short enough to be sent whole"
-only when opened from nowhere in particular, which the browser never does.
-
-**One full-suite run failed and would not reproduce** — `test_web_search.py`'s injection
-test, untouched here, in a Conversation of two short Messages Compaction never looks at.
-Same unexplained ordering flake HANDOFF §7 records from ticket 12, in the same test.
-
-Left for a human: nothing on this ticket.
+Two findings from the review were reported and left: the tuple `conversations_apart_from`
+answers with is unnamed, because `db/` deliberately does not know the advisor's shapes; and
+the Advisor Instructions page renders "short enough to be sent whole" only when opened from
+nowhere in particular, which the browser never does.

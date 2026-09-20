@@ -1,14 +1,12 @@
 /**
  * The Trip Plan on screen, and everything that revises it.
  *
- * Two writers reach the same plan: the advisor, mid-turn, and the traveler,
- * by hand. Both arrive here, and the rule for what happens when they reach
- * for the same field at once is `merging.ts` — pure, and tested there rather
- * than through this.
+ * Two writers reach the same plan: the advisor mid-turn, and the traveler by
+ * hand. Both arrive here; what happens when they reach for one field at once
+ * is `merging.ts`, pure and tested there.
  *
- * Which field the traveler has open is kept in a ref rather than in state,
- * because nothing on the page is drawn from it: the editor holds its own
- * draft, and this needs the answer only at the moment a patch lands.
+ * Which field is open lives in a ref rather than state, because nothing is
+ * drawn from it: this needs the answer only when a patch lands.
  */
 
 import { useRef, useState } from "react";
@@ -51,11 +49,9 @@ export function usePlanHolding(): PlanHolding {
   const { lit, light } = useHighlight();
 
   /**
-   * Take a plan that has arrived, keeping whatever the traveler has open.
-   *
-   * The updater reads the editing ref, which is a read of something that does
-   * not change during a render, and folds the suggestions in idempotently —
-   * so React calling it twice answers the same thing twice.
+   * Take a plan that has arrived, keeping whatever the traveler has open. The
+   * updater reads the editing ref and folds suggestions in idempotently, so
+   * React calling it twice answers the same thing twice.
    */
   function take(conversationId: string, arriving: TripPlan, changed: readonly string[]) {
     setHeld((sofar) => {
@@ -84,9 +80,8 @@ export function usePlanHolding(): PlanHolding {
 
     revised: (conversationId, plan, changed) => {
       take(conversationId, plan, changed);
-      // Everything the patch moved, except the one field it was not allowed
-      // to: lighting that one would say the traveler's own field had changed
-      // under them, which is the opposite of what happened.
+      // Everything the patch moved except the field it was not allowed to:
+      // lighting that would claim the traveler's own value had changed.
       light(changed.filter((field) => field !== editing.current));
     },
 

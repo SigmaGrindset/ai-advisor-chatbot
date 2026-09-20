@@ -47,67 +47,49 @@ import { type OnDeletingTrip, TripsPage } from "./routes/TripsPage";
 import { useTurn } from "./stream/useTurn";
 
 /**
- * The Conversations, the Trip Plan one of them is producing, and what shows
- * them.
+ * The Conversations, the Trip Plan one of them is producing, and what shows them.
  *
- * What the traveler has said and been told is held here, at the one place
- * both the list and the open Conversation can be revised from — a turn adds a
- * Message to the Conversation being read *and* moves its row to the top of
- * the list, and two copies of that would disagree. The plan is held here for
- * the same reason and one more: it is shown in two places at once on a phone,
- * as a sheet and as the strip above the composer.
- *
- * The Trips are held here for a third: one turn can start a Trip, name it and
- * attach the Conversation to it all at once, and the chip in the list, the
- * switcher over the plan and the page listing every Trip all have to say the
- * same thing about it a moment later. What a page shows is the route's
- * question; what is true is this one's, which is why the state lives above
- * both screens and a page cannot take a running turn down with it.
+ * All of it is held here because a single turn revises several views at once —
+ * it adds a Message *and* moves the row to the top of the list, and can start a
+ * Trip that the chip, the switcher and the Trips page must all agree about a
+ * moment later. Two copies of that would disagree. State living above both
+ * screens is also what stops a page taking a running turn down with it.
  *
  * The turn itself is `useTurn`, what becomes of a plan two people are writing
  * to is `plan/holding`, and the arrangement of panes and sheets is `AppShell`.
  */
 export function App() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
-  // Every Trip the traveler has. Kept rather than re-read: a Trip is born
-  // mid-turn, and the plan the turn sends back is the whole of the new Trip,
-  // so a refetch would say the same thing a round trip later — with the chip
-  // beside the Conversation arriving after the plan it belongs to.
+  // Kept rather than re-read: a Trip is born mid-turn and the plan the turn
+  // sends back is the whole of it, so a refetch would only say the same thing
+  // a round trip later — with the chip arriving after the plan it belongs to.
   const [trips, setTrips] = useState<TripPlan[]>([]);
-  // Everything the advisor durably knows about the traveler. It belongs to no
-  // Conversation — every one of them is shown it and any one of them can add
-  // to it — so it is held here rather than beside the open Conversation.
+  // Belongs to no Conversation: every one is shown it and any one can add to it.
   const [profile, setProfile] = useState<ProfileFact[]>([]);
-  // Null is a Conversation the traveler has begun but not yet said anything in.
-  // It has no row in the list and no row in the database until they do.
+  // Null is a Conversation begun but not yet spoken in. It has no row in the
+  // list and none in the database until they say something.
   const [current, setCurrent] = useState<Conversation | null>(null);
-  // What the advisor is told, and the prompt it composes into. Read when that
-  // page is opened rather than on arrival: nothing else shows it, and the
-  // composed prompt is only true of the moment it was asked for — the plan and
-  // the profile it carries move as the traveler talks.
+  // Read when that page is opened rather than on arrival: the composed prompt
+  // is only true of the moment it was asked for, since the plan and profile it
+  // carries move as the traveler talks.
   const [instructions, setInstructions] = useState<AdvisorInstructions | null>(null);
   const [savingInstructions, setSavingInstructions] = useState(false);
   const [rowActions, setRowActions] = useState<RowActions | null>(null);
-  // The Conversation whose name the traveler is editing in the list, if they
-  // are. Held here rather than in the list, because the list is rebuilt from
-  // the top every time a turn moves a row to it.
+  // Held here rather than in the list, which is rebuilt from the top every
+  // time a turn moves a row to it.
   const [renaming, setRenaming] = useState<string | null>(null);
-  // True until the first read of everything has come back, however it came
-  // back. Every pane holds an empty state, and an empty state shown before
-  // anything has been read is a statement about the traveler's account that
-  // nothing has checked — so until this is false the panes stand in shapes
-  // instead (`shell/Skeleton.tsx`).
+  // True until the first read has come back, however it came back. An empty
+  // state shown before anything is read is a claim about the traveler's
+  // account that nothing has checked, so the panes stand in shapes until then.
   const [resuming, setResuming] = useState(true);
   const [failure, setFailure] = useState<string | null>(null);
   const [tab, setTab] = useState<RecordTab>("plan");
-  // The records that changed while their tab was not showing. The tab is
-  // marked rather than switched to (ADR-0006 keeps the plan in view; it does
-  // not take the other record away to do it).
+  // Records that changed while their tab was hidden. Marked rather than
+  // switched to: ADR-0006 keeps the plan in view.
   const [unseen, setUnseen] = useState<ReadonlySet<RecordTab>>(EMPTY);
-  // Which record is showing, kept where a turn can read it. A turn outlives
-  // the render that started it, so the tab it closed over is the tab that was
-  // open when the traveler pressed send and not the one they are looking at
-  // when the plan actually moves.
+  // Kept where a turn can read it. A turn outlives the render that started it,
+  // so what it closed over is the tab open when they pressed send rather than
+  // the one they are looking at when the plan moves.
   const showingTab = useRef(tab);
   useEffect(() => {
     showingTab.current = tab;
@@ -121,8 +103,8 @@ export function App() {
     onConversation: setCurrent,
     onListed: setConversations,
     onAsking: () => {
-      // What the page was showing around the Conversation, which a new turn
-      // supersedes. What the last turn left in it the turn puts down itself.
+      // What the page was showing around the Conversation, superseded by this
+      // turn. What the last turn left in it, the turn puts down itself.
       setRowActions(null);
       setFailure(null);
     },
@@ -130,10 +112,8 @@ export function App() {
     onBegan: (conversationId) => plan.opened(conversationId, null),
     onPlanRevised: (conversationId, revised, changed) => {
       plan.revised(conversationId, revised, changed);
-      // The turn may have started this Trip or joined another, so the list
-      // and the row both hear about it from the same event — a chip that
-      // appeared a request later would be a chip that appeared for no reason
-      // the traveler watched happen.
+      // The turn may have started or joined a Trip, so the list and the row
+      // hear about it from the same event rather than a request later.
       noteTrip(conversationId, revised);
       mark("plan");
     },
@@ -144,8 +124,7 @@ export function App() {
   });
 
   useEffect(() => {
-    // The most recently active Conversation is the one they were working in, so
-    // a reload puts them back rather than somewhere they have to navigate from.
+    // A reload puts them back in the Conversation they were working in.
     void resume()
       .then(([listed, planned, known, opened]) => {
         setConversations(listed);
@@ -157,9 +136,8 @@ export function App() {
         plan.opened(conversation.id, refining);
       })
       .catch(() => setFailure("Your conversations could not be loaded."))
-      // Put down whether the read worked or not. A read that failed has said
-      // so in `failure`, and a pane left loading forever underneath the
-      // sentence explaining why it will not load is two accounts of one thing.
+      // Put down either way: a failed read has already said so in `failure`,
+      // and a pane loading forever beneath that sentence says it twice.
       .finally(() => setResuming(false));
   }, []);
 
@@ -171,17 +149,13 @@ export function App() {
   useEffect(() => {
     if (route !== "instructions") {
       // Put down rather than kept: the composed prompt carries the plan and
-      // the profile as they stood, and showing yesterday's on the way back in
-      // would be showing something that is not what the next message sends.
+      // profile as they stood, so yesterday's is not what the next message sends.
       setInstructions(null);
       return;
     }
-    // What came back for a Conversation that is no longer the one being read
-    // is dropped rather than shown. A traveler arriving at this address has
-    // two reads in flight — the one this page makes before `resume` has said
-    // which Conversation they were in, and the one it makes when it has — and
-    // the first of them answering last would leave a prompt on screen that is
-    // not the one their next message sends.
+    // A traveler arriving at this address has two reads in flight — one before
+    // `resume` has said which Conversation they were in, one after — and the
+    // first answering last would leave a prompt on screen that is not theirs.
     let reading = true;
     void readInstructions(current?.id ?? null)
       .then((read) => {
@@ -193,11 +167,9 @@ export function App() {
     return () => {
       reading = false;
     };
-    // Read again when the Conversation under it changes, which is what a
-    // traveler who arrived at this address rather than navigating to it does:
-    // on a reload or a bookmark the page is drawn before `resume` has said
-    // which Conversation they were in, and a prompt composed without that
-    // Conversation's Trip Plan is not the prompt their next message sends.
+    // Read again when the Conversation under it changes: on a reload the page
+    // is drawn before `resume` has said which one they were in, and a prompt
+    // composed without its plan is not what their next message sends.
   }, [route, current?.id]);
 
   /** Mark a record as changed, unless the traveler is looking straight at it. */
@@ -239,11 +211,8 @@ export function App() {
   }
 
   /**
-   * Call a Conversation something the traveler will recognise it by.
-   *
-   * What the server stored is what is shown afterwards, in both places a
-   * Conversation is named: the row they typed into, and the heading over the
-   * transcript if that is the one they are reading.
+   * Call a Conversation something the traveler will recognise it by. What the
+   * server stored is what both places showing a name are then given.
    */
   function rename(id: string, title: string) {
     setFailure(null);
@@ -274,13 +243,9 @@ export function App() {
   }
 
   /**
-   * The list as it stands once some Conversations have gone, and the traveler
-   * put somewhere if they were reading one of them.
-   *
-   * Two gestures end here — deleting one Conversation, and deleting a Trip
-   * with its Conversations — and what has to happen afterwards is the same
-   * either way: something has to take the place of what they were reading.
-   * The next one down, or a blank Conversation if that was the last of them.
+   * The list once some Conversations have gone, and the traveler put somewhere
+   * if they were reading one: the next one down, or a blank Conversation if
+   * that was the last. Shared by deleting one and deleting a whole Trip.
    */
   async function afterDeleting(
     remaining: ConversationSummary[],
@@ -295,17 +260,12 @@ export function App() {
   }
 
   /**
-   * Delete a Trip, and do what the traveler decided about its Conversations.
+   * Delete a Trip, and do what the traveler decided about its Conversations:
+   * deleted, they leave the list as one deleted alone does; kept, they come
+   * off the Trip and are listed under none.
    *
-   * The plan goes either way. The Conversations are the part they answered a
-   * question about, and both answers have somewhere to land here: deleted,
-   * they leave the list the same way one deleted on its own does; kept, they
-   * come off the Trip and are listed under none, which is where every
-   * Conversation starts.
-   *
-   * Which ones those are is worked out from what this page was showing rather
-   * than read back from the server. It is the same answer, and it is the set
-   * of rows the traveler was actually looking at when they decided.
+   * Which ones those are comes from what this page was showing rather than
+   * from the server — the same answer, and the rows they were looking at.
    */
   async function discard(tripId: string, going: OnDeletingTrip) {
     setFailure(null);
@@ -316,8 +276,7 @@ export function App() {
       return;
     }
     setTrips((sofar) => sofar.filter((trip) => trip.trip_id !== tripId));
-    // The plan pane is showing a Trip that no longer exists, whichever way
-    // they answered — so it is emptied before anything else is decided.
+    // The pane is showing a Trip that no longer exists, either way.
     if (plan.plan?.trip_id === tripId && current !== null) plan.opened(current.id, null);
     if (going === "keep") {
       setConversations((sofar) =>
@@ -334,7 +293,6 @@ export function App() {
     );
   }
 
-  /** Take one thing the advisor learned off the Traveler Profile. */
   function forget(factId: string) {
     setFailure(null);
     void forgetProfileFact(factId)
@@ -343,11 +301,9 @@ export function App() {
   }
 
   /**
-   * Change how the advisor behaves, or put back the way it shipped.
-   *
-   * Both answer with the instructions *and* the prompt they now compose into,
-   * so what the traveler is shown after the change is the server's own
-   * composition of what they just saved rather than the page's guess at it.
+   * Change how the advisor behaves, or put back the way it shipped. Both
+   * answer with the instructions *and* the prompt they compose into, so the
+   * traveler sees the server's composition rather than the page's guess at it.
    */
   function revise(saving: Promise<AdvisorInstructions>, trouble: string) {
     setFailure(null);
@@ -359,11 +315,8 @@ export function App() {
   }
 
   /**
-   * Leave nothing behind.
-   *
-   * Everything on screen goes with it rather than being re-read: what the
-   * traveler is looking at afterwards is a first visit, and asking the server
-   * what it holds now would be asking a question already answered.
+   * Leave nothing behind. Everything on screen goes with it rather than being
+   * re-read — what is left is a first visit, and the server has nothing to add.
    */
   function erase() {
     setFailure(null);
@@ -379,19 +332,15 @@ export function App() {
   }
 
   /**
-   * A plan that has arrived, filed where the rest of the interface reads it
-   * from: the Trips list, and the row of the Conversation refining it.
-   *
-   * Both from the one plan, because both are answers to the same question.
-   * A Conversation whose Trip changed mid-turn and a list that has not heard
-   * of the Trip would leave a row marked with a colour nothing explains.
+   * A plan that has arrived, filed where the interface reads it from: the
+   * Trips list and the row of the Conversation refining it. Both from the one
+   * plan, or a row would be marked with a colour nothing explains.
    */
   function noteTrip(conversationId: string, refining: TripPlan) {
     setTrips((sofar) => withPlan(sofar, refining));
     markTrip(conversationId, refining.trip_id);
   }
 
-  /** Say on a Conversation's row which Trip it is refining. */
   function markTrip(conversationId: string, tripId: string | null) {
     setConversations((sofar) =>
       sofar.map((row) => (row.id === conversationId ? { ...row, trip_id: tripId } : row)),
@@ -418,10 +367,8 @@ export function App() {
   }
 
   /**
-   * One change the traveler made to the plan themselves.
-   *
-   * Every one of these answers with the whole plan, so there is nothing to
-   * reconcile: what comes back is what is shown, bar whatever field they have
+   * One change the traveler made to the plan themselves. Each answers with the
+   * whole plan, so what comes back is what is shown, bar the field they have
    * moved on to editing since.
    */
   function byHand(changing: (tripId: string) => Promise<TripPlan>) {
@@ -430,8 +377,7 @@ export function App() {
     void changing(tripId)
       .then((revised) => {
         plan.replaced(revised);
-        // The page that lists every Trip shows what the traveler just typed
-        // into this one, so it hears about it from the same answer.
+        // The Trips page shows this too, from the same answer.
         setTrips((sofar) => withPlan(sofar, revised));
       })
       .catch(() => setFailure("That change to your trip could not be saved."));
@@ -441,16 +387,15 @@ export function App() {
   function save(field: string, value: string) {
     if (isScalar(field)) {
       const patch = asPatch(field, value);
-      // Text that is not a value the field could hold is not a change and not
-      // an instruction to empty it, so there is nothing to send.
+      // Text the field could not hold is neither a change nor an instruction
+      // to empty it, so there is nothing to send.
       if (Object.keys(patch).length === 0) return;
       byHand((tripId) => changePlan(tripId, patch));
       return;
     }
-    // An Itinerary Item cleared to nothing is not a request to delete it. The
-    // editor opens with its text selected, so one Backspace and a click away
-    // would otherwise destroy the row silently; removing one is the control
-    // beside it, which says what it does.
+    // Clearing an Itinerary Item is not a request to delete it: the editor
+    // opens with its text selected, so a Backspace and a click away would
+    // destroy the row silently. Removing one is the control beside it.
     if (value === "") return;
     byHand((tripId) => changeItineraryItem(tripId, field, value));
   }
@@ -483,8 +428,7 @@ export function App() {
           failure={failure}
           onDelete={(tripId, going) => void discard(tripId, going)}
           onOpen={(id) => {
-            // Opening one is also the way back to it: a traveler who came
-            // here to find a Conversation has found it.
+            // Opening one is also the way back: they came here to find it.
             goTo("conversations");
             void open(id);
           }}
@@ -582,8 +526,7 @@ export function App() {
             }}
             unseen={unseen}
             switcher={
-              // Nothing to switch on a Conversation that does not exist yet:
-              // there is nothing to put on a Trip until they say something.
+              // Nothing to put on a Trip until they have said something.
               current === null ? null : (
                 <TripSwitcher plan={plan.plan} trips={trips} onChoose={attach} />
               )
@@ -599,9 +542,8 @@ export function App() {
             plan={plan.plan}
             lit={plan.lit}
             onOpen={() => {
-              // The strip says where and when, so the record has to come out
-              // at the thing it was showing rather than at whichever tab was
-              // last looked at.
+              // The strip says where and when, so the record opens on that
+              // rather than on whichever tab was last looked at.
               setTab("plan");
               setUnseen((sofar) => without(sofar, "plan"));
               showRecord();
@@ -628,10 +570,9 @@ function without(marked: ReadonlySet<RecordTab>, seen: RecordTab): ReadonlySet<R
  * What to show on arrival: every Conversation, every Trip, everything the
  * advisor knows about the traveler, and the one Conversation last worked in.
  *
- * The Trips come with the rest rather than when a page asks for them, because
- * the very first screen is already marked with which Trip each Conversation
- * is about. The profile comes with them because the pane beside the
- * Conversation has a tab showing it.
+ * Trips and profile come with the rest rather than when a page asks, because
+ * the first screen already marks each Conversation's Trip and has a tab
+ * showing the profile.
  */
 async function resume(): Promise<
   [ConversationSummary[], TripPlan[], ProfileFact[], ConversationRead | null]

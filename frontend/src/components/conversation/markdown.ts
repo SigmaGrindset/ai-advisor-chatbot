@@ -1,12 +1,10 @@
 /**
  * The Markdown the advisor writes, read into a closed set of shapes.
  *
- * The advisor's replies are model output, which is to say text from outside
- * the application that lands inside it. The safety here is structural rather
- * than filtering: what this module answers with is a typed tree, and the tree
- * has no node for an image and no node for raw markup. A reply that contains
- * `<script>` cannot become a script element, because there is nothing for it
- * to become — it comes back as text and is rendered as text.
+ * A reply is model output, so the safety here is structural rather than
+ * filtering: the tree this answers with has no node for an image and none for
+ * raw markup. A reply containing `<script>` cannot become a script element,
+ * because there is nothing for it to become.
  */
 
 /** One run inside a line of prose. */
@@ -27,24 +25,18 @@ export type Block =
   | { kind: "rule" };
 
 /**
- * The addresses a link is allowed to carry.
- *
- * Everything else — `javascript:`, `data:`, a scheme nobody has heard of — is
- * refused and the link becomes its own words. An allowed list rather than a
- * refused one, so a scheme invented tomorrow is refused by default.
+ * The addresses a link may carry. Everything else is refused and the link
+ * becomes its own words. An allowed list, so a scheme invented tomorrow is
+ * refused by default.
  */
 const FOLLOWABLE = /^(?:https?|mailto):/i;
 
 /**
- * How far structure is followed before it is read as prose.
- *
- * A reply is a travel answer, not a document tree, so six levels is past
- * anything real. Past it the text still arrives, as paragraphs — the limit
- * bounds the work, it does not drop what the traveler was told.
+ * How far structure is followed before it is read as prose. Past this the text
+ * still arrives, as paragraphs: the limit bounds the work, it drops nothing.
  */
 const MAX_DEPTH = 6;
 
-/** Read a reply into the shapes the interface knows how to draw. */
 export function parse(markdown: string): Block[] {
   const lines = markdown
     .replace(/\r\n?/g, "\n")
@@ -54,13 +46,9 @@ export function parse(markdown: string): Block[] {
 }
 
 /**
- * A reply as words alone, for a live region to read out.
- *
- * A screen reader given the reply as written announces "hash hash Three Days
- * in Lisbon, star star Day One", because the markup is characters like any
- * other. Reading it off the parsed tree instead says what was actually
- * written, and drops the punctuation that was only ever instructions to a
- * renderer.
+ * A reply as words alone, for a live region to read out. Given the reply as
+ * written, a screen reader announces "hash hash Three Days in Lisbon"; read
+ * off the tree, the punctuation meant for a renderer is gone.
  */
 export function spoken(markdown: string): string {
   return said(parse(markdown)).join("\n");
@@ -121,10 +109,8 @@ function blocks(lines: string[], depth: number): Block[] {
         at += 1;
       }
       if (at < lines.length) at += 1;
-      // The language a fence is labelled with is read only so that it is not
-      // taken for the first line of the code. Nothing draws it: highlighting
-      // is not something this interface does, and a field nothing reads is a
-      // field that goes quietly wrong.
+      // The label is read only so it is not taken for the first line of code.
+      // Nothing draws it: this interface does no highlighting.
       found.push({ kind: "code", text: fenced.join("\n") });
       continue;
     }
@@ -132,8 +118,8 @@ function blocks(lines: string[], depth: number): Block[] {
     const heading = HEADING.exec(line.trimStart());
     if (heading !== null) {
       found.push({
-        // A reply already sits under a heading of its own, so its own headings
-        // are three levels of weight rather than six levels of outline.
+        // A reply already sits under a heading, so its own are three levels of
+        // weight rather than six of outline.
         kind: "heading",
         level: Math.min(heading[1]!.length, 3) as 1 | 2 | 3,
         content: inlines(heading[2]!.trim()),
@@ -165,8 +151,7 @@ function blocks(lines: string[], depth: number): Block[] {
       paragraph.push(lines[at]!.trim());
       at += 1;
     }
-    // A line that opens a block can only be the first of a paragraph when the
-    // block it opens was not recognised, so it is prose after all.
+    // A line that opens an unrecognised block is prose after all.
     if (paragraph.length === 0) {
       paragraph.push(lines[at]!.trim());
       at += 1;
@@ -236,8 +221,8 @@ function list(
       continue;
     }
 
-    // Anything indented as far as the item's own text belongs to that item,
-    // which is how a nested list arrives as a list inside its parent.
+    // Anything indented as far as the item's text belongs to that item, which
+    // is how a nested list arrives inside its parent.
     if (indentOf(line) >= opening.content) {
       gathering.push(line.slice(opening.content));
       at += 1;
@@ -331,8 +316,8 @@ function inlines(line: string): Inline[] {
       }
     }
 
-    // `![alt](src)` asks for an image, and there is no image to give it: the
-    // shape does not exist, so what is left is the words it was labelled with.
+    // `![alt](src)` asks for an image, and there is no such shape to give it,
+    // so what is left is the words it was labelled with.
     const figure = here === "!" && line[at + 1] === "[";
     if (here === "[" || figure) {
       const linked = linkAt(line, figure ? at + 1 : at);
@@ -365,12 +350,9 @@ function inlines(line: string): Inline[] {
 }
 
 /**
- * Runs of ordinary text that ended up side by side, joined back together.
- *
- * A refused link and a dropped image both leave their words where the link or
- * the image was, between whatever was already text on either side. Joining
- * them means the traveler reads one sentence rather than three fragments that
- * happen to abut.
+ * Runs of ordinary text that ended up side by side, joined back together. A
+ * refused link and a dropped image both leave their words in place, and
+ * joining them makes one sentence rather than three abutting fragments.
  */
 function coalesce(content: Inline[]): Inline[] {
   const joined: Inline[] = [];
@@ -400,8 +382,8 @@ function codeAt(line: string, at: number): { text: string; end: number } | null 
     }
     const text = line.slice(at + opener, closes);
     return {
-      // One space either side is the way to write a span that itself starts or
-      // ends in a backtick, so it belongs to the markup rather than the code.
+      // One space either side is how a span starting or ending in a backtick
+      // is written, so it belongs to the markup rather than the code.
       text: text.startsWith(" ") && text.endsWith(" ") && text.trim() !== "" ? text.slice(1, -1) : text,
       end: closes + opener,
     };
@@ -445,8 +427,8 @@ function matching(line: string, at: number, open: string, close: string): number
 
 /** The address as something a traveler can follow, or null if it is not. */
 function followable(href: string): string | null {
-  // Control characters are how `java\tscript:` is written to read as a scheme
-  // in a browser but not in a test for one.
+  // Control characters are how `java\tscript:` reads as a scheme in a browser
+  // but not in a test for one.
   const address = href.replace(/[\u0000-\u0020\u007f]/g, "");
   return FOLLOWABLE.test(address) ? address : null;
 }

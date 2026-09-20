@@ -1,9 +1,6 @@
-"""The saved revisions of the Advisor Instructions.
-
-Nothing here decides what the instructions are when none have been saved, and
-nothing here decides whether a save is worth a row. Both are rules and both
-live a layer up, in `services/instructions.py`. This keeps a revision and
-finds the most recent one.
+"""The saved revisions of the Advisor Instructions: keeping one, and finding
+the most recent. Every rule about them is a layer up, in
+`services/instructions.py`.
 """
 
 from sqlalchemy import select
@@ -17,9 +14,8 @@ async def latest(session: AsyncSession) -> PromptVersion | None:
     version: PromptVersion | None = await session.scalar(
         select(PromptVersion)
         .where(PromptVersion.traveler_id == SOLE_TRAVELER_ID)
-        # By the revision the database counted, never by when it was written:
-        # see `PromptVersion.revision` for what a timestamp settles here and
-        # what it does not.
+        # By the revision the database counted, never by when it was written —
+        # see `PromptVersion.revision`.
         .order_by(PromptVersion.revision.desc())
         .limit(1)
     )
@@ -29,9 +25,8 @@ async def latest(session: AsyncSession) -> PromptVersion | None:
 async def record(session: AsyncSession, instructions: str) -> PromptVersion:
     """Keep a revision of the Advisor Instructions, and answer with it.
 
-    Committed rather than left pending, because the caller goes on to compose
-    a prompt from it and to stamp Messages with it: a version a Message points
-    at has to have survived first.
+    Committed rather than left pending: a version a Message points at has to
+    have survived first.
     """
     version = PromptVersion(traveler_id=SOLE_TRAVELER_ID, instructions=instructions)
     session.add(version)

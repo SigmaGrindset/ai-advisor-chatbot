@@ -1,16 +1,12 @@
 /**
  * How much of the page a phone is actually showing, and where.
  *
- * `100dvh` is the tallest a stylesheet can be told the window is, and on a
- * phone it is frequently wrong: a virtual keyboard takes half the screen and
- * takes it without resizing anything the CSS can see. A shell sized in `dvh`
- * therefore runs on underneath the keyboard, taking the composer with it —
- * which is the exact failure ADR-0007 names as invisible from a resized
- * desktop browser.
+ * A virtual keyboard takes half the screen without resizing anything the CSS
+ * can see, so a shell sized in `100dvh` runs on underneath it with the
+ * composer — the failure ADR-0007 names as invisible from a desktop browser.
  *
- * The browser does know. `window.visualViewport` reports the part of the page
- * the traveler can see, and reports it again whenever the keyboard, the URL
- * bar or a pinch changes it. The shell is given those numbers instead, and
+ * `window.visualViewport` does know, and says so again whenever the keyboard,
+ * the URL bar or a pinch changes it. The shell is given those numbers, and
  * falls back to `100dvh` where they are not on offer.
  */
 
@@ -30,28 +26,24 @@ const HEIGHT = "--spacing-viewport";
 const TOP = "--spacing-viewport-top";
 
 /**
- * What the shell should be, or null to leave the stylesheet's own answer alone.
+ * What the shell should be, or null to leave the stylesheet's answer alone.
  *
- * Null for a browser with nothing to say, and null while the traveler is
- * pinched in: a magnified page reports a viewport a third of the width, and a
- * shell that believed it would reflow to a phone layout under their fingers.
+ * Null for a browser with nothing to say, and null while pinched in: a
+ * magnified page reports a viewport a third of the width, and believing it
+ * would reflow to a phone layout under the traveler's fingers.
  */
 export function showing(reading: Reading | null): Showing | null {
   if (reading === null) return null;
   if (Math.abs(reading.scale - 1) > STILL) return null;
-  // Rounded down, never up. A fraction of a pixel too tall puts the last row
-  // of the composer under the keyboard, which is the whole failure this is
-  // here to prevent.
+  // Rounded down, never up: a fraction of a pixel too tall puts the last row
+  // of the composer under the keyboard.
   return { height: Math.floor(reading.height), top: Math.floor(reading.offsetTop) };
 }
 
 /**
- * Keep the shell the size of what the browser is showing, for as long as the
- * application is mounted.
- *
- * The offset matters as much as the height. A phone opening its keyboard also
- * scrolls the page up underneath it, so a shell that tracked only the height
- * would be the right size in the wrong place, with its foot below the fold.
+ * Keep the shell the size of what the browser is showing. The offset matters
+ * as much as the height: a phone opening its keyboard also scrolls the page up
+ * underneath it, leaving a height-only shell with its foot below the fold.
  */
 export function useVisibleViewport(): void {
   useEffect(() => {

@@ -8,18 +8,13 @@ import { resting } from "./snapping";
 /**
  * A panel that comes in from an edge over the shell, and the only one.
  *
- * Everything the narrow layouts put away lives in one of these: the
- * Conversation list on a tablet and a phone, the record beside it on a phone,
- * and whatever the tickets after this one have to fold away. The snap points
- * are why it is a primitive rather than three drawers — a sheet with a peek,
- * a half and a whole is the shape ADR-0006 asks the Trip Plan for, and it is
- * not a shape to write twice.
+ * Everything the narrow layouts put away lives in one of these. The snap
+ * points are why it is a primitive rather than three drawers: a sheet with a
+ * peek, a half and a whole is the shape ADR-0006 asks the Trip Plan for.
  *
- * It is a `dialog` opened modally, which is deliberate rather than
- * incidental: the browser then owns the focus trap, the Escape key, the
- * inertness of everything behind it, and the return of focus to whatever
- * opened it. A hand-written trap gets one of those four subtly wrong, and the
- * one it gets wrong is only ever found by the traveler who depends on it.
+ * It is a `dialog` opened modally, so the browser owns the focus trap, the
+ * Escape key, the inertness behind it and the return of focus — a
+ * hand-written trap gets one of those four subtly wrong.
  */
 export function Sheet({
   open,
@@ -35,10 +30,7 @@ export function Sheet({
   side: "left" | "bottom";
   /** What the sheet is, for anyone who cannot see which one opened. */
   label: string;
-  /**
-   * Where it is allowed to rest, as fractions of its own size. The default is
-   * the one place a drawer has: all the way out.
-   */
+  /** Where it may rest, as fractions of its own size. */
   stops?: readonly number[];
   /** Which of those it opens at. The default is the furthest out. */
   opensAt?: number;
@@ -47,12 +39,10 @@ export function Sheet({
 }) {
   const frame = useRef<HTMLDialogElement>(null);
   const panel = useRef<HTMLDivElement>(null);
-  // How much of the sheet is out, from 0 for closed to 1 for all of it. It
-  // starts at 0 even when `open` arrives true, so the first frame after the
-  // dialog is shown has somewhere to travel from.
+  // How much is out, 0 to 1. Starts at 0 even when `open` arrives true, so the
+  // first frame after the dialog is shown has somewhere to travel from.
   const [extent, setExtent] = useState(0);
-  // True only while a thumb is on it, when the sheet has to follow the thumb
-  // exactly rather than easing towards anywhere.
+  // True only while a thumb is on it, when the sheet follows it exactly.
   const [dragging, setDragging] = useState(false);
 
   const furthest = Math.max(...stops);
@@ -64,21 +54,14 @@ export function Sheet({
 
     if (open) {
       if (!dialog.open) dialog.showModal();
-      // The panel itself rather than a control in it, so a reader is told
-      // what has opened before it is told what is inside.
-      //
-      // Without `preventScroll` the browser brings the panel into view, and
-      // at this moment the panel is deliberately off the bottom of the
-      // screen waiting to travel up — so bringing it into view scrolls the
-      // whole sheet by however far it had left to come, and the sheet then
-      // rests at the right size in the wrong place.
+      // The panel itself, so a reader is told what has opened before what is
+      // inside. `preventScroll` because the panel is deliberately off-screen
+      // waiting to travel up: bringing it into view would scroll the sheet by
+      // the distance it had left, leaving it the right size in the wrong place.
       panel.current?.focus({ preventScroll: true });
-      // An element displayed and moved in the same breath transitions from
-      // nowhere: a transition needs the position it is leaving to have been
-      // resolved first, and until `showModal` the panel had no position at
-      // all. Reading a layout value resolves it. A frame would do the same
-      // job and only when the page is actually being painted, which is not a
-      // thing to make a sheet opening depend on.
+      // A transition needs the position it is leaving to have been resolved,
+      // and until `showModal` the panel had none. Reading a layout value
+      // resolves it; a frame would work too, but only when actually painting.
       void panel.current?.offsetHeight;
       setExtent(target);
       return;
@@ -86,20 +69,16 @@ export function Sheet({
 
     if (!dialog.open) return;
     setExtent(0);
-    // Shut once it has finished leaving, so the traveler watches it go rather
-    // than watching it vanish.
-    //
-    // How long that is, is asked of the panel rather than assumed, because a
-    // traveler who has asked for less motion has a sheet that leaves in no
-    // time at all — and a fixed wait would hold the page inert behind a sheet
-    // that is already gone. `transitionend` closes it sooner where it fires;
-    // it does not fire at all for a transition short enough to round away.
+    // Shut once it has finished leaving, so the traveler watches it go. How
+    // long that takes is asked of the panel rather than assumed: with less
+    // motion it leaves at once, and a fixed wait would hold the page inert
+    // behind a sheet already gone. `transitionend` closes it sooner where it
+    // fires, which it does not for a transition short enough to round away.
     const shut = () => dialog.close();
     const late = window.setTimeout(shut, travelOf(panel.current) + A_FRAME);
-    // This panel's own travel, and nothing else's. Every control inside a
-    // sheet transitions its colours, and those events bubble: a close button
-    // finishing its hover would otherwise shut the sheet mid-flight, which is
-    // exactly the vanishing this is here to prevent.
+    // This panel's own travel and nothing else's: colour transitions inside
+    // the sheet bubble, and a close button finishing its hover would
+    // otherwise shut the sheet mid-flight.
     const left = (finished: TransitionEvent) => {
       if (finished.target === panel.current && finished.propertyName === "transform") shut();
     };
@@ -125,8 +104,8 @@ export function Sheet({
     },
   });
 
-  // Nothing eases while a thumb is on it: a sheet that lags behind the finger
-  // dragging it does not read as a sheet being dragged.
+  // Nothing eases while a thumb is on it: a sheet lagging behind the finger
+  // does not read as a sheet being dragged.
   const following = dragging ? "0ms" : undefined;
   const away = (1 - extent) * 100;
 
@@ -134,27 +113,19 @@ export function Sheet({
     <dialog
       ref={frame}
       aria-label={label}
-      // The dialog is the whole screen and holds nothing of its own. The
-      // scrim and the panel are inside it, so a press beside the panel is an
-      // ordinary click on an element rather than a press on a pseudo-element
-      // nothing can listen to.
-      //
-      // Its overflow is clipped rather than hidden. A sheet resting part of
-      // the way out leaves the rest of its panel below the screen, and hidden
-      // overflow is still *scrollable* overflow: bringing the focused panel
-      // into view scrolls the sheet by exactly the distance it had left to
-      // travel, and it comes to rest the right size in the wrong place.
-      // Clipped overflow cannot be scrolled by anything.
+      // The whole screen, holding the scrim and the panel, so a press beside
+      // the panel is an ordinary click rather than one on a pseudo-element.
+      // Overflow is clipped rather than hidden: hidden overflow is still
+      // *scrollable*, and a part-open sheet would be scrolled into view and
+      // come to rest the right size in the wrong place.
       className="fixed inset-0 m-0 h-viewport max-h-none w-full max-w-none translate-y-viewport-top overflow-clip border-0 bg-transparent p-0 text-ink backdrop:bg-transparent"
       onKeyDown={(pressed) => {
         if (pressed.key !== "Escape") return;
-        // Escape is taken here rather than left to the dialog's own close
-        // request, for two reasons. The sheet has to leave the way it
-        // arrived rather than vanish, and — the one that is a bug otherwise —
-        // a close request is the *default action* of this key, which nothing
-        // inside the sheet can stand in front of. A row that has its own
-        // actions open would put them away and take the whole sheet with
-        // them. Stopped here, one press is one thing.
+        // Taken here rather than left to the dialog's close request: the
+        // sheet has to leave the way it arrived, and a close request is this
+        // key's *default action*, which nothing inside the sheet can stand in
+        // front of — a row putting its own actions away would take the whole
+        // sheet with it. Stopped here, one press is one thing.
         pressed.preventDefault();
         pressed.stopPropagation();
         onClose();
@@ -183,18 +154,14 @@ export function Sheet({
         style={{
           transform: side === "left" ? `translateX(-${away}%)` : `translateY(${away}%)`,
           transitionDuration: following,
-          // A bottom sheet is as tall as it is ever allowed to be and hangs
-          // the rest of itself below the screen, so dragging it up reveals
-          // more of one panel rather than growing an empty one.
+          // As tall as it is ever allowed to be, hanging the rest below the
+          // screen, so dragging up reveals more of one panel.
           height: side === "bottom" ? `${furthest * 100}%` : undefined,
         }}
       >
-        {/* The one part of a bottom sheet a drag is taken from. Taking it from
-            the body would fight the list inside it, and a sheet that steals a
-            scroll is worse than one that has to be gripped.
-            The open hand says it can be picked up; the closed one says it has
-            been, which is the only acknowledgement a drag gets between the
-            grip and wherever the sheet comes to rest. */}
+        {/* The one part a drag is taken from: taking it from the body would
+            fight the list inside. The hand closes on the grip, which is the
+            only acknowledgement a drag gets until the sheet rests. */}
         <div
           className={`relative flex shrink-0 items-center justify-center py-2 ${
             side === "bottom" ? `touch-none ${dragging ? "cursor-grabbing" : "cursor-grab"}` : ""
@@ -226,7 +193,7 @@ const A_FRAME = 50;
 /** How long this sheet's own travel takes, in milliseconds, as drawn. */
 function travelOf(panel: HTMLElement | null): number {
   if (panel === null) return 0;
-  // The first duration is the transform's; they are all the same, and a
-  // reduced-motion preference has already flattened every one of them.
+  // The first duration is the transform's; they are all the same, and less
+  // motion has already flattened every one of them.
   return parseFloat(getComputedStyle(panel).transitionDuration) * 1000 || 0;
 }

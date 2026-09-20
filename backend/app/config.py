@@ -5,17 +5,16 @@ from pathlib import Path
 from fastapi import Request
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# The checkout root, when the package is run from one. Both defaults below are
-# development conveniences: the container passes configuration as environment
-# variables and sets STATIC_DIR explicitly.
+# The checkout root, for the development defaults below. The container passes
+# configuration as environment variables and sets STATIC_DIR explicitly.
 _CHECKOUT_ROOT = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
     """Everything the application needs to know about its surroundings.
 
-    A missing OpenRouter key is a valid configuration: the application starts and
-    says so, rather than refusing to boot.
+    A missing OpenRouter key is a valid configuration: the application starts
+    and says so, rather than refusing to boot.
     """
 
     model_config = SettingsConfigDict(env_file=_CHECKOUT_ROOT / ".env", extra="ignore")

@@ -1,14 +1,11 @@
-"""The Traveler Profile: read for the prompt, and written by the tool that fills it.
+"""The Traveler Profile: read for the prompt, and written by its tools.
 
-The advisor's side lives in `advisor/remembering.py` and knows nothing about
-storage: a tool call is read there into a typed change, and this is what knows
-how to apply one. What comes back is what the advisor is told, and whether the
-profile the traveler is looking at has moved.
+`advisor/remembering.py` reads a tool call into a typed change and knows
+nothing about storage; this applies one.
 
-The one rule that lives here rather than in the tool's description: three of
-the four subjects hold a single fact each, so recording one of them again
-replaces what was there. A correction made in conversation has to land as a
-correction whether or not the model meant it as one (ADR-0001).
+The rule that lives here rather than in a tool description: three of the four
+subjects hold a single fact each, so recording one again replaces it. A
+correction has to land as one whether or not the model meant it (ADR-0001).
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,10 +28,9 @@ def _as_fact(fact: ProfileFact) -> Fact:
 class Remembering:
     """The advisor's profile tools, applied to the one traveler's profile.
 
-    There is one Traveler and one Traveler Profile, so unlike the plan's there
-    is nothing for this to be built around — it exists for the same reason:
-    the loop is handed something that can apply a change, and what a session is
-    stays on this side of that line.
+    Nothing to be built around, unlike the plan's, but it exists for the same
+    reason: the loop is handed something that can apply a change, and what a
+    session is stays on this side of that line.
     """
 
     def __init__(self, session: AsyncSession) -> None:
@@ -61,8 +57,8 @@ class Remembering:
                 revised=True,
             )
         if standing.detail == asked.detail:
-            # A fact written again with the same words is not a change, and the
-            # traveler watching the profile must not see one happen.
+            # The same words again is not a change, and the traveler watching
+            # the profile must not see one happen.
             return Learned(told=f"The profile already says {said}: {asked.detail}.")
         was = standing.detail
         await traveler.amend_fact(self._session, standing, asked.detail)
@@ -74,10 +70,9 @@ class Remembering:
     async def _standing(self, asked: Remember) -> ProfileFact | None:
         """The fact this one is a correction to, if it is a correction to one.
 
-        For the three single-valued subjects that is whatever is recorded under
-        the subject. For a note it is only a note that already says the same
-        thing, which is there to stop the same sentence accumulating rather
-        than to stop a second note being kept.
+        For the three single-valued subjects, whatever is recorded under the
+        subject. For a note, only one already saying the same thing — which
+        stops a sentence accumulating rather than stopping a second note.
         """
         about = await traveler.facts_about(self._session, FactSubject(asked.subject))
         if asked.subject in remembering.ONE_EACH:

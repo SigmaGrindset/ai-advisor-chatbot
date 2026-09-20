@@ -1,20 +1,12 @@
 """Why a turn did not answer, in words that say whose problem it is.
 
-The whole point of this module is the distinction someone running the
-application for the first time needs and cannot make from "something went
-wrong": a key that was never set is theirs to fix, an exhausted balance is
-theirs to top up, a provider having a bad afternoon is nobody's, and a request
-the provider would not accept is ours. Every one of those arrives as the same
-`APIError`, so the kind is read off the provider's own status or error code
-once, here, rather than guessed at by whoever is showing it.
+A key never set is the traveler's to fix, an exhausted balance theirs to top
+up, a provider having a bad afternoon nobody's, and a request the provider
+refused ours. All four arrive as the same `APIError`, so the kind is read off
+the provider's status or error code once, here, and carried whole afterwards:
+recorded on the Message, sent to the browser, shown under the question.
 
-What comes out is carried whole: recorded against the Message the failed turn
-left behind, sent to the browser on the event that says the turn failed, and
-shown under the question that went unanswered. Nothing downstream re-decides
-what kind of failure it was.
-
-Nothing here touches HTTP, the database or the browser. It takes an exception
-and answers with two strings.
+Nothing here touches HTTP, the database or the browser.
 """
 
 from dataclasses import dataclass
@@ -26,20 +18,17 @@ from openai import APIError, APIStatusError
 class FailureKind(StrEnum):
     """Whose problem a failed turn is.
 
-    Four rather than a free-text reason, because the traveler is shown this as
-    a label above the sentence and the reader of a label is deciding what to
-    *do* — set something, pay something, wait, or report a bug.
+    Four rather than free text, because the reader of the label is deciding
+    what to *do* — set something, pay something, wait, or report a bug.
     """
 
-    #: The application is not configured to reach the model: no key, or a key
-    #: the provider will not accept.
+    #: No key, or a key the provider will not accept.
     CONFIGURATION = "configuration"
     #: The account can no longer pay for a turn.
     CREDIT = "credit"
     #: The provider could not be reached, or would not answer this time.
     UPSTREAM = "upstream"
-    #: This application asked for something it should not have, or fell over
-    #: while answering. A bug, and said to be one.
+    #: A bug here, and said to be one.
     APPLICATION = "application"
 
 
@@ -48,8 +37,7 @@ class Failure:
     """A failed turn, as the traveler is told about it."""
 
     kind: FailureKind
-    #: One or two sentences, addressed to whoever is reading the screen, saying
-    #: what happened and what would change it.
+    #: A sentence or two on what happened and what would change it.
     detail: str
 
     def recorded(self) -> dict[str, str]:
@@ -57,18 +45,16 @@ class Failure:
         return {"kind": self.kind.value, "detail": self.detail}
 
 
-#: No key at all. Raised before anything is recorded, because a turn that never
-#: reached the model is not a turn the traveler has to retry — their question is
-#: still in the composer.
+#: No key at all. Raised before anything is recorded, so the traveler's
+#: question is still in the composer rather than in a transcript.
 NO_KEY = Failure(
     FailureKind.CONFIGURATION,
     "No OpenRouter key is configured. Set OPENROUTER_API_KEY and start the "
     "application again.",
 )
 
-#: Something in the application itself gave way. Named as a bug on purpose: the
-#: reader has just been told three times over that a failure might be their
-#: configuration, and this is the case where it is not.
+#: Named as a bug on purpose: this is the case where it is not the reader's
+#: configuration.
 UNEXPECTED = Failure(
     FailureKind.APPLICATION,
     "The application failed while answering. This is a fault here rather than "
@@ -116,11 +102,9 @@ def of(failure: APIError) -> Failure:
 def _status(failure: APIError) -> int | None:
     """The provider's own code for this failure, where it gave one.
 
-    Two places carry it. A call that was refused outright carries the HTTP
-    status. A call that was accepted and then failed *while streaming* — the
-    turn that dies halfway through an answer — carries the provider's code in
-    the error body instead, because by then the response is a 200 that is still
-    arriving.
+    A call refused outright carries the HTTP status. One that was accepted and
+    then failed *while streaming* carries the code in the error body instead,
+    because by then the response is a 200 that is still arriving.
     """
     if isinstance(failure, APIStatusError):
         return failure.status_code

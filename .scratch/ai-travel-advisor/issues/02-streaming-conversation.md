@@ -27,10 +27,9 @@ from a keystroke to a persisted answer.
 
 ## Comments
 
-Implemented. Driven in the browser against the real OpenRouter API: a reply streamed in
-progressively, survived a reload and a container rebuild, and `cost_usd = 0.006724` was
-recorded from the provider's own final chunk. 24 backend tests pass, `mypy --strict` and
-`tsc --noEmit` clean.
+Implemented and driven in the browser against the real OpenRouter API: a reply streamed
+in progressively, survived a reload and a container rebuild, and `cost_usd` was recorded
+from the provider's own final chunk.
 
 - **The stream is hand-rolled server-sent events over a POST** — `traveler_message`, a
   `fragment` per chunk, then `advisor_message` or `failed` — and the browser reads it with
@@ -41,20 +40,11 @@ recorded from the provider's own final chunk. 24 backend tests pass, `mypy --str
   timestamp, so Messages written inside one transaction — as the harness does — would
   share a timestamp and lose their order.
 - Cost is `usage.cost` on the final chunk, asked for with `{"usage": {"include": true}}`;
-  confirmed against the live API that the usage chunk arrives after the finish chunk.
+  the usage chunk arrives after the finish chunk.
 - Compose passes `CONVERSATION_MODEL` and `UTILITY_MODEL` through only when actually set,
   so an unset variable leaves the application's default rather than blanking it.
 
-Deviations, and what was left for later tickets:
-
-- `test_the_utility_model_is_named_by_the_environment` asserts on `Settings` rather than
-  through the API, because nothing consumes the utility model until 03 needs titles.
-  Marked as a deviation in its own docstring.
-- Raw Tailwind colour utilities, against the spec's no-raw-colour rule: the semantic token
-  layer is 04's, and building it here would be the scope creep this ticket otherwise
-  avoids.
-- Failure handling is the minimum that avoids a hang — a 503 before anything persists when
-  the key is missing, a `failed` event when the turn dies, the draft handed back. The
-  structured error and the partial Message are 14's.
-- `/api/conversation` is singular because there is exactly one; 03 generalises it.
-  Markdown renders as plain text until 05. The growing composer is 05's.
+Left for later tickets: failure handling is the minimum that avoids a hang — the
+structured error and the partial Message are 14's; raw Tailwind colours until 04 builds
+the token layer; Markdown as plain text until 05; and `/api/conversation` is singular
+until 03 generalises it.

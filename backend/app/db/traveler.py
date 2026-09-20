@@ -28,9 +28,8 @@ async def facts_of(session: AsyncSession) -> Sequence[ProfileFact]:
 async def facts_about(session: AsyncSession, subject: FactSubject) -> Sequence[ProfileFact]:
     """Everything recorded under one subject, in the order it was learned.
 
-    A sequence rather than one fact, because only three of the four subjects
-    hold exactly one — what that means for a fact arriving is a decision, and
-    it is made a layer up.
+    A sequence rather than one fact: only three of the four subjects hold
+    exactly one, and what that means is decided a layer up.
     """
     facts = await session.scalars(
         select(ProfileFact)
@@ -82,8 +81,8 @@ async def record_fact(
 async def amend_fact(session: AsyncSession, fact: ProfileFact, detail: str) -> None:
     """Correct what one fact says, keeping the fact it is about.
 
-    The same row rather than a new one, so a correction is a correction: the
-    traveler sees one nationality change rather than two nationalities appear.
+    The same row rather than a new one, so the traveler sees one nationality
+    change rather than two nationalities appear.
     """
     fact.detail = detail
     await session.commit()
@@ -102,25 +101,18 @@ async def forget_fact(session: AsyncSession, fact: ProfileFact) -> None:
 async def erase_everything(session: AsyncSession) -> None:
     """Leave nothing behind: every Conversation, every Trip, the whole profile.
 
-    Every table in the application hangs off the Traveler, so this deletes the
-    Traveler and puts an empty one back in its place — the database's own
-    cascade takes the rest, exactly as it was always going to. A table added
-    later needs no line here, which is the point: a "delete everything" that
-    had to be kept in step with the schema by hand is one that will one day
-    leave something behind.
+    Every table hangs off the Traveler, so the Traveler goes and an empty one
+    takes its place. A table added later needs no line here, which is the
+    point: one kept in step by hand would one day leave something behind.
 
-    The row comes straight back because it is not something the application
-    knows *about* the traveler — it is the one implicit account there is, and
-    the application has to keep working afterwards. `next_fact_ref` starts at
-    one again for free, which is right: nothing refers to the numbers the old
-    facts were listed under any more.
+    The row comes straight back because it is the one implicit account there
+    is. `next_fact_ref` starts at one again, which is right — nothing refers
+    to the old numbers any more.
     """
     await session.execute(delete(Traveler).where(Traveler.id == SOLE_TRAVELER_ID))
     await session.execute(insert(Traveler).values(id=SOLE_TRAVELER_ID))
     await session.commit()
-    # What the cascade took, it took underneath the session: rows deleted by
-    # the database are still in this one's identity map, and a later read by
-    # identifier would answer from it rather than from the database — with a
-    # Conversation that no longer exists. Nothing loaded before this point is
-    # worth keeping, so none of it is kept.
+    # The cascade took those rows underneath the session, which still holds
+    # them in its identity map: a later read by identifier would answer with a
+    # Conversation that no longer exists.
     session.expunge_all()

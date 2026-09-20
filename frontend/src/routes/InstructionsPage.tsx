@@ -8,21 +8,15 @@ import { Skeleton } from "../components/shell/Skeleton";
 /**
  * The Advisor Instructions, and the whole prompt they are composed into.
  *
- * A page rather than a pane, and one of the two there are: what the advisor is
- * told is about none of the open Conversations in particular, and a traveler
- * can be *at* it — an edit is something you come back to and a link is
- * something you send yourself (ADR-0012).
+ * A page rather than a pane: what the advisor is told is about none of the
+ * open Conversations in particular, and a traveler can be *at* it (ADR-0012).
  *
- * It shows two things that have to be seen together. Above, the part the
- * traveler owns: the advisor's persona and its rules, editable. Below, the
- * whole system prompt as it is actually sent — their instructions with the
- * Traveler Profile, the Trip Plan and the tool guidance composed around them.
- * The second is not a description of the first, it is the server's own
- * composition of it, so there is nothing here that can drift from what the
- * next message sends.
+ * Two things seen together. Above, the part they own: the persona and its
+ * rules, editable. Below, the system prompt as it is actually sent — not a
+ * description of the first but the server's own composition of it, so nothing
+ * here can drift from what the next message sends.
  *
- * It draws what it is handed. What is saved, and when it is re-read, is
- * `App.tsx`'s, for the same reason the Trips page's list is.
+ * It draws what it is handed; saving and re-reading are `App.tsx`'s.
  */
 export function InstructionsPage({
   instructions,
@@ -72,9 +66,8 @@ export function InstructionsPage({
           )}
 
           {instructions === null ? (
-            // The shape of what is coming rather than a sentence about it: the
-            // editor and the composed prompt below it are both tall, and a
-            // line of text where a page is about to be is a page that jumps.
+            // The shape of what is coming rather than a sentence about it: a
+            // line of text where a tall page is about to be is a page that jumps.
             <div
               className="flex flex-col gap-3"
               role="status"
@@ -86,9 +79,9 @@ export function InstructionsPage({
             </div>
           ) : (
             <Editing
-              // Keyed on the version, so a save or a restore replaces the
-              // editor rather than leaving a draft standing over instructions
-              // that are no longer the ones it was started from.
+              // Keyed on the version, so a save or restore replaces the editor
+              // rather than leaving a draft over instructions it did not start
+              // from.
               key={instructions.version_id}
               instructions={instructions}
               saving={saving}
@@ -116,9 +109,8 @@ function Editing({
 }) {
   const [draft, setDraft] = useState(instructions.instructions);
   const edited = draft !== instructions.instructions;
-  // Emptied entirely, the advisor would be left with the application's own
-  // guidance and no persona at all. That is a slip rather than an instruction,
-  // and the server refuses it — so the control says so before it is pressed.
+  // Emptied, the advisor would have our guidance and no persona at all. The
+  // server refuses it, so the control says so before it is pressed.
   const emptied = draft.trim() === "";
 
   return (
@@ -148,9 +140,8 @@ function Editing({
           >
             {saving ? "Saving…" : "Save"}
           </button>
-          {/* Said rather than drawn, and announced: whether what is on screen
-              is what the advisor is actually being told is the one thing this
-              page exists to be unambiguous about. */}
+          {/* Said and announced: whether what is on screen is what the advisor
+              is told is the one thing this page must be unambiguous about. */}
           <p role="status" className="text-meta text-ink-subtle">
             {emptied
               ? "Your advisor needs some instructions. Restore the default to start again."
@@ -181,9 +172,8 @@ function Editing({
           )}
         </div>
 
-        {/* Wrapped rather than scrolled sideways: a prompt read on a phone is
-            still the whole prompt. Focusable, because a block this tall has to
-            be scrollable by someone who is not holding a mouse. */}
+        {/* Wrapped rather than scrolled sideways, and focusable, because a
+            block this tall has to be scrollable without a mouse. */}
         <pre
           tabIndex={0}
           aria-label="The composed prompt"
@@ -197,13 +187,10 @@ function Editing({
 }
 
 /**
- * Putting the shipped instructions back.
- *
- * Asked once before it happens, with named controls rather than an undo nobody
- * is offered — the same two-step the Conversation list deletes a row with,
- * because this throws away what the traveler wrote. Not offered at all when
- * what is in force is already the default: a control that would do nothing
- * says nothing.
+ * Putting the shipped instructions back. Asked once first, with named
+ * controls — the same two-step the Conversation list deletes a row with,
+ * because this throws away what the traveler wrote. Not offered when the
+ * default is already in force.
  */
 function Restoring({
   instructions,
@@ -215,9 +202,8 @@ function Restoring({
   const [confirming, setConfirming] = useState(false);
 
   if (instructions.is_default) {
-    // Said rather than drawn as a control that would do nothing — and said at
-    // all, because a traveler about to rewrite their advisor wants to know
-    // before they start that there is a way back.
+    // Said rather than drawn as a control that would do nothing, but said:
+    // somebody about to rewrite their advisor wants to know there is a way back.
     return (
       <p className="text-meta text-ink-subtle">
         These are the instructions your advisor ships with. Once you have changed them,

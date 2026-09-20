@@ -6,16 +6,12 @@ import { useTheme } from "../../design/theme";
 /**
  * The other theme, one press away.
  *
- * One control and two states, because there are two themes. The third thing
- * a theme control usually offers — "follow this machine" — is not on the
- * screen, because it is not a thing the traveler has to choose: it is what
- * they already have until they press this, and nothing here takes it away
- * from somebody who never does (`design/theme.ts`).
+ * One control and two states. The third thing a theme control usually offers
+ * — "follow this machine" — is not on screen because it is not a choice: it
+ * is what they have until they press this (`design/theme.ts`).
  *
- * The label is where the press leads rather than where it is now. A button in
- * a column of buttons is read as a thing to do, so "Dark mode" beside a moon
- * is read as the offer it is; the same words as a status line would be a
- * sentence about the screen the traveler is already looking at.
+ * The label is where the press leads rather than where it is now, because a
+ * button in a column of buttons reads as a thing to do.
  */
 export function ThemeToggle() {
   const { scheme, toggle } = useTheme();

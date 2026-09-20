@@ -7,35 +7,26 @@ import { Sheet } from "./Sheet";
  * How to reach what this width has folded into a sheet, and null for whatever
  * it has left on the page.
  *
- * The controls that open the sheets are the shell's, but they are drawn in
- * the Conversation's header, which is the only thing on a phone with room for
- * them. So the shell hands them to whatever it puts in the middle rather than
- * drawing them itself.
+ * The controls belong to the shell but are drawn in the Conversation's header,
+ * the only thing on a phone with room for them, so the shell hands them to
+ * whatever it puts in the middle.
  */
 export type Folded = {
   conversations: (() => void) | null;
   record: (() => void) | null;
-  /**
-   * The peek state of the record on a phone, which belongs above the
-   * composer — so it is drawn where the composer is rather than where the
-   * sheet is. Null at a width that has the record on the page already.
-   */
+  /** Drawn where the composer is rather than where the sheet is. */
   peek: ReactNode;
 };
 
 /**
  * Three things, and which of them have a pane of their own is the width's
- * decision: what the traveler has talked about, what they are talking about,
- * and what the talking is producing. On a laptop all three stand side by
- * side; on a tablet the list comes out as a sheet, because the record is
- * continuous context and the list is occasional navigation (ADR-0006); on a
- * phone the conversation has the screen and the other two are sheets.
+ * decision. On a laptop all three stand side by side; on a tablet the list
+ * comes out as a sheet, the record being continuous context where the list is
+ * occasional navigation (ADR-0006); on a phone only the conversation remains.
  *
- * Each of them is given here once, and this puts it in whichever place the
- * width has for it. A component rendered into both a pane and a sheet and
- * hidden in one of them would be two of everything — two tab strips
- * disagreeing about which tab is open, and two of every identifier on the
- * page.
+ * Each is given here once and put wherever the width has room. Rendering one
+ * into both a pane and a sheet and hiding one would be two of everything —
+ * two tab strips disagreeing, and two of every identifier on the page.
  */
 export function AppShell({
   list,
@@ -44,41 +35,32 @@ export function AppShell({
   peek,
 }: {
   /**
-   * The Conversation list. It is given the way to put the sheet away, because
-   * a traveler who has picked something out of the list has finished with it:
-   * a sheet left open over the Conversation they just asked for is a sheet
-   * they have to dismiss before they can read it.
+   * Given the way to put the sheet away: one left open over the Conversation
+   * they just asked for has to be dismissed before they can read it.
    */
   list: (dismiss: () => void) => ReactNode;
   /** The Conversation itself, which has the middle at every width. */
   conversation: (folded: Folded) => ReactNode;
   /** What the talking is producing. */
   record: ReactNode;
-  /**
-   * The one line of it that stays in view on a phone. It is given the way to
-   * bring the rest of the record out, because that is the only thing it does
-   * — and it is drawn into the Conversation rather than here, for the same
-   * reason the sheet controls are.
-   */
+  /** The one line of it that stays in view on a phone, and how to open the rest. */
   peek: (show: () => void) => ReactNode;
 }) {
-  // Which sheet is out, and null when none is. One at a time: a sheet is
-  // modal, so a second one would open over the first with no way back to it.
+  // One at a time: a sheet is modal, so a second would open over the first
+  // with no way back to it.
   const [sheet, setSheet] = useState<"conversations" | "record" | null>(null);
   const layout = useLayout();
 
   useEffect(() => {
-    // A window widened until it has a pane for what is in the sheet does not
-    // need the sheet, and leaving it out would put a modal scrim over a
-    // layout that is showing the same thing behind it.
+    // A window wide enough for a pane does not need the sheet, which would
+    // put a modal scrim over a layout already showing the same thing.
     if (sheet === "conversations" && layout === "desktop") setSheet(null);
     if (sheet === "record" && layout !== "phone") setSheet(null);
   }, [layout, sheet]);
 
-  // Whether each of the two has a pane of its own at this width, asked once.
-  // Every place below reads one of these rather than the width again: the
-  // pane and the sheet are exact complements, and a pair that drifted would
-  // put the same component on the page twice or leave it off altogether.
+  // Asked once, and read everywhere below rather than the width again: pane
+  // and sheet are exact complements, and a pair that drifted would draw the
+  // same component twice or leave it off altogether.
   const listed = layout === "desktop";
   const recorded = layout !== "phone";
 
@@ -86,9 +68,8 @@ export function AppShell({
   const listing = list(dismiss);
 
   return (
-    // The panes themselves, in the order they stand. The frame they stand in
-    // is `AppFrame`, which every screen shares — this arrangement is one of
-    // the things that can be inside it, not the application's own window.
+    // The panes, in the order they stand. The frame around them is `AppFrame`,
+    // which every screen shares.
     <>
       {listed ? (
         <div className="w-rail shrink-0 border-r border-line">{listing}</div>
@@ -134,14 +115,11 @@ export function AppShell({
 }
 
 /**
- * Where the record sheet is allowed to rest on a phone, as fractions of the
- * screen.
+ * Where the record sheet may rest on a phone, as fractions of the screen.
  *
- * Half and whole. ADR-0006's third state, the peek, is not a third number
- * here: this sheet is a modal dialog, which is what gives it a focus trap and
- * a working back gesture, and a modal sheet resting permanently over the
- * composer would leave the traveler unable to type — which is the one thing
- * the peek exists to let them do. The peek is `PlanPeek`, a strip above the
- * composer, and dragging this sheet down lands back on it.
+ * Half and whole. ADR-0006's third state, the peek, is not a third number:
+ * this sheet is a modal dialog, and one resting permanently over the composer
+ * would leave the traveler unable to type. The peek is `PlanPeek`, a strip
+ * above the composer, and dragging this sheet down lands back on it.
  */
 const RECORD_SNAPS = [0.55, 1] as const;

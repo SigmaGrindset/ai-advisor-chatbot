@@ -1,10 +1,8 @@
 """The Advisor Instructions: what is shown, what an edit changes, and what it marks.
 
-Every test drives the whole application through its own HTTP API, the way the
-page does. What is asserted is what a traveler would see: the prompt the page
-shows them, the advisor answering differently on the very next message of a
-Conversation they were already in, and the reply carrying the version that
-produced it.
+Every test drives the application through its own HTTP API. What is asserted
+is what a traveler would see: the prompt on the page, the advisor answering
+differently on the very next message, and the reply carrying its version.
 """
 
 import json

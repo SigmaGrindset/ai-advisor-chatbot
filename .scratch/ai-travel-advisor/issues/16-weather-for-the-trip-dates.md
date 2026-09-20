@@ -33,28 +33,27 @@ have really been like — said plainly as that, never dressed up as a prediction
 ## Comments
 
 **The Climate API was the road not taken.** It covers 1950–2050 and would have answered
-about the actual future dates in one request, which is the tidier-looking design. Its
-daily values for a future date are one realisation of a climate model rather than a
-prediction of that day, and there is no honest sentence to put them in — "on 14 June it
-will be 26°C" is a thing nobody knows. Asked for 10–20 June 2027 in Lisbon it gave a
-23.5°C mean high, where the ten observed years give 25.1°C and 2025 alone was 27.6°C —
-three numbers for one question, which is the whole trouble with answering it from a
-single run of anything.
+about the actual future dates in one request, which is the tidier-looking design. Its daily
+values for a future date are one realisation of a climate model rather than a prediction of
+that day, and there is no honest sentence to put them in. Asked for 10–20 June 2027 in
+Lisbon it gave a 23.5°C mean high, where the ten observed years give 25.1°C and 2025 alone
+was 27.6°C — three numbers for one question, which is the whole trouble with answering it
+from a single run of anything.
 
-**The far-dates request is deliberately wasteful.** Ten years of the same calendar window
-is not a contiguous range, so the request asks for ten whole years and the reader throws
-away the days that are not the trip's — about a hundred kilobytes and half a second. The
+**The far-dates request is deliberately wasteful.** Ten years of the same calendar window is
+not a contiguous range, so the request asks for ten whole years and the reader throws away
+the days that are not the trip's — about a hundred kilobytes and half a second. The
 alternative was ten requests, which would have meant ten ways for one lookup to half-fail
 inside the retry and timeout machinery ticket 07 built for a single `Errand`.
 
 **Two tools rather than one with an optional date.** `current_weather` answers with a
 reading taken; this answers with a forecast made or a decade averaged. One tool returning
-any of the three would be one whose answer the advisor could repeat without knowing which
-it had, which is the exact failure the whole design is trying to avoid.
+any of the three would be one whose answer the advisor could repeat without knowing which it
+had, which is the exact failure the whole design is trying to avoid.
 
-**Nothing verifies the browser end automatically,** as in ticket 07. The status line for
+**Nothing verifies the browser end automatically,** as in ticket 07: the status line for
 both branches was read from the SSE events in the turn tests rather than from a rendered
-page; the frontend suite is still Node-only (`HANDOFF.md` §4).
+page.
 
 **Ready for human rather than done:** the advisor's wording when it gets a ten-year answer
 is a judgement call that wants reading against a few real turns, not just the canned ones.

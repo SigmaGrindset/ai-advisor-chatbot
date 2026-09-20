@@ -77,10 +77,9 @@ async def test_a_reopened_conversation_continues_where_it_was_left(
         ("traveler", "And Oslo?"),
         ("advisor", "Oslo in April is still cold."),
     ]
-    # Nothing said in the other Conversation is in this one's prompt either. The
-    # advisor is told that Conversation exists, by name and by journey — the two
-    # tests further down — and never what was said in it: keeping them apart is
-    # what the traveler asked for by starting a second one.
+    # Nothing said in the other Conversation is in this one's prompt. The
+    # advisor is told it exists, by name and journey, and never what was
+    # said in it — the two tests further down.
     assert "Oslo" not in str(later.prompt)
 
 
@@ -211,9 +210,9 @@ async def test_deleting_a_conversation_removes_its_messages(
 ) -> None:
     """Counted in the database, unlike every other test here.
 
-    Deletion means there are no rows left, and rows the API can no longer reach
-    are exactly what a soft delete would leave behind. There is nothing to ask the
-    API that would tell the two apart, so this one test looks.
+    Rows the API can no longer reach are exactly what a soft delete leaves
+    behind, and nothing asked of the API tells the two apart — so this one
+    test looks.
     """
     outbound_routes["openrouter.ai"] = replying("April in Lisbon is mild.")
     await send(api, conversation, "What is Lisbon like in April?")
@@ -326,8 +325,7 @@ async def test_the_advisor_is_told_the_travelers_other_conversations_exist(
     await send(api, oslo, "And what about Oslo?")
 
     assert "Three days in Lisbon — about Lisbon" in _system(model.prompt)
-    # Its name and its journey, and not a word of what was said in it: keeping
-    # Conversations apart is what the traveler asked for by starting a second.
+    # Its name and its journey, and not a word of what was said in it.
     assert "We have settled on Lisbon." not in str(model.prompt)
 
     outbound_routes["openrouter.ai"] = later = replying("Take the tram.")
@@ -353,8 +351,8 @@ async def test_only_the_most_recently_spoken_in_others_reach_the_prompt(
 
     system = _system(model.prompt)
     assert f"Trip number {MOST_RECENT_OTHERS:02d}" in system
-    # The one spoken in longest ago falls off the end rather than the prompt
-    # growing by a line for every Conversation the traveler has ever had.
+    # The one spoken in longest ago falls off the end, rather than the prompt
+    # growing a line for every Conversation the traveler has ever had.
     assert "Trip number 00" not in system
 
 

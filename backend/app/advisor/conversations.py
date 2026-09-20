@@ -1,20 +1,13 @@
 """The traveler's other Conversations, as the advisor is shown they exist.
 
-A traveler plans one trip across several Conversations: they ask about flights in
-one, come back a week later and start another about what to do when they land. The
-advisor is shown one Conversation at a time and would otherwise have no idea the
-others are there — so it answers as though this were the only place the trip has
-ever been discussed.
+One trip is planned across several Conversations, and an advisor shown one at
+a time would answer as though this were the only place it had been discussed.
 
-What is composed in is a line each: the name the Conversation was given after its
-first exchange, and the Trip it is refining. Not a word of what was *said* in
-them. Keeping Conversations apart is what the traveler asked for by starting a
-second one, and what they settled about a journey is in the Trip Plan, which the
-advisor is shown in full. All this has to do is stop the advisor being surprised
-that the others are there.
+A line each: the Conversation's name and the Trip it refines — not a word of
+what was *said* in them. Keeping them apart is what the traveler asked for by
+starting a second, and what they settled is in the Trip Plan anyway.
 
-Nothing here touches the database; `services/instructions.py` reads the rows and
-composes what this describes into the one system prompt.
+Nothing here touches the database; `services/instructions.py` reads the rows.
 """
 
 from collections.abc import Sequence
@@ -25,12 +18,10 @@ from dataclasses import dataclass
 class OtherConversation:
     """One Conversation of the traveler's, other than the one being answered."""
 
-    #: What it was named after its first exchange. A Conversation nothing has
-    #: been said in yet has no name and is not worth mentioning, so there is no
-    #: null here — the query leaves those out.
+    #: Never null: an unnamed Conversation has had nothing said in it, and the
+    #: query leaves those out.
     title: str
-    #: Where the Trip it is refining is going, and null when it is refining no
-    #: Trip or when the destination is still undecided.
+    #: Null when it refines no Trip, or when the destination is undecided.
     destination: str | None
 
 

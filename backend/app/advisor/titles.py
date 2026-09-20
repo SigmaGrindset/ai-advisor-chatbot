@@ -1,9 +1,8 @@
 """Naming a Conversation after its first exchange.
 
-The utility model does the naming, because a title is exactly the kind of small,
-unseen work the cheaper model is configured for. It is never worth failing a turn
-over: every way the call can disappoint ends at the traveler's own first words,
-which is why `utility.ask` answering None covers all of them at once.
+The utility model does it, this being exactly the small unseen work it is
+configured for. Never worth failing a turn over: every way the call can
+disappoint ends at the traveler's own first words.
 """
 
 from openai import AsyncOpenAI
@@ -33,11 +32,10 @@ async def name_conversation(
     traveler_said: str,
     advisor_said: str,
 ) -> str | None:
-    """A title for this exchange, from the utility model or from what the traveler said.
+    """A title for this exchange, from the utility model or the traveler's words.
 
-    None when there is nothing to name it by, which a Message of pure whitespace
-    leaves behind. An unnamed Conversation can be named by its next exchange; one
-    named the empty string could not be.
+    None when there is nothing to name it by: an unnamed Conversation can be
+    named by its next exchange, one named the empty string could not be.
     """
     proposed = await ask(
         model,

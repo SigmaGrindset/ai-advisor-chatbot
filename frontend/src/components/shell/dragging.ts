@@ -1,24 +1,19 @@
 /**
- * Carrying a sheet under a thumb.
+ * Carrying a sheet under a thumb: arithmetic over a stream of pointer
+ * positions, where the sheet itself is a dialog and where it comes to rest is
+ * `snapping.ts`.
  *
- * Separated from the sheet itself because it is a different kind of thing: a
- * sheet is a dialog with a panel in it, and this is arithmetic over a stream
- * of pointer positions. Where the sheet comes to rest afterwards is a third
- * thing again, and lives in `snapping.ts`.
- *
- * Everything here speaks in extents — a fraction of the sheet's own size,
- * from 0 for closed to 1 for all of it — so that neither this nor the
- * snapping rule has to know which edge the sheet came in from.
+ * Everything speaks in extents — a fraction of the sheet's own size, 0 closed
+ * to 1 out — so neither this nor the snapping rule needs to know which edge
+ * the sheet came in from.
  */
 
 import { useRef, type PointerEvent } from "react";
 
 /**
- * How far back a velocity is measured, in milliseconds.
- *
- * Over the whole drag, a thumb that wandered for a second and then flicked
- * reads as barely moving. Between the last two frames it reads as noise. A
- * window of a few frames is the speed a hand would say it was going.
+ * How far back a velocity is measured, in milliseconds. Over the whole drag a
+ * thumb that wandered then flicked reads as barely moving; between two frames
+ * it reads as noise. A few frames is the speed a hand would claim.
  */
 const RECENTLY = 50;
 
