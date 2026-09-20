@@ -1,15 +1,21 @@
 """The Live-data Tools: what the advisor calls when it must not guess.
 
-Four capabilities, of two kinds. Three are keyless public services — Open-Meteo
-for current weather, Frankfurter for exchange rates, and the World Bank for a
-country's basics — none of which needs a second credential, which is the
-constraint the whole choice was made under (ADR-0003, and ADR-0008 for why the
-third one is not the one ADR-0003 named). The fourth is a web search, which is
-a nested model call rather than an HTTP GET and lives in `searching.py`.
+Five capabilities, of two kinds. Four are keyless public services — Open-Meteo
+for the weather now and for the weather over the days of a trip, Frankfurter
+for exchange rates, and the World Bank for a country's basics — none of which
+needs a second credential, which is the constraint the whole choice was made
+under (ADR-0003, and ADR-0008 for why the country one is not the one ADR-0003
+named). The fifth is a web search, which is a nested model call rather than an
+HTTP GET and lives in `searching.py`.
 
-Three of the four take arguments a traveler's words cannot fit into, which is
+The two weather tools are two tools because they answer two different
+sentences: one reports a reading taken, the other a forecast made or a decade
+of Junes averaged, and a single tool returning any of the three would be one
+the advisor could quote without knowing which it had.
+
+Four of the five take arguments a traveler's words cannot fit into, which is
 what makes personal data structurally unable to travel with a lookup rather
-than merely unlikely to (ADR-0004). The one string the weather tool takes is a
+than merely unlikely to (ADR-0004). The one string the weather tools take is a
 place *label*: it is shown to the traveler while the lookup runs, it is refused
 if it carries a digit, and it is never part of the request. The search query is
 the single exception — a search needs words — and it is the single thing the
@@ -28,6 +34,8 @@ import json
 import logging
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date, timedelta
+from statistics import fmean
 from typing import Any
 
 import httpx2
@@ -398,6 +406,291 @@ _WEATHER_CODES = {
 }
 
 
+# ---- Weather for the dates of a trip, from Open-Meteo --------------------- #
+
+
+def _read_outlook(given: Mapping[str, Any]) -> Errand | Unusable:
+    """The weather over a stretch of days, which is two different questions.
+
+    Near enough and there is a forecast to fetch. Far enough out and there is
+    not one to fetch anywhere, because nobody makes one — so the question
+    becomes what those dates have actually been like, which is a different
+    fetch from a different service answering a different sentence. Which of the
+    two it is, is decided here rather than by the advisor, because the horizon
+    is a fact about the service and not something the advisor should have to
+    carry in its head.
+    """
+    latitude = _degrees(given.get("latitude"), limit=90.0)
+    longitude = _degrees(given.get("longitude"), limit=180.0)
+    if latitude is None or longitude is None:
+        return Unusable(
+            activity="Checking the weather for some dates",
+            complaint="The weather outlook needs a latitude and a longitude as numbers.",
+        )
+    starts = _day(given.get("start_date"))
+    ends = _day(given.get("end_date"))
+    if starts is None or ends is None:
+        return Unusable(
+            activity="Checking the weather for some dates",
+            complaint=(
+                "The weather outlook needs a start_date and an end_date, each written "
+                "as YYYY-MM-DD."
+            ),
+        )
+    if ends < starts:
+        starts, ends = ends, starts
+    # Same label rules as the current-weather tool, and for the same reason: it
+    # is shown to the traveler and is no part of the request (ADR-0004).
+    place = _label(given.get("place")) or f"{latitude:g}, {longitude:g}"
+
+    today = date.today()
+    if ends < today:
+        return Unusable(
+            activity=f"Checking the weather in {place}",
+            complaint=(
+                f"Those dates have already gone by — {ends.isoformat()} is in the past. "
+                "Ask about the dates the trip is actually on."
+            ),
+        )
+    starts = max(starts, today)
+    ends = min(ends, starts + MAX_OUTLOOK)
+    reach = today + FORECAST_REACH
+    if starts <= reach:
+        return _forecast(latitude, longitude, place, starts, min(ends, reach), asked=ends)
+    return _typical(latitude, longitude, place, starts, ends)
+
+
+#: How far ahead Open-Meteo forecasts, counting today as the first day. Asked
+#: for a day past this it refuses the whole request rather than answering with
+#: what it has, which is why the horizon is worked out here before asking.
+FORECAST_REACH = timedelta(days=15)
+
+#: The longest stretch one outlook covers. A trip longer than this is asked
+#: about in parts; past a month the answer stops being something a traveler
+#: reads and the averages stop describing a single season.
+MAX_OUTLOOK = timedelta(days=30)
+
+#: How many years of observation "usually" is drawn from. One year is weather
+#: rather than climate — the same June that averaged 25°C across ten years ran
+#: four degrees hotter in one of them — and ten is enough for the spread to
+#: mean something without the request growing past a second.
+TYPICAL_YEARS = 10
+
+#: How much rain in a day counts as a day it rained. Below this is the damp
+#: morning nobody changes their plans for.
+RAINY_DAY = 1.0
+
+
+def _forecast(
+    latitude: float, longitude: float, place: str, starts: date, ends: date, *, asked: date
+) -> Errand:
+    """A real forecast, for dates near enough that one exists."""
+    return Errand(
+        activity=f"Checking the forecast for {place}, {_span(starts, ends)}",
+        service="Open-Meteo",
+        url="https://api.open-meteo.com/v1/forecast",
+        params={
+            "latitude": f"{latitude:g}",
+            "longitude": f"{longitude:g}",
+            "daily": ",".join(_FORECAST_FIELDS),
+            "start_date": starts.isoformat(),
+            "end_date": ends.isoformat(),
+            "timezone": "auto",
+        },
+        read=lambda answered: _forecast_found(answered, place, starts, ends, asked),
+    )
+
+
+#: What a day of the forecast is, asked for by name so the answer is the same
+#: shape every time. A high, a low, whether it rains and how hard it blows —
+#: what somebody deciding what to pack is actually asking.
+_FORECAST_FIELDS = (
+    "weather_code",
+    "temperature_2m_max",
+    "temperature_2m_min",
+    "precipitation_sum",
+    "precipitation_probability_max",
+    "wind_speed_10m_max",
+)
+
+
+def _forecast_found(answered: Any, place: str, starts: date, ends: date, asked: date) -> Found:
+    daily = answered["daily"]
+    units = answered.get("daily_units", {})
+    days = [_forecast_day(daily, units, at) for at in range(len(daily["time"]))]
+    # The traveler asked about a stretch running past where forecasting stops.
+    # Saying so is the difference between an answer that is short and an answer
+    # that is quietly wrong about how much of the trip it covered.
+    beyond = (
+        ""
+        if asked <= ends
+        else (
+            f" A forecast reaches no further than {ends.isoformat()}, so the rest of the "
+            f"stretch to {asked.isoformat()} is not in this and has to be asked about "
+            "nearer the time."
+        )
+    )
+    return Found(
+        content=(
+            f"Forecast for {place}, {_span(starts, ends)} "
+            f"({answered.get('timezone', 'local time zone unknown')}):\n"
+            + "\n".join(days)
+            + beyond
+        ),
+        about=f"Forecast for {place}, {_span(starts, ends)}",
+    )
+
+
+def _forecast_day(daily: Mapping[str, Any], units: Mapping[str, Any], at: int) -> str:
+    """One day of it, in a line."""
+    when = date.fromisoformat(daily["time"][at])
+    described = _WEATHER_CODES.get(_nth(daily, "weather_code", at), "conditions not described")
+    said = [described]
+    low = _nth(daily, "temperature_2m_min", at)
+    high = _nth(daily, "temperature_2m_max", at)
+    if low is not None and high is not None:
+        said.append(f"{low}–{high}{units.get('temperature_2m_max', '')}")
+    fell = _nth(daily, "precipitation_sum", at)
+    if fell is not None:
+        chance = _nth(daily, "precipitation_probability_max", at)
+        odds = (
+            ""
+            if chance is None
+            else f" ({chance}{units.get('precipitation_probability_max', '')} chance)"
+        )
+        said.append(f"{fell}{units.get('precipitation_sum', '')} rain{odds}")
+    blew = _nth(daily, "wind_speed_10m_max", at)
+    if blew is not None:
+        said.append(f"wind to {blew}{units.get('wind_speed_10m_max', '')}")
+    return f"  {when:%a %d %b}: {', '.join(said)}"
+
+
+def _typical(
+    latitude: float, longitude: float, place: str, starts: date, ends: date
+) -> Errand:
+    """What these dates have been like, for dates no forecast reaches.
+
+    One request covering whole years, rather than one per year: the days that
+    are not the ones asked about are thrown away in `_typical_found`, which
+    costs about a hundred kilobytes and buys the whole thing staying a single
+    `Errand` that fails and retries like every other lookup here.
+    """
+    # A stretch that runs over new year ends in the year after it starts, so
+    # the ten windows it is measured against start a year further back.
+    wraps = (ends.month, ends.day) < (starts.month, starts.day)
+    last = date.today().year - 1
+    first = last - TYPICAL_YEARS + 1
+    return Errand(
+        activity=f"Checking what the weather is usually like in {place}, {_span(starts, ends)}",
+        service="Open-Meteo (ERA5 reanalysis)",
+        url="https://archive-api.open-meteo.com/v1/archive",
+        params={
+            "latitude": f"{latitude:g}",
+            "longitude": f"{longitude:g}",
+            "daily": ",".join(_TYPICAL_FIELDS),
+            "start_date": _same_day_in(first - (1 if wraps else 0), starts).isoformat(),
+            "end_date": _same_day_in(last, ends).isoformat(),
+            "timezone": "auto",
+        },
+        read=lambda answered: _typical_found(answered, place, starts, ends, first, last),
+    )
+
+
+#: Less than the forecast asks for, because an average of the wind over ten
+#: Junes is not something anybody packs for.
+_TYPICAL_FIELDS = (
+    "temperature_2m_max",
+    "temperature_2m_min",
+    "precipitation_sum",
+)
+
+
+def _typical_found(
+    answered: Any, place: str, starts: date, ends: date, first: int, last: int
+) -> Found:
+    daily = answered["daily"]
+    units = answered.get("daily_units", {})
+    wanted = _calendar_days(starts, ends)
+    highs: list[float] = []
+    lows: list[float] = []
+    fell: list[float] = []
+    for at, when in enumerate(daily["time"]):
+        day = date.fromisoformat(when)
+        if (day.month, day.day) not in wanted:
+            continue
+        high = _nth(daily, "temperature_2m_max", at)
+        low = _nth(daily, "temperature_2m_min", at)
+        rain = _nth(daily, "precipitation_sum", at)
+        if high is None or low is None or rain is None:
+            continue
+        highs.append(high)
+        lows.append(low)
+        fell.append(rain)
+    if not highs:
+        # Read the same way a timeout is: the lookup failed, and the advisor
+        # says it could not check rather than inventing a season.
+        raise ValueError("the archive answered with none of the days asked about")
+
+    degrees = units.get("temperature_2m_max", "")
+    wet = sum(1 for rain in fell if rain >= RAINY_DAY)
+    return Found(
+        content=(
+            f"What {place} is usually like from {_span(starts, ends)}, measured over the "
+            f"{last - first + 1} years {first}–{last} rather than forecast: days reached "
+            f"{fmean(highs):.1f}{degrees} on average, the coolest of them {min(highs):g}"
+            f"{degrees} and the warmest {max(highs):g}{degrees}; nights fell to "
+            f"{fmean(lows):.1f}{degrees} on average, the coldest {min(lows):g}{degrees}; "
+            f"and rain worth the name fell on {wet} of those {len(fell)} days. "
+            "These are past observations for these dates and not a forecast — no forecast "
+            "for them exists yet, and the year being asked about may run warmer or wetter "
+            "than any of these."
+        ),
+        about=f"Typical weather in {place}, {_span(starts, ends)}",
+    )
+
+
+def _calendar_days(starts: date, ends: date) -> set[tuple[int, int]]:
+    """The days of the year a stretch covers, without the year.
+
+    What makes the filter work across a new year without a special case, and
+    what quietly drops 29 February in the nine years out of ten it did not
+    happen.
+    """
+    days = set()
+    walk = starts
+    while walk <= ends:
+        days.add((walk.month, walk.day))
+        walk += timedelta(days=1)
+    return days
+
+
+def _same_day_in(year: int, day: date) -> date:
+    """The same day of the year, in another year, stepping off 29 February."""
+    try:
+        return day.replace(year=year)
+    except ValueError:
+        return day.replace(year=year, day=28)
+
+
+def _nth(daily: Mapping[str, Any], field: str, at: int) -> Any:
+    """One reading, or nothing where the service left the whole series out."""
+    readings = daily.get(field)
+    return None if readings is None else readings[at]
+
+
+def _span(starts: date, ends: date) -> str:
+    """A stretch of days as a traveler writes one, for a status line.
+
+    Built rather than formatted, because the one format code that would do it
+    without a leading zero is not the same code on every platform.
+    """
+    if starts == ends:
+        return f"{starts.day} {starts:%B}"
+    if (starts.year, starts.month) == (ends.year, ends.month):
+        return f"{starts.day}–{ends.day} {starts:%B}"
+    return f"{starts.day} {starts:%B} – {ends.day} {ends:%B}"
+
+
 # ---- Exchange rates, from Frankfurter ------------------------------------- #
 
 
@@ -610,6 +903,25 @@ def _label(value: object) -> str | None:
     return tidied
 
 
+def _day(value: Any) -> date | None:
+    """One calendar day, exactly as the tool says to write it, or nothing.
+
+    Held to ten characters rather than left to `fromisoformat`, which on this
+    version will also take a whole timestamp and a handful of other spellings.
+    A tool that accepts more than it documents is a tool whose arguments are
+    not the narrow thing ADR-0004 rests on.
+    """
+    if not isinstance(value, str):
+        return None
+    written = value.strip()
+    if len(written) != 10:
+        return None
+    try:
+        return date.fromisoformat(written)
+    except ValueError:
+        return None
+
+
 def _untrusted(content: str) -> str:
     """A tool result, marked as data rather than as anything anyone is asking for.
 
@@ -699,6 +1011,73 @@ CATALOGUE: Sequence[LiveDataTool] = (
             "additionalProperties": False,
         },
         read=_read_weather,
+    ),
+    LiveDataTool(
+        name="weather_outlook",
+        description=(
+            "The weather over a stretch of days at a point on the earth, for a trip that "
+            "has not happened yet. Call this for any question about what the weather will "
+            "be like on the dates someone is travelling, and what to pack for them — "
+            "never answer one from memory. Within about a fortnight it answers with a real "
+            "forecast; further out it answers with what those same dates have actually "
+            "been like over the last ten years, which is the only honest answer because no "
+            "forecast reaches that far. It tells you which of the two you got, and you "
+            "pass that on: a ten-year average is what to expect of the season and never a "
+            "promise about the day. Give the coordinates yourself — there is no search. "
+            "For conditions right now rather than on the trip, call current_weather."
+        ),
+        arguments={
+            "type": "object",
+            "properties": {
+                "latitude": {
+                    "type": "number",
+                    "minimum": -90,
+                    "maximum": 90,
+                    "description": "Degrees north of the equator, negative for south.",
+                },
+                "longitude": {
+                    "type": "number",
+                    "minimum": -180,
+                    "maximum": 180,
+                    "description": "Degrees east of Greenwich, negative for west.",
+                },
+                "place": {
+                    "type": "string",
+                    "maxLength": MAX_PLACE,
+                    "pattern": "^[^0-9]+$",
+                    "description": (
+                        "What to call the place while the traveler waits, such as "
+                        "'Lisbon'. Shown on their screen and never sent to the weather "
+                        "service. Letters only: it must contain no digits."
+                    ),
+                },
+                "start_date": {
+                    "type": "string",
+                    "minLength": 10,
+                    "maxLength": 10,
+                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                    "description": (
+                        "First day of the stretch, as YYYY-MM-DD. Work it out from the "
+                        "Trip Plan's dates or from what the traveler said, against today's "
+                        "date as given above — never against your own sense of the year."
+                    ),
+                },
+                "end_date": {
+                    "type": "string",
+                    "minLength": 10,
+                    "maxLength": 10,
+                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                    "description": (
+                        "Last day of the stretch, as YYYY-MM-DD. The same day as "
+                        "start_date for a single day. Stretches longer than a month are "
+                        "answered a month at a time."
+                    ),
+                },
+            },
+            "required": ["latitude", "longitude", "place", "start_date", "end_date"],
+            "additionalProperties": False,
+        },
+        read=_read_outlook,
     ),
     LiveDataTool(
         name="exchange_rate",

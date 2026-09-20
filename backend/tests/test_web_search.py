@@ -256,6 +256,7 @@ async def test_a_search_result_telling_the_advisor_to_write_produces_no_write(
             "country_facts",
             "current_weather",
             "exchange_rate",
+            "weather_outlook",
             "web_search",
         ]
 

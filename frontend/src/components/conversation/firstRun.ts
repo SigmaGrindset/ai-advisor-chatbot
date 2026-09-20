@@ -26,7 +26,8 @@ export type Starter = {
  * Four openings, chosen to show what the advisor can actually do.
  *
  * Three of them are questions no model can answer from memory — entry rules
- * change, weather is today's, a rate is this morning's — so the first thing a
+ * change, a rate is this morning's, and the weather on a week next June is
+ * either forecast or measured but never recalled — so the first thing a
  * traveler sees is the advisor going and looking. The fourth is open, because
  * the application is not a lookup service.
  */
@@ -39,7 +40,7 @@ export const STARTERS: readonly Starter[] = [
   {
     asks: "weather",
     label: "What to pack",
-    prompt: "What is the weather like in Lisbon right now, and what should I pack?",
+    prompt: "I have a week in Lisbon next June. What will the weather be like, and what should I pack?",
   },
   {
     asks: "exchange-rate",

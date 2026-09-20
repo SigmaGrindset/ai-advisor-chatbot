@@ -1,8 +1,10 @@
 # Handoff — orientation for the next agent
 
 **Repo:** `D:\Antonio\ai-advisor-chatbot` · branch `main` · **no git remote**
-**Current as of** ticket 14 (tickets 01–14 shipped; the advisor now calls Live-data
-Tools, searches the web through a guarded query, leaves Citations behind, keeps a Trip
+**Current as of** ticket 16 (tickets 01–14 and 16 shipped; the advisor now calls Live-data
+Tools — including the weather over the days of a Trip, forecast where a forecast reaches
+and ten years of the same dates observed where none does — searches the web
+through a guarded query, leaves Citations behind, knows what day it is, keeps a Trip
 Plan that fills in beside the conversation as the traveler talks, carries what it has
 learned about the traveler from one Conversation into the next, knows by name which other
 Conversations the traveler has going, and goes on working in a Conversation that has run
@@ -39,10 +41,10 @@ known to bite on this machine. It is not a task — the task is a ticket.
   was said in them. Why a failed turn is a Message rather than something the browser
   remembers is in ticket 14 rather than an ADR, the way 11's profile shape is in ticket 11.
 - `docs/agents/` — the issue tracker, triage labels and domain-doc conventions.
-- `.scratch/ai-travel-advisor/spec.md` and `issues/01`–`15` — the work. Each ticket carries
+- `.scratch/ai-travel-advisor/spec.md` and `issues/01`–`16` — the work. Each ticket carries
   a `**Status:**` line using the five canonical labels — a finished ticket keeps its label
   and records what happened in ticked boxes and a `## Comments` section, which is why the
-  done ones still say `ready-for-agent`. 01–13 are done; 14–15 are unrun.
+  done ones still say `ready-for-agent`. 01–14 and 16 are done; 15 is unrun.
 
 ---
 
@@ -258,10 +260,19 @@ cd D:/Antonio/ai-advisor-chatbot/backend && D:/Antonio/ai-advisor-chatbot/.venv/
 cd D:/Antonio/ai-advisor-chatbot/backend && D:/Antonio/ai-advisor-chatbot/.venv/Scripts/python.exe -m mypy
 ```
 
-As of renaming a Conversation: **126 frontend tests in 18 files** (~2s), `tsc` silent,
-build clean; **120 backend tests**, mypy clean over 63 files. Confirm those numbers
-*before* you start — if they do not match, something changed underneath you. Update this
-paragraph when a ticket legitimately moves them.
+As of ticket 16: **121 frontend tests in 17 files** (~2s), `tsc` silent, build clean;
+**127 backend tests**, mypy clean over 42 files. Confirm those numbers *before* you start
+— if they do not match, something changed underneath you. Update this paragraph when a
+ticket legitimately moves them.
+
+**Four backend tests read the models out of `.env`,** which is untracked and on this
+machine names Gemini rather than the shipped Anthropic defaults. They fail on a bare
+`pytest` run for that reason alone and nothing is wrong. Either accept those four, or
+pin the defaults for the run:
+
+```bash
+cd D:/Antonio/ai-advisor-chatbot/backend && CONVERSATION_MODEL=anthropic/claude-sonnet-5 UTILITY_MODEL=anthropic/claude-haiku-4.5 D:/Antonio/ai-advisor-chatbot/.venv/Scripts/python.exe -m pytest -q
+```
 
 09, 10 and 11 are the tickets that moved the frontend suite, because each brought pure
 modules with opinions in them: 09's merge rule, field readings and calendar, 10's three —

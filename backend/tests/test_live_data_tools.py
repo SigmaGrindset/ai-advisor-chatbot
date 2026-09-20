@@ -6,6 +6,7 @@ host, the result re-enters the loop, and the answer that comes out is the one
 the traveler keeps. Nothing between the browser and the socket is stubbed.
 """
 
+from datetime import date, timedelta
 from typing import Any
 
 import httpx2
@@ -15,6 +16,7 @@ from .fakes.canned_transport import Responder
 from .fakes.talking import send, transcript
 
 OPEN_METEO = "api.open-meteo.com"
+ARCHIVE = "archive-api.open-meteo.com"
 FRANKFURTER = "api.frankfurter.dev"
 WORLD_BANK = "api.worldbank.org"
 
@@ -309,7 +311,13 @@ async def test_a_call_the_application_cannot_read_never_leaves_the_machine(
 
 #: The four capabilities that fetch. Every step of every turn is offered these
 #: and only these once anything has been fetched into it (ADR-0004, ADR-0009).
-FETCHING = ["country_facts", "current_weather", "exchange_rate", "web_search"]
+FETCHING = [
+    "country_facts",
+    "current_weather",
+    "exchange_rate",
+    "weather_outlook",
+    "web_search",
+]
 
 
 async def test_every_live_data_argument_is_narrow_enough_to_carry_nothing_said(
@@ -374,6 +382,140 @@ async def test_what_a_lookup_cost_is_still_the_whole_turn(
 
     _, advisor = reopened.json()["messages"]
     assert advisor["cost_usd"] == 0.000035
+
+
+def _outlook(start: date, end: date) -> str:
+    """The arguments the advisor passes for a stretch of days in Lisbon."""
+    return (
+        f'{{"latitude": 38.72, "longitude": -9.14, "place": "Lisbon", '
+        f'"start_date": "{start.isoformat()}", "end_date": "{end.isoformat()}"}}'
+    )
+
+
+def _observed(start: date, end: date, years: int = 10) -> dict[str, Any]:
+    """An archive answer: whole years, of which most days are not asked about.
+
+    Built rather than written out because that is what the service really
+    sends — one unbroken run of days — and the filtering under test is the
+    part that picks the trip's dates back out of it.
+    """
+    first = date(date.today().year - years, start.month, start.day)
+    last = date(date.today().year - 1, end.month, end.day)
+    days = [first + timedelta(days=step) for step in range((last - first).days + 1)]
+    # Warm and dry on the days asked about, freezing and soaking on every other
+    # day of the year, so an answer that failed to filter could not look right.
+    inside = [(day.month, day.day) in {(d.month, d.day) for d in (start, end)} for day in days]
+    return {
+        "daily_units": {"temperature_2m_max": "°C", "precipitation_sum": "mm"},
+        "daily": {
+            "time": [day.isoformat() for day in days],
+            "temperature_2m_max": [26.0 if here else -40.0 for here in inside],
+            "temperature_2m_min": [15.0 if here else -50.0 for here in inside],
+            "precipitation_sum": [0.0 if here else 99.0 for here in inside],
+        },
+    }
+
+
+async def test_the_weather_on_the_trips_dates_is_forecast_when_a_forecast_reaches_them(
+    api: httpx2.AsyncClient, conversation: str, outbound_routes: dict[str, Responder]
+) -> None:
+    start, end = date.today() + timedelta(days=3), date.today() + timedelta(days=6)
+    outbound_routes["openrouter.ai"] = model = CannedModel(
+        *calling("weather_outlook", _outlook(start, end)),
+        wants_tools(),
+        then=[[content("Warm and dry the whole time — pack light."), finish()]],
+    )
+    outbound_routes[OPEN_METEO] = weather = Source(
+        {
+            "timezone": "Europe/Lisbon",
+            "daily_units": {
+                "temperature_2m_max": "°C",
+                "temperature_2m_min": "°C",
+                "precipitation_sum": "mm",
+                "precipitation_probability_max": "%",
+                "wind_speed_10m_max": "km/h",
+            },
+            "daily": {
+                "time": [
+                    (start + timedelta(days=step)).isoformat()
+                    for step in range((end - start).days + 1)
+                ],
+                "weather_code": [0, 0, 3, 61],
+                "temperature_2m_max": [28.0, 29.0, 27.0, 22.0],
+                "temperature_2m_min": [17.0, 18.0, 17.0, 15.0],
+                "precipitation_sum": [0.0, 0.0, 0.0, 4.2],
+                "precipitation_probability_max": [0, 0, 10, 70],
+                "wind_speed_10m_max": [12.0, 11.0, 14.0, 20.0],
+            },
+        }
+    )
+
+    await send(api, conversation, "What will the weather be like when I am in Lisbon?")
+
+    # The real forecast endpoint, asked for exactly those days. The place is a
+    # label for the traveler's screen, so it is not among the arguments.
+    assert weather.asked.path == "/v1/forecast"
+    assert weather.asked.params["start_date"] == start.isoformat()
+    assert weather.asked.params["end_date"] == end.isoformat()
+    assert "Lisbon" not in str(weather.asked)
+
+    (result,) = _tool_results(model)
+    assert "Forecast for Lisbon" in result
+    assert "17.0–28.0°C" in result
+    assert "4.2mm rain (70% chance)" in result
+
+
+async def test_dates_no_forecast_reaches_are_answered_from_what_they_have_been_like(
+    api: httpx2.AsyncClient, conversation: str, outbound_routes: dict[str, Responder]
+) -> None:
+    """The whole point of the second branch: a season, and never a prediction."""
+    start, end = date(date.today().year + 1, 6, 10), date(date.today().year + 1, 6, 11)
+    outbound_routes["openrouter.ai"] = model = CannedModel(
+        *calling("weather_outlook", _outlook(start, end)),
+        wants_tools(),
+        then=[[content("Mid-June in Lisbon usually runs warm and dry."), finish()]],
+    )
+    outbound_routes[ARCHIVE] = archive = Source(_observed(start, end))
+
+    await send(api, conversation, "I am in Lisbon next June. What is the weather like?")
+
+    # The archive was asked, over whole years rather than the trip's few days.
+    assert archive.asked.path == "/v1/archive"
+    assert archive.asked.params["start_date"] == f"{date.today().year - 10}-06-10"
+    assert archive.asked.params["end_date"] == f"{date.today().year - 1}-06-11"
+
+    (result,) = _tool_results(model)
+    # The days of other months came back in the same answer and were left out
+    # of it: an unfiltered reading would have averaged in the -40°C days.
+    assert "26.0°C on average" in result
+    assert "-40" not in result
+    assert "10 years" in result
+    # And it says what kind of answer it is, which is what stops the advisor
+    # repeating a ten-year average as a claim about a day.
+    assert "not a forecast" in result
+
+    reopened = await api.get(f"/api/conversations/{conversation}")
+    (citation,) = reopened.json()["messages"][1]["citations"]
+    assert citation["service"] == "Open-Meteo (ERA5 reanalysis)"
+    assert citation["about"] == "Typical weather in Lisbon, 10–11 June"
+
+
+async def test_dates_that_have_gone_by_are_refused_before_anything_leaves(
+    api: httpx2.AsyncClient, conversation: str, outbound_routes: dict[str, Responder]
+) -> None:
+    gone = date.today() - timedelta(days=30)
+    outbound_routes["openrouter.ai"] = model = CannedModel(
+        *calling("weather_outlook", _outlook(gone, gone + timedelta(days=2))),
+        wants_tools(),
+        then=[[content("Those dates are behind us — when are you actually going?"), finish()]],
+    )
+    outbound_routes[OPEN_METEO] = weather = Source(WEATHER)
+    outbound_routes[ARCHIVE] = archive = Source(_observed(gone, gone))
+
+    await send(api, conversation, "What was the weather like in Lisbon last month?")
+
+    assert weather.requests == [] and archive.requests == []
+    assert "already gone by" in _tool_results(model)[0]
 
 
 async def test_a_source_that_refuses_outright_is_not_asked_a_second_time(

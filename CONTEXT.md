@@ -94,10 +94,20 @@ A saved revision of the Advisor Instructions. Every Message records the Prompt V
 that produced it.
 
 **Live-data Tool**:
-A capability the advisor calls to fetch real-world information it cannot know — current
-weather, exchange rates, country facts, or a web search. Distinct from the tools it uses
-to write to the Traveler Profile or the Trip Plan.
+A capability the advisor calls to fetch real-world information it cannot know — the
+weather now, the weather over the days of a Trip, exchange rates, country facts, or a web
+search. Distinct from the tools it uses to write to the Traveler Profile or the Trip Plan.
 _Avoid_: Function, plugin, API call, skill
+
+**Typical Weather**:
+What a Trip's dates have actually been like over the ten years before now, which is what
+the advisor answers with when those dates are too far off for a forecast to exist. It is a
+description of a season and never a claim about a day, and the difference is load-bearing:
+an advisor that reports one as the other is telling a traveler something nobody knows.
+Always said with its spread — the coolest year, the warmest, how many days it rained —
+because the average alone is what leaves someone packing for a mean that never happened.
+_Avoid_: Forecast (that is the other branch, and the word is wrong here), prediction,
+outlook, normals, average weather
 
 **Citation**:
 A source link attached to an advisor Message, recording where a fetched claim came from.

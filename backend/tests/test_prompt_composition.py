@@ -14,6 +14,7 @@ Conversation begun afterwards that already knew it.
 """
 
 import uuid
+from datetime import date
 
 from app.advisor.instructions import DEFAULT_ADVISOR_INSTRUCTIONS, compose_system_prompt
 from app.advisor.prompt import compose_prompt
@@ -28,6 +29,22 @@ def _said(role: MessageRole, content: str) -> Message:
 def _shipped() -> str:
     """The system prompt of a traveler who has edited nothing and recorded nothing."""
     return compose_system_prompt(DEFAULT_ADVISOR_INSTRUCTIONS)
+
+
+def test_the_advisor_is_told_what_day_it_is() -> None:
+    """Without this the advisor dates a trip from when its training stopped.
+
+    It matters more than it reads: the dates of a trip are tool arguments now,
+    so a year taken from memory is a lookup quietly answered about the wrong
+    twelve months rather than a sentence a traveler can see is wrong.
+    """
+    prompt = compose_system_prompt(DEFAULT_ADVISOR_INSTRUCTIONS, today=date(2026, 9, 20))
+
+    assert "2026-09-20" in prompt
+    assert "Sunday" in prompt
+    # And composing without saying which day still says one, so no caller can
+    # produce a prompt with no date in it at all.
+    assert date.today().isoformat() in _shipped()
 
 
 def test_the_advisor_instructions_come_first_and_once() -> None:

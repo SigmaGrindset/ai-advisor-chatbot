@@ -11,6 +11,8 @@ Nothing here reads a turn or writes a Message. What a Message does with the
 version it was produced by is `services/turns.py`'s.
 """
 
+from datetime import date
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..advisor.conversations import OtherConversation
@@ -80,6 +82,7 @@ async def compose_around(
     """
     return compose_system_prompt(
         instructions,
+        today=date.today(),
         plan=None if conversation is None else await plan_of(session, conversation),
         trips=await summarise_trips(session),
         profile=await read_profile(session),

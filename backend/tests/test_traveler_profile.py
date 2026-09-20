@@ -297,7 +297,13 @@ async def test_a_page_the_advisor_read_cannot_put_anything_into_the_profile(
     # Which is because the tools that write were not on the table on that step.
     for turn in model.turns[1:]:
         offered = sorted(tool["function"]["name"] for tool in turn["tools"])
-        assert offered == ["country_facts", "current_weather", "exchange_rate", "web_search"]
+        assert offered == [
+            "country_facts",
+            "current_weather",
+            "exchange_rate",
+            "weather_outlook",
+            "web_search",
+        ]
     # And they were on the first step, composed from nothing but what the
     # traveler said.
     first = [tool["function"]["name"] for tool in model.turns[0]["tools"]]

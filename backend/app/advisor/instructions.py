@@ -15,6 +15,7 @@ page shows the composed prompt in full.
 """
 
 from collections.abc import Sequence
+from datetime import date
 
 from . import compaction, conversations, planning, remembering
 from .conversations import OtherConversation
@@ -76,6 +77,9 @@ exact, narrow arguments; work out what to pass from what the traveler told you, 
 nothing that is not one of the named arguments.
 
 - current_weather — conditions right now at a latitude and longitude you supply.
+- weather_outlook — the weather over a stretch of days at coordinates you supply: a real
+  forecast for dates within about a fortnight, and what those dates have been like over
+  the last ten years for anything further out.
 - exchange_rate — today's reference rate between two currency codes.
 - country_facts — a country's capital, world region, income level and rough coordinates.
 - web_search — the web, searched and read, answering with the pages it read.
@@ -99,8 +103,19 @@ their date of birth. A query carrying anything of that shape has it removed befo
 search is made, and the traveler is shown what was actually sent.
 
 Everything else about travel — what a place is like, how long to spend there, how to get
-between two towns, what to eat, what to pack for a season — you answer from your own
-knowledge, without calling anything.
+between two towns, what to eat, what there is to do when it rains — you answer from your
+own knowledge, without calling anything.
+
+Weather on the dates of a trip is weather_outlook, not your own knowledge and not
+current_weather, however far off the trip is. What comes back says which of two things it
+is, and you pass that on rather than flattening it: a forecast is a forecast, and ten
+years of the same dates averaged is what the season is usually like and never a claim
+about the day. If it gave you the second, say so in the answer — that those dates have run
+warm, or wet, or swung thirteen degrees between the coolest year and the warmest, is the
+useful thing, and a traveler who hears "it will be 25 degrees" about a fortnight in June
+next year has been told something nobody knows. Where it gives you the range or the number
+of days it rained, use them; an average alone is what leaves somebody packing for a mean
+that never happens.
 
 An exchange rate you report is a daily reference rate rather than a live market quote, and
 you say so whenever you give one.
@@ -214,6 +229,22 @@ first: once a lookup has come back in a turn, these tools are gone for the rest 
 """
 
 
+def today_is(today: date) -> str:
+    """What day it is, which the model has no way of knowing.
+
+    A model's sense of the date is the date its training stopped, so without
+    this an advisor asked about "next June" reasons about the wrong year — and
+    since a trip's dates are now tool arguments rather than only prose, a wrong
+    year is a lookup quietly answered about the wrong twelve months rather than
+    an obvious mistake in a sentence.
+    """
+    return (
+        f"Today is {today:%A}, {today.day} {today:%B} {today.year} — {today.isoformat()}. "
+        "Every relative date the traveler uses is relative to this and not to anything you "
+        "remember, and every date you pass to a tool is worked out from it."
+    )
+
+
 def compose_system_prompt(
     instructions: str,
     plan: TripPlan | None = None,
@@ -221,6 +252,7 @@ def compose_system_prompt(
     profile: Sequence[Fact] = (),
     elsewhere: Sequence[OtherConversation] = (),
     earlier: str | None = None,
+    today: date | None = None,
 ) -> str:
     """The system prompt for one turn, composed on the server.
 
@@ -243,11 +275,19 @@ def compose_system_prompt(
     The Compaction summary comes last, closest to the Messages it stands in
     front of: what the advisor reads just before the conversation itself is the
     part of that conversation it is no longer being sent.
+
+    The date comes before the tool guidance because the guidance tells the
+    advisor to work its date arguments out from it, and a rule pointing at
+    something further down is one a reader has to hold open. It defaults to the
+    real one rather than being required, so that a caller cannot compose a
+    prompt with no date in it at all; the turn and the page that previews it
+    both pass it explicitly, through `services/instructions.py::compose_around`.
     """
     return "\n".join(
         [
             instructions,
             SCOPE_GUIDANCE,
+            today_is(date.today() if today is None else today),
             TOOL_GUIDANCE,
             PLAN_GUIDANCE,
             PROFILE_GUIDANCE,
