@@ -57,16 +57,22 @@ export function PlanPanel({
   onSettle: (questionId: string) => void;
 }) {
   if (resuming) {
-    // The shape of the four facts at the head of a plan: a label and a value
-    // on each line, which is the row `Row` draws.
+    // The shape of the head of a plan: the destination standing at a
+    // masthead's height, then a label and a value on each line below, which
+    // is the row `Row` draws.
     return (
-      <div className="flex flex-col gap-3" role="status" aria-label="Loading the trip plan">
-        {LOADING_ROWS.map((width, at) => (
-          <div key={at} className="flex items-baseline justify-between gap-3">
-            <Skeleton className="h-2.5 w-20" />
-            <Skeleton className={`h-3.5 ${width}`} />
-          </div>
-        ))}
+      <div className="flex flex-col gap-7" role="status" aria-label="Loading the trip plan">
+        <div className="border-b border-line pb-5">
+          <Skeleton className="h-7 w-40" />
+        </div>
+        <div className="flex flex-col gap-3">
+          {LOADING_ROWS.map((width, at) => (
+            <div key={at} className="flex items-baseline justify-between gap-3">
+              <Skeleton className="h-2.5 w-20" />
+              <Skeleton className={`h-3.5 ${width}`} />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -94,16 +100,35 @@ export function PlanPanel({
 
   return (
     <div className="flex flex-col gap-7">
-      <dl className="flex flex-col gap-3">
-        <Row label="Destination">
-          <EditableField
-            {...field("destination")}
-            label="Destination"
-            shown={plan.destination ?? ""}
-            placeholder="Where to?"
-          />
-        </Row>
+      {/* Where the journey goes, at the head of its own record rather than on
+          a line of it.
+          Every other part of a plan is a fact about a trip; the destination is
+          the trip's name, and a traveler opening this pane is looking for the
+          place before they are looking for anything about it. It is still the
+          same field as the rest — the same dotted underline, the same edit in
+          place, the same highlight when the advisor rewrites it — set larger
+          and given a rule to sit on, which is how a masthead differs from a
+          row.
+          It says "Where to?" and nothing else when the plan holds no
+          destination yet, because a trip nobody has named is the ordinary
+          state of a conversation that has only just begun.
+          The switcher above it carries the same word on a chip, and that is
+          not the same thing said twice: the chip is small, coloured and not
+          editable, and it answers *which Trip this Conversation is on*. This
+          answers *where the Trip goes*, and it is the thing that lights up
+          when the advisor decides. */}
+      <div className="border-b border-line pb-5">
+        <EditableField
+          {...field("destination")}
+          label="Destination"
+          size="display"
+          align="left"
+          shown={plan.destination ?? ""}
+          placeholder="Where to?"
+        />
+      </div>
 
+      <dl className="flex flex-col gap-3">
         <Row label="Dates" note={running === null ? null : `${running} days`}>
           <div className="flex min-w-0 flex-col items-end gap-1">
             <EditableField
@@ -421,5 +446,5 @@ function Questions({
   );
 }
 
-/** The widths the plan's four facts stand in at while they are being read. */
-const LOADING_ROWS = ["w-28", "w-20", "w-24", "w-16"] as const;
+/** The widths the facts under the masthead stand in at while they are read. */
+const LOADING_ROWS = ["w-28", "w-20", "w-24"] as const;

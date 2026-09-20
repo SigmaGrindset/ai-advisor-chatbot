@@ -146,7 +146,7 @@ export function ConversationPane({
     // `tabIndex` so that focus actually lands here when the skip link is
     // followed: a browser moves focus to the target of a fragment link only
     // if the target can hold it, and a landmark cannot by default.
-    <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col bg-canvas outline-none">
+    <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col outline-none">
       <header className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-3 sm:px-6 sm:py-4">
         {onShowConversations !== null && (
           <button

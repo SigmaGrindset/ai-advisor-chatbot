@@ -14,12 +14,18 @@ import { useVisibleViewport } from "./viewport";
  *
  * It is a flex row, and what it holds arranges itself in it: the shell's
  * panes, or a page.
+ *
+ * It is also the only thing in the application that draws the ground — the
+ * canvas and the contour lines on it (`design/base.css`). Every pane that
+ * shows no background of its own is standing on it, which is why the
+ * transcript and the pages draw none: the map runs under all of them without
+ * a seam, rather than each of them printing its own patch of it.
  */
 export function AppFrame({ children }: { children: ReactNode }) {
   useVisibleViewport();
 
   return (
-    <div className="fixed inset-x-0 top-0 flex h-viewport translate-y-viewport-top overflow-hidden bg-canvas pl-safe-left pr-safe-right text-ink">
+    <div className="terrain fixed inset-x-0 top-0 flex h-viewport translate-y-viewport-top overflow-hidden pl-safe-left pr-safe-right text-ink">
       {/* The way past the navigation, for whoever cannot point at what they
           want. The rail comes before the Conversation in the document because
           that is the order it is read in, which means a keyboard arriving on

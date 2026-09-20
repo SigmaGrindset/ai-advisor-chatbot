@@ -9,7 +9,16 @@
  * Hue is the only thing the identity chooses. Lightness and chroma are fixed,
  * which is what makes every Trip's chip equally pale and its label equally
  * readable, rather than one Trip happening to draw a colour nobody can read.
+ *
+ * These are the one set of colours in the application that a stylesheet
+ * cannot hold, because there is no list of them to write down — there are as
+ * many as the traveler has Trips. So this is the one place that has to be
+ * told which theme is showing, and it is told rather than asked: the two
+ * recipes below are the light and the dark, and a Trip keeps its hue across
+ * the move. The same journey is the same colour with the lamp off.
  */
+
+import type { Scheme } from "./theme";
 
 /** The three colours a Trip chip is drawn with, as `#rrggbb`. */
 export type TripPastel = {
@@ -29,17 +38,40 @@ export type TripPastel = {
 const HUES = 12;
 const FIRST_HUE = 15;
 
-/** Where on the wheel each of the three colours sits. Fixed for every Trip. */
-const FILL = { lightness: 0.945, chroma: 0.048 };
-const HAIRLINE = { lightness: 0.855, chroma: 0.065 };
-const LABEL = { lightness: 0.425, chroma: 0.085 };
+/** How far from the ground each of the three colours sits, per theme. */
+type Recipe = { lightness: number; chroma: number };
 
-export function tripPastel(tripId: string): TripPastel {
+/**
+ * On paper: a pale wash, a hairline a little deeper, and a label dark enough
+ * to read on the wash.
+ *
+ * In the dark the recipe turns over, as the surfaces do — the wash is a deep
+ * one and the label is the pale thing on it. Not the same numbers inverted:
+ * chroma comes down on the fill, because a saturated dark fill on a near-black
+ * rail reads as a colour sample rather than as a chip, and comes down on the
+ * label too, because a bright saturated small text is the one thing on a dark
+ * screen that vibrates.
+ */
+const RECIPES: Record<Scheme, { fill: Recipe; hairline: Recipe; label: Recipe }> = {
+  light: {
+    fill: { lightness: 0.945, chroma: 0.048 },
+    hairline: { lightness: 0.855, chroma: 0.065 },
+    label: { lightness: 0.425, chroma: 0.085 },
+  },
+  dark: {
+    fill: { lightness: 0.295, chroma: 0.038 },
+    hairline: { lightness: 0.415, chroma: 0.055 },
+    label: { lightness: 0.845, chroma: 0.062 },
+  },
+};
+
+export function tripPastel(tripId: string, scheme: Scheme): TripPastel {
   const hue = FIRST_HUE + (hash(tripId) % HUES) * (360 / HUES);
+  const { fill, hairline, label } = RECIPES[scheme];
   return {
-    background: oklchToHex(FILL.lightness, FILL.chroma, hue),
-    border: oklchToHex(HAIRLINE.lightness, HAIRLINE.chroma, hue),
-    ink: oklchToHex(LABEL.lightness, LABEL.chroma, hue),
+    background: oklchToHex(fill.lightness, fill.chroma, hue),
+    border: oklchToHex(hairline.lightness, hairline.chroma, hue),
+    ink: oklchToHex(label.lightness, label.chroma, hue),
   };
 }
 

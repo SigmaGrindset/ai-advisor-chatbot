@@ -7,6 +7,7 @@ import { nights, showRange } from "../components/plan/dates";
 import { showAmount } from "../components/plan/money";
 import { gathered } from "../components/trip/listing";
 import { tripName } from "../components/trip/naming";
+import { useTheme } from "../design/theme";
 import { tripPastel } from "../design/tripPastel";
 
 /**
@@ -43,7 +44,7 @@ export function TripsPage({
   const { trips: gatherings, unattached } = gathered(trips, conversations);
 
   return (
-    <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col bg-canvas outline-none">
+    <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col outline-none">
       <header className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-3 sm:px-6 sm:py-4">
         <button
           type="button"
@@ -112,6 +113,7 @@ function Trip({
   onOpen: (id: string) => void;
 }) {
   const running = nights(plan.starts_on, plan.ends_on);
+  const { scheme } = useTheme();
   return (
     // A rule and room, not a box. A Trip is a heading with things under it —
     // its facts, then the Conversations writing them — and a border drawn
@@ -129,7 +131,7 @@ function Trip({
         <span
           aria-hidden="true"
           className="size-3 shrink-0 rounded-[3px]"
-          style={{ backgroundColor: tripPastel(plan.trip_id).border }}
+          style={{ backgroundColor: tripPastel(plan.trip_id, scheme).border }}
         />
         <span className="min-w-0 truncate">{tripName(plan)}</span>
       </h2>

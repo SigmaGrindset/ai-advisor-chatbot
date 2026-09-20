@@ -15,10 +15,12 @@ import { TripChip } from "./TripChip";
  * correction the traveler needs is right where the mistake shows: at the head
  * of the plan that turned out to belong to a different journey.
  *
- * It opens in place rather than over anything, as the Conversation list's row
- * actions do. On a phone this control is inside the record sheet, and a menu
- * floating out of a modal dialog is a second layer to escape from; a list
- * that pushes the plan down is one.
+ * It opens in place rather than over anything. On a phone this control is
+ * inside the record sheet, and a menu floating out of a modal dialog is a
+ * second layer to escape from; a list that pushes the plan down is one. The
+ * Conversation list's row actions do float, and for the opposite reason: that
+ * rail scrolls, so a panel opened inside it would be cut off by it, and the
+ * rows under the one being asked about would be shoved down the list.
  */
 export function TripSwitcher({
   plan,

@@ -10,13 +10,10 @@
 @import "./tokens.css";
 
 @layer base {
-  /* Dark mode is deliberately out of scope. Pin the page to the light scheme
-     so a dark operating system preference does not leave dark text on a dark
-     canvas. The tokens are named for their role rather than their lightness,
-     so the theme that lifts this is one more block in tokens.css. */
-  :root {
-    color-scheme: light;
-  }
+  /* `color-scheme` is declared beside the theme it belongs to, in tokens.css:
+     it is what the browser draws its own furniture from — scrollbars, a date
+     picker, the inside of a `select` — and none of that is reachable from
+     here. */
 
   html {
     /* The shell is the height of what the browser is showing and every scroll
@@ -107,6 +104,27 @@
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
   }
+}
+
+/*
+ * The ground.
+ *
+ * The canvas colour, with the contour lines of `--texture-terrain` printed on
+ * it. Applied to the one element the whole application is drawn inside, so
+ * the map is under everything and nothing has to opt in: a pane that draws no
+ * background of its own is standing on open country, and a pane that draws
+ * one — the rail, the record, a sheet, a panel — is a sheet of paper laid
+ * over it, which is why those are opaque.
+ *
+ * Not `background-attachment: fixed`. The element this lands on does not
+ * scroll, so there is nothing for it to fix against, and asking a phone to
+ * repaint a fixed background is how a smooth scroll stops being one. The
+ * contours stay put because the frame does.
+ */
+@utility terrain {
+  background-color: var(--color-canvas);
+  background-image: var(--texture-terrain);
+  background-size: var(--texture-terrain-size) var(--texture-terrain-size);
 }
 
 /*

@@ -7,8 +7,16 @@
  * framework's own palette is switched off below so none of them can.
  *
  * Because the names are roles, a dark theme is one more block of the same
- * names with different values — nothing else in the codebase changes. That
- * block is not written: dark mode is deliberately out of scope for now.
+ * names with different values, at the foot of this file. It is: not one
+ * component learned a second colour, and not one of them says `dark:`.
+ *
+ * What the values are *of* is a map. Not a decorated one — there is no plane,
+ * no compass and no passport anywhere in this application — but the material
+ * a map is printed on and the ink it is printed in: a pale sheet that runs
+ * green of grey, contour lines under everything that is not a panel, and one
+ * interaction colour taken from the green that means woodland on every
+ * topographic sheet ever drawn. A traveler should be able to tell what this
+ * application is for from a screenshot with the words blurred out.
  */
 
 /* `static` so every token below reaches the stylesheet, not only the ones a
@@ -23,46 +31,71 @@
   --radius-*: initial;
 
   /* ---- Surfaces ------------------------------------------------------- */
-  /* A warm monochrome base: paper rather than screen. */
-  --color-canvas: #faf8f5;
+  /* Map paper: a sheet, not a screen, and one that runs green of grey rather
+     than red of it. The chroma is tiny — nobody looking at the canvas would
+     call it a colour — but it is the same tiny chroma the accent, the
+     hairlines and the ink are all pulled toward, which is what makes the
+     whole application read as one material instead of as a grey interface
+     that happens to have a green button in it. */
+  --color-canvas: #f5f7f2;
   --color-surface: #ffffff;
-  --color-sunken: #f2efe9;
+  --color-sunken: #e8ece3;
 
   /* ---- Hairlines ------------------------------------------------------ */
-  --color-line: #e5e0d8;
-  --color-line-strong: #8f8578;
+  --color-line: #dbe2d6;
+  --color-line-strong: #7e8a78;
 
   /* ---- Text ----------------------------------------------------------- */
-  --color-ink: #1f1b17;
-  --color-ink-muted: #56504a;
-  --color-ink-subtle: #6e675f;
+  --color-ink: #161c17;
+  --color-ink-muted: #4a5449;
+  --color-ink-subtle: #5f6a5d;
 
   /* ---- The accent ----------------------------------------------------- */
-  /* Muted clay. Interaction only: links, the send control, focus, selection. */
-  --color-accent: #9a5640;
-  --color-accent-strong: #7c4230;
-  --color-accent-tint: #f6ece7;
-  --color-accent-contrast: #fffcfa;
-  --color-focus: #7c4230;
+  /* Deep pine. Interaction only: links, the send control, focus, selection.
+     It is the one colour in the application a traveler is invited to press,
+     and it is dark enough at this lightness to be read as text on the canvas
+     rather than only seen as a colour on it. */
+  --color-accent: #2c6b46;
+  --color-accent-strong: #1c4e31;
+  --color-accent-tint: #e3eee7;
+  --color-accent-contrast: #f6fbf7;
+  --color-focus: #1c4e31;
 
-  /* What a sheet lays over the shell behind it: the page's own ink, thinned,
-     rather than a black nobody else on the page uses. */
-  --color-scrim: color-mix(in oklab, var(--color-ink) 45%, transparent);
+  /* ---- The dark ------------------------------------------------------- */
+  /* What a shadow is cast in and what a sheet lays over the shell behind it.
+     On paper that is the page's own ink, thinned, rather than a black nobody
+     else on the page uses — a green-cast canvas gets a green-cast shadow. It
+     is named apart from the ink because in the dark the two part company: ink
+     goes pale and a shadow does not become a glow. */
+  --color-shade: #161c17;
+  --color-scrim: color-mix(in oklab, var(--color-shade) 45%, transparent);
 
   /* ---- The four meanings ---------------------------------------------- */
-  /* Colour says exactly four things, and says nothing else anywhere. */
-  /* A Trip Plan field the advisor has just rewritten. */
+  /* Colour says exactly four things, and says nothing else anywhere.
+     They are spread around the wheel on purpose: with the accent at pine,
+     every one of the four is at least fifty degrees of hue from it and from
+     each of the others, which is what lets a traveler tell a marker from a
+     link without reading either. */
+  /* A Trip Plan field the advisor has just rewritten. Contour brown, which is
+     the colour elevation is printed in. */
   --color-changed: #7a5a12;
-  --color-changed-tint: #faf0d9;
-  /* A claim backed by a Live-data Tool's answer. */
-  --color-verified: #3b6a4b;
-  --color-verified-tint: #e6f0e8;
-  /* An Open Question the Trip Plan still needs decided. */
+  --color-changed-tint: #f6efd9;
+  /* A claim backed by a Live-data Tool's answer.
+     This used to be green, and green is now what a link is. A Citation chip
+     sits a few pixels above the link that opens its source, so the two cannot
+     be the same colour: one says *this was looked up*, the other says *this
+     can be pressed*, and a traveler reading an answer has to be able to tell
+     which is which at a glance. So it moved to the blue-green a survey is
+     recorded in, which is sixty degrees away and still reads as checked. */
+  --color-verified: #1a6272;
+  --color-verified-tint: #dfedf0;
+  /* An Open Question the Trip Plan still needs decided. Water blue: the part
+     of the map that has not been walked. */
   --color-open: #3a5c85;
   --color-open-tint: #e5edf6;
   /* A turn that failed, or an answer that could not be given. */
   --color-error: #a32d22;
-  --color-error-tint: #fbe9e6;
+  --color-error-tint: #fae8e4;
 
   /* ---- Type ----------------------------------------------------------- */
   /* Archivo carries headings and the traveler's own words back to them;
@@ -153,26 +186,44 @@
   /* Hairlines do the separating. A shadow is for something that floats, and
      there are two heights to float at: a surface lifted off the canvas, and
      a surface lifted over the rest of the page.
-     Both are mixed from the page's own ink rather than from black, so a
-     shadow on a warm canvas is a warm shadow. A single flat black at low
+     Both are mixed from `--color-shade` rather than from black, so a shadow
+     on a green-cast canvas is a green-cast shadow. A single flat black at low
      opacity is the grey haze that says a component was drawn somewhere else
-     and pasted here. Two offsets each: a tight one for the contact edge and
-     a wide one for the cast, which is one light source, from above. */
+     and pasted here. Two offsets each: a tight one for the contact edge and a
+     wide one for the cast, which is one light source, from above. */
   --shadow-raised:
-    0 1px 1px color-mix(in oklab, var(--color-ink) 5%, transparent),
-    0 2px 6px -2px color-mix(in oklab, var(--color-ink) 8%, transparent);
+    0 1px 1px color-mix(in oklab, var(--color-shade) 5%, transparent),
+    0 2px 6px -2px color-mix(in oklab, var(--color-shade) 8%, transparent);
   --shadow-floating:
-    0 1px 2px color-mix(in oklab, var(--color-ink) 6%, transparent),
-    0 12px 28px -10px color-mix(in oklab, var(--color-ink) 22%, transparent);
+    0 1px 2px color-mix(in oklab, var(--color-shade) 6%, transparent),
+    0 12px 28px -10px color-mix(in oklab, var(--color-shade) 22%, transparent);
 
   /* ---- Texture -------------------------------------------------------- */
   /* The canvas is paper, and paper is not a flat fill. A single tile of
      monochrome noise, laid over the whole page at an opacity that is felt
-     rather than seen, is the difference between a warm colour and a surface.
+     rather than seen, is the difference between a flat fill and a surface.
      Generated here rather than fetched: it is four lines of SVG, and a
      texture worth one network request is not worth having. */
   --texture-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
   --texture-grain-opacity: 0.035;
+
+  /* The ground the whole application stands on: contour lines, the way land
+     is drawn on every topographic sheet there is.
+     This is the one thing in the interface that says *travel* without saying
+     anything. It is not an illustration and it is not decoration — it is the
+     material the panels are laid on, so it appears only where nothing has
+     been laid: behind the transcript, in the margins beside it, under the
+     first screen. A panel, a sheet or the rail covers it, because paper laid
+     on a map hides the map.
+     The field it is contoured from is a sum of sine waves whose wave numbers
+     are whole multiples of the tile, which is what makes a contour that
+     leaves one edge arrive at the other: the tile repeats and no seam does.
+     Baked per theme rather than tinted from a token, because a data URI
+     cannot read a custom property. That is the one exception to this file's
+     rule that a colour is named once, and the dark block below is where the
+     second naming lives. */
+  --texture-terrain: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='384' height='384' viewBox='0 0 384 384'><path d='M204,208L202,216L198,228L195,240L195,252L201,264L204,267L216,275L219,276L228,279L240,283L252,285L264,282L270,276L276,269L278,264L284,252L288,245L291,240L297,228L300,224L306,216L312,210L319,204L324,200L336,192L336,192L348,184L353,180L360,172L363,168L367,156L368,144L367,132L365,120L362,108L360,103L353,96L348,93L336,93L326,96L324,97L312,104L305,108L300,112L288,120L287,120L276,127L264,132L261,132L252,134L240,132L239,132L228,130L216,132L216,132L211,144L212,156L213,168L212,180L210,192L206,204L204,208M0,183L2,180L3,168L1,156L0,149M384,149L383,144L381,132L379,120L377,108L374,96L372,92L366,84L360,79L348,75L336,77L324,81L319,84L312,88L300,95L298,96L288,102L276,107L268,108L264,109L252,108L251,108L240,105L228,102L216,99L204,101L192,107L191,108L186,120L184,132L185,144L188,156L190,168L192,180L191,192L190,204L186,216L183,228L180,238L179,240L178,252L179,264L180,266L187,276L192,279L204,285L210,288L216,290L228,295L238,300L240,301L252,308L261,312L264,314L276,314L277,312L282,300L286,288L288,283L290,276L294,264L299,252L300,250L306,240L312,231L314,228L324,218L326,216L336,209L345,204L348,202L360,197L371,192L372,192L384,183M0,210L12,211L24,211L36,208L41,204L45,192L40,180L36,175L31,168L24,161L21,156L14,144L12,138L10,132L7,120L5,108L3,96L0,85M384,85L384,84L377,72L372,67L360,61L349,60L348,60L347,60L336,62L324,67L315,72L312,74L300,80L293,84L288,86L276,90L264,92L252,90L240,87L232,84L228,83L216,80L204,80L192,82L188,84L180,90L175,96L169,108L168,116L167,120L168,132L168,136L169,144L172,156L175,168L177,180L177,192L176,204L174,216L170,228L168,235L166,240L164,252L162,264L165,276L168,281L176,288L180,290L192,295L204,299L206,300L216,304L228,311L230,312L240,321L243,324L252,336L252,336L262,348L264,351L276,357L288,356L297,348L300,342L302,336L302,324L302,312L301,300L301,288L303,276L307,264L312,252L312,252L320,240L324,235L331,228L336,224L348,217L352,216L360,213L372,211L384,210M0,227L7,228L12,229L24,231L36,231L44,228L48,227L60,216L60,216L66,204L67,192L65,180L60,173L57,168L48,160L43,156L36,149L32,144L24,132L24,132L20,120L17,108L16,96L14,84L12,78L10,72L3,60L0,57M384,57L372,49L370,48L360,45L348,44L336,46L332,48L324,51L312,58L309,60L300,65L288,71L284,72L276,74L264,74L252,72L252,72L240,68L228,64L216,62L204,61L192,62L180,64L168,69L164,72L156,84L156,85L153,96L152,108L152,120L153,132L155,144L156,149L158,156L161,168L163,180L164,192L164,204L161,216L158,228L156,233L154,240L150,252L147,264L147,276L150,288L156,296L162,300L168,303L180,306L192,309L203,312L204,312L216,318L223,324L228,329L234,336L240,346L241,348L248,360L252,368L256,372L264,378L276,382L288,381L300,376L305,372L312,365L315,360L319,348L320,336L319,324L317,312L315,300L314,288L316,276L319,264L324,254L325,252L335,240L336,239L348,231L357,228L360,227L372,226L384,227M0,242L12,244L24,247L36,247L48,245L59,240L60,240L72,228L72,228L80,216L84,204L84,202L86,192L85,180L84,178L80,168L72,159L69,156L60,149L53,144L48,140L41,132L36,124L34,120L31,108L29,96L28,84L27,72L24,62L23,60L15,48L12,45L0,37M107,0L96,11L95,12L90,24L88,36L93,48L96,51L106,60L108,62L120,71L121,72L129,84L132,93L133,96L135,108L136,120L137,132L138,144L141,156L144,164L145,168L148,180L150,192L150,204L148,216L144,228L144,229L139,240L135,252L132,262L131,264L129,276L129,288L131,300L132,304L137,312L144,318L156,320L168,320L180,321L192,323L196,324L204,327L216,336L216,336L224,348L228,356L230,360L234,372L238,384M133,384L132,383L120,378L108,383L107,384M133,0L143,12L144,13L152,24L156,28L167,36L168,36L180,40L192,41L204,41L216,40L228,39L240,39L252,41L263,48L264,48L276,50L283,48L288,46L300,37L302,36L300,26L288,25L276,26L264,27L258,24L252,22L244,12L240,5L238,0M329,0L324,12L336,21L348,23L350,24L360,26L372,30L383,36L384,37M384,242L372,240L360,241L348,247L341,252L336,258L333,264L328,276L327,288L328,300L331,312L333,324L336,336L336,342L336,348L336,355L336,360L333,372L329,384M78,0L72,8L69,12L60,24L60,24L48,34L36,33L24,29L15,24L12,23L0,16M78,384L84,376L87,372L96,360L96,360L103,348L107,336L108,330L109,324L108,312L108,307L108,300L107,288L108,276L108,275L109,264L112,252L118,240L120,236L123,228L126,216L128,204L124,192L120,184L114,192L108,200L107,204L104,216L98,228L96,231L91,240L84,247L78,252L72,256L60,261L48,264L42,264L36,264L33,264L24,263L12,261L0,258M48,86L47,96L48,108L48,108L55,120L60,126L68,132L72,135L84,141L93,144L96,146L108,146L109,144L112,132L113,120L112,108L108,99L107,96L96,84L96,84L84,76L75,72L72,70L60,69L56,72L49,84L48,86M166,0L168,3L179,12L180,13L192,15L204,12L204,12L212,0M212,384L213,372L210,360L204,348L204,348L192,341L180,340L168,344L162,348L157,360L159,372L166,384M384,258L372,257L360,259L352,264L348,268L344,276L342,288L343,300L346,312L348,319L350,324L353,336L355,348L356,360L358,372L360,376L364,384M364,0L372,8L377,12L384,16M49,384L60,375L63,372L72,360L72,360L78,348L82,336L84,324L83,312L79,300L72,291L63,288L60,287L48,286L36,286L24,285L12,283L0,282M17,384L12,381L2,372L0,368M17,0L24,3L36,5L48,1L49,0M384,282L372,284L368,288L367,300L368,312L371,324L372,328L374,336L377,348L380,360L384,368' fill='none' stroke='%23163a25' stroke-width='1' stroke-opacity='0.09' stroke-linejoin='round'/></svg>");
+  --texture-terrain-size: 384px;
 
   /* ---- Motion --------------------------------------------------------- */
   /* Decelerating, never bouncing. Everything below is suppressed under a
@@ -216,4 +267,109 @@
     opacity: 1;
     transform: none;
   }
+}
+
+/*
+ * The same names, after dark.
+ *
+ * Every declaration below is a token the block above already defined; there
+ * is not one new name here and there is nothing in the application that reads
+ * only one of the two. That is the whole point of naming a colour for its
+ * role: a second theme is a second set of values, and no component, no
+ * utility class and no `dark:` variant anywhere knows this file has two
+ * halves.
+ *
+ * Keyed on an attribute rather than on `prefers-color-scheme`, because the
+ * traveler is allowed to disagree with their operating system. The attribute
+ * is always the *resolved* theme — `light` or `dark`, never `system` —
+ * written onto `<html>` before the first paint by the snippet in `index.html`
+ * and kept there by `design/theme.ts`. So there is one dark block rather than
+ * one for the preference and one for the media query.
+ *
+ * It is not an inversion. Paper lit from in front and a screen lit from
+ * behind are different materials: the lightness steps between the surfaces
+ * are wider here because a dark hairline separates less than a pale one does,
+ * every tint is a deep wash rather than a pale one, and the accent and the
+ * four meanings are lifted until they read as text again on a dark ground.
+ * What survives the move is the cast — every neutral below still runs green
+ * of grey — because the application is meant to be the same country after
+ * sundown, not a different application.
+ */
+:root {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* ---- Surfaces ------------------------------------------------------- */
+  /* The order flips with the light. On paper a raised surface is whiter than
+     the page and a recessed one is greyer; here a raised surface catches more
+     of the light and a recessed one falls further from it. */
+  --color-canvas: #151a16;
+  --color-surface: #1e241f;
+  --color-sunken: #0f1310;
+
+  /* ---- Hairlines ------------------------------------------------------ */
+  --color-line: #2d342e;
+  --color-line-strong: #76836f;
+
+  /* ---- Text ----------------------------------------------------------- */
+  /* Not #fff. Full white on a dark ground blooms — the glyphs thicken and the
+     counters close up — and this text is read in paragraphs. */
+  --color-ink: #e9efe6;
+  --color-ink-muted: #acb6a8;
+  --color-ink-subtle: #919b8d;
+
+  /* ---- The accent ----------------------------------------------------- */
+  /* The same pine, lit. `strong` still means *further from the background*,
+     which on paper was darker and here is lighter, so every hover written
+     against it goes on meaning what it meant. */
+  --color-accent: #68bd88;
+  --color-accent-strong: #8dd2a5;
+  --color-accent-tint: #16301f;
+  --color-accent-contrast: #0b1710;
+  --color-focus: #68bd88;
+
+  /* ---- The dark ------------------------------------------------------- */
+  /* Ink and shade part company here: the ink went pale, and a shadow cast in
+     pale ink is a glow. A shadow on a dark ground is the absence of light, so
+     it is black — and it has to be a much deeper black than on paper, because
+     8% of anything over #151a16 is nothing at all. */
+  --color-shade: #000000;
+  --color-scrim: color-mix(in oklab, var(--color-shade) 62%, transparent);
+
+  /* ---- The four meanings ---------------------------------------------- */
+  --color-changed: #c8a153;
+  --color-changed-tint: #2d2715;
+  --color-verified: #57b3c4;
+  --color-verified-tint: #11272e;
+  --color-open: #87a8cf;
+  --color-open-tint: #161f2c;
+  --color-error: #e68a7d;
+  --color-error-tint: #2e1a17;
+
+  /* ---- Depth ---------------------------------------------------------- */
+  /* Most of the lifting is done by `--color-surface` being lighter than the
+     canvas rather than by these; what a shadow adds in the dark is the
+     contact edge and the cast under a sheet, and both need far more of the
+     shade behind them than paper did. */
+  --shadow-raised:
+    0 1px 1px color-mix(in oklab, var(--color-shade) 40%, transparent),
+    0 2px 6px -2px color-mix(in oklab, var(--color-shade) 50%, transparent);
+  --shadow-floating:
+    0 1px 2px color-mix(in oklab, var(--color-shade) 45%, transparent),
+    0 12px 28px -10px color-mix(in oklab, var(--color-shade) 70%, transparent);
+
+  /* ---- Texture -------------------------------------------------------- */
+  /* The same tile, felt the same amount. The grain lightens what it lands on
+     here instead of darkening it, and light added to a dark surface carries
+     further than dark added to a pale one, so the opacity comes down to stay
+     at the strength that is felt rather than seen. */
+  --texture-grain-opacity: 0.028;
+
+  /* The same contours, drawn in the pale of the two rather than the deep of
+     them, and fainter for the same reason the grain is: a line lighter than
+     its ground carries further than a line darker than one. */
+  --texture-terrain: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='384' height='384' viewBox='0 0 384 384'><path d='M204,208L202,216L198,228L195,240L195,252L201,264L204,267L216,275L219,276L228,279L240,283L252,285L264,282L270,276L276,269L278,264L284,252L288,245L291,240L297,228L300,224L306,216L312,210L319,204L324,200L336,192L336,192L348,184L353,180L360,172L363,168L367,156L368,144L367,132L365,120L362,108L360,103L353,96L348,93L336,93L326,96L324,97L312,104L305,108L300,112L288,120L287,120L276,127L264,132L261,132L252,134L240,132L239,132L228,130L216,132L216,132L211,144L212,156L213,168L212,180L210,192L206,204L204,208M0,183L2,180L3,168L1,156L0,149M384,149L383,144L381,132L379,120L377,108L374,96L372,92L366,84L360,79L348,75L336,77L324,81L319,84L312,88L300,95L298,96L288,102L276,107L268,108L264,109L252,108L251,108L240,105L228,102L216,99L204,101L192,107L191,108L186,120L184,132L185,144L188,156L190,168L192,180L191,192L190,204L186,216L183,228L180,238L179,240L178,252L179,264L180,266L187,276L192,279L204,285L210,288L216,290L228,295L238,300L240,301L252,308L261,312L264,314L276,314L277,312L282,300L286,288L288,283L290,276L294,264L299,252L300,250L306,240L312,231L314,228L324,218L326,216L336,209L345,204L348,202L360,197L371,192L372,192L384,183M0,210L12,211L24,211L36,208L41,204L45,192L40,180L36,175L31,168L24,161L21,156L14,144L12,138L10,132L7,120L5,108L3,96L0,85M384,85L384,84L377,72L372,67L360,61L349,60L348,60L347,60L336,62L324,67L315,72L312,74L300,80L293,84L288,86L276,90L264,92L252,90L240,87L232,84L228,83L216,80L204,80L192,82L188,84L180,90L175,96L169,108L168,116L167,120L168,132L168,136L169,144L172,156L175,168L177,180L177,192L176,204L174,216L170,228L168,235L166,240L164,252L162,264L165,276L168,281L176,288L180,290L192,295L204,299L206,300L216,304L228,311L230,312L240,321L243,324L252,336L252,336L262,348L264,351L276,357L288,356L297,348L300,342L302,336L302,324L302,312L301,300L301,288L303,276L307,264L312,252L312,252L320,240L324,235L331,228L336,224L348,217L352,216L360,213L372,211L384,210M0,227L7,228L12,229L24,231L36,231L44,228L48,227L60,216L60,216L66,204L67,192L65,180L60,173L57,168L48,160L43,156L36,149L32,144L24,132L24,132L20,120L17,108L16,96L14,84L12,78L10,72L3,60L0,57M384,57L372,49L370,48L360,45L348,44L336,46L332,48L324,51L312,58L309,60L300,65L288,71L284,72L276,74L264,74L252,72L252,72L240,68L228,64L216,62L204,61L192,62L180,64L168,69L164,72L156,84L156,85L153,96L152,108L152,120L153,132L155,144L156,149L158,156L161,168L163,180L164,192L164,204L161,216L158,228L156,233L154,240L150,252L147,264L147,276L150,288L156,296L162,300L168,303L180,306L192,309L203,312L204,312L216,318L223,324L228,329L234,336L240,346L241,348L248,360L252,368L256,372L264,378L276,382L288,381L300,376L305,372L312,365L315,360L319,348L320,336L319,324L317,312L315,300L314,288L316,276L319,264L324,254L325,252L335,240L336,239L348,231L357,228L360,227L372,226L384,227M0,242L12,244L24,247L36,247L48,245L59,240L60,240L72,228L72,228L80,216L84,204L84,202L86,192L85,180L84,178L80,168L72,159L69,156L60,149L53,144L48,140L41,132L36,124L34,120L31,108L29,96L28,84L27,72L24,62L23,60L15,48L12,45L0,37M107,0L96,11L95,12L90,24L88,36L93,48L96,51L106,60L108,62L120,71L121,72L129,84L132,93L133,96L135,108L136,120L137,132L138,144L141,156L144,164L145,168L148,180L150,192L150,204L148,216L144,228L144,229L139,240L135,252L132,262L131,264L129,276L129,288L131,300L132,304L137,312L144,318L156,320L168,320L180,321L192,323L196,324L204,327L216,336L216,336L224,348L228,356L230,360L234,372L238,384M133,384L132,383L120,378L108,383L107,384M133,0L143,12L144,13L152,24L156,28L167,36L168,36L180,40L192,41L204,41L216,40L228,39L240,39L252,41L263,48L264,48L276,50L283,48L288,46L300,37L302,36L300,26L288,25L276,26L264,27L258,24L252,22L244,12L240,5L238,0M329,0L324,12L336,21L348,23L350,24L360,26L372,30L383,36L384,37M384,242L372,240L360,241L348,247L341,252L336,258L333,264L328,276L327,288L328,300L331,312L333,324L336,336L336,342L336,348L336,355L336,360L333,372L329,384M78,0L72,8L69,12L60,24L60,24L48,34L36,33L24,29L15,24L12,23L0,16M78,384L84,376L87,372L96,360L96,360L103,348L107,336L108,330L109,324L108,312L108,307L108,300L107,288L108,276L108,275L109,264L112,252L118,240L120,236L123,228L126,216L128,204L124,192L120,184L114,192L108,200L107,204L104,216L98,228L96,231L91,240L84,247L78,252L72,256L60,261L48,264L42,264L36,264L33,264L24,263L12,261L0,258M48,86L47,96L48,108L48,108L55,120L60,126L68,132L72,135L84,141L93,144L96,146L108,146L109,144L112,132L113,120L112,108L108,99L107,96L96,84L96,84L84,76L75,72L72,70L60,69L56,72L49,84L48,86M166,0L168,3L179,12L180,13L192,15L204,12L204,12L212,0M212,384L213,372L210,360L204,348L204,348L192,341L180,340L168,344L162,348L157,360L159,372L166,384M384,258L372,257L360,259L352,264L348,268L344,276L342,288L343,300L346,312L348,319L350,324L353,336L355,348L356,360L358,372L360,376L364,384M364,0L372,8L377,12L384,16M49,384L60,375L63,372L72,360L72,360L78,348L82,336L84,324L83,312L79,300L72,291L63,288L60,287L48,286L36,286L24,285L12,283L0,282M17,384L12,381L2,372L0,368M17,0L24,3L36,5L48,1L49,0M384,282L372,284L368,288L367,300L368,312L371,324L372,328L374,336L377,348L380,360L384,368' fill='none' stroke='%23a9d8bc' stroke-width='1' stroke-opacity='0.07' stroke-linejoin='round'/></svg>");
 }

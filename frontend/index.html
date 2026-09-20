@@ -20,8 +20,49 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
     />
-    <meta name="theme-color" content="#faf8f5" />
+    <!--
+      The light canvas, which is what the browser draws its own furniture in
+      around the page until the application is running. `design/theme.ts`
+      rewrites this from the stylesheet once it is, so the colour is named
+      once in `tokens.css` and the value here is only what a traveler sees
+      before a line of JavaScript has run.
+    -->
+    <meta name="theme-color" content="#f5f7f2" />
     <meta name="description" content="Plan a trip by talking about one." />
+
+    <!--
+      The theme, before the first paint.
+
+      Everything about how this application looks hangs off one attribute on
+      `<html>` (`design/tokens.css`), and React cannot set it soon enough: a
+      traveler who chose dark would watch the page load white and turn over,
+      which is a flash of precisely the thing they said they did not want.
+      So the attribute is settled here, in the head, before the browser has
+      drawn anything — and `design/theme.ts` takes it from here.
+
+      The key and the attribute are named in that module too. Two places
+      naming one string can drift apart, so `theme.test.ts` reads this file
+      and checks that they have not. The rule is the module's own: anything
+      stored that is not `light` or `dark` — `system`, nothing at all, or a
+      leftover from a version of this application that no longer exists —
+      means follow the machine.
+
+      It is allowed to fail. A browser told to keep no site data throws on
+      the mere act of reaching for `localStorage`, and a theme is not worth a
+      blank page: the catch leaves the attribute unset, which is the light
+      theme, which is where this application started.
+    -->
+    <script>
+      try {
+        var asked = localStorage.getItem("travel-advisor.theme");
+        var dark =
+          asked === "dark" ||
+          (asked !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+      } catch (unavailable) {
+        /* The light theme, then. */
+      }
+    </script>
     <link rel="manifest" href="/manifest.webmanifest" />
     <!-- iOS reads no manifest, and rounds this one's corners itself. -->
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />

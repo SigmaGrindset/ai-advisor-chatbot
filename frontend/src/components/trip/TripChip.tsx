@@ -1,5 +1,6 @@
 import type { TripPlan } from "../../api/types";
 import { tripName } from "./naming";
+import { useTheme } from "../../design/theme";
 import { tripPastel } from "../../design/tripPastel";
 
 /**
@@ -17,7 +18,8 @@ import { tripPastel } from "../../design/tripPastel";
  * them at all — is owed the same glance everyone else gets.
  */
 export function TripChip({ plan, className = "" }: { plan: TripPlan; className?: string }) {
-  const pastel = tripPastel(plan.trip_id);
+  const { scheme } = useTheme();
+  const pastel = tripPastel(plan.trip_id, scheme);
   return (
     <span
       className={`inline-flex max-w-full items-center truncate rounded-chip border px-2 py-0.5 font-mono text-micro ${className}`}

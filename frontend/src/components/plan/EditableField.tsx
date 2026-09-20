@@ -28,6 +28,7 @@ export function EditableField({
   placeholder,
   kind = "text",
   align = "right",
+  size = "body",
   lit = false,
   suggestion = null,
   onEditing,
@@ -51,6 +52,15 @@ export function EditableField({
    * sentence, and a sentence that wraps reads from the left.
    */
   align?: "left" | "right";
+  /**
+   * How large it is set. Every field of the plan is a line of a record and
+   * reads at `body` — except the destination, which is the name of the whole
+   * journey and is the head of its own record rather than a line of it.
+   *
+   * The editor is set at the same size as the reading state, so a field the
+   * traveler clicks into does not resize under the click.
+   */
+  size?: "body" | "display";
   /** True while the advisor's last change to this field is still lit. */
   lit?: boolean;
   /** What the advisor wanted for this field while the traveler was in it. */
@@ -66,6 +76,10 @@ export function EditableField({
   // over the render before the one that put the editor away.
   const open = useRef(false);
   const editing = draft !== null;
+  // The face and the size, chosen once and spent on both states, so that the
+  // reading state and the editor are the same words in the same type.
+  const set =
+    size === "display" ? "font-display text-display font-semibold" : "text-body";
 
   useEffect(() => {
     if (!editing) return;
@@ -101,7 +115,7 @@ export function EditableField({
           type="button"
           aria-label={`${label}: ${shown === "" ? placeholder : shown}. Click to edit.`}
           onClick={start}
-          className={`max-w-full rounded-control border-b border-dotted border-line-strong px-1 text-body transition-colors duration-500 hover:bg-sunken active:translate-y-px ${
+          className={`max-w-full rounded-control border-b border-dotted border-line-strong px-1 transition-colors duration-500 hover:bg-sunken active:translate-y-px ${set} ${
             align === "right" ? "text-right" : "text-left"
           } ${lit ? "bg-changed-tint" : ""} ${
             shown === "" ? "text-ink-subtle italic" : "text-ink"
@@ -127,9 +141,9 @@ export function EditableField({
               stop(false);
             } else return;
           }}
-          className={`w-full min-w-0 rounded-control border border-line-strong bg-surface px-1.5 py-0.5 text-input text-ink outline-none focus:outline-2 focus:outline-offset-1 focus:outline-focus ${
-            align === "right" ? "text-right" : "text-left"
-          }`}
+          className={`w-full min-w-0 rounded-control border border-line-strong bg-surface px-1.5 py-0.5 text-ink outline-none focus:outline-2 focus:outline-offset-1 focus:outline-focus ${
+            size === "display" ? set : "text-input"
+          } ${align === "right" ? "text-right" : "text-left"}`}
         />
       )}
 
