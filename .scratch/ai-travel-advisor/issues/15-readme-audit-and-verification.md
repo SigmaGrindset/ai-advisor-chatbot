@@ -23,6 +23,6 @@ looked at closely.
 - [ ] AI usage describes the techniques actually used while building, not a generic account
 - [ ] The `redesign-existing-projects` audit pass has been applied, with its findings either
       fixed or recorded
-- [ ] Contrast is verified on the clay accent and the four semantic tints, in both themes
+- [ ] Contrast is verified on the pine accent and the four semantic tints, in both themes
 - [ ] A real-device pass on a phone has been done
 - [ ] The full test suite is green

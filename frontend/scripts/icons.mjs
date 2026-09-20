@@ -7,7 +7,7 @@
  * from, kept so the mark can be changed rather than redrawn from memory.
  *
  * The mark is the compass the interface already carries in its own header — a
- * four-point star inside a ring, set in the clay accent. It is drawn here in
+ * four-point star inside a ring, set in the accent. It is drawn here in
  * pixels rather than fetched, so nothing outside this repository decides what
  * the traveler pins to their home screen.
  *
@@ -25,15 +25,15 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = join(HERE, "..", "public");
 
 /**
- * The theme's own clay, and the near-white that is written on it.
+ * The theme's own accent, and the near-white that is written on it.
  *
  * Read out of `tokens.css` rather than copied, because that file is the only
  * one in the project allowed to say what a colour is, and a mark that quietly
  * kept the old accent after a re-theme would be the worst kind of drift: the
  * one nobody sees until it is already on somebody's home screen.
  */
-const THEME = readFileSync(join(HERE, "..", "src", "tokens.css"), "utf8");
-const CLAY = themeColour("accent");
+const THEME = readFileSync(join(HERE, "..", "src", "design", "tokens.css"), "utf8");
+const ACCENT = themeColour("accent");
 const CHALK = themeColour("accent-contrast");
 
 /** One `--color-*` token from the theme, as the three bytes it names. */
@@ -47,12 +47,12 @@ function themeColour(name) {
 const GRAIN = 4;
 
 /**
- * One icon: a square of clay carrying the mark, drawn at `size` pixels.
+ * One icon: a square of the accent carrying the mark, drawn at `size` pixels.
  *
  * `room` is how much of the square the mark is allowed, which is the whole
  * difference between an ordinary icon and a maskable one — a launcher that
  * crops to a circle takes the corners, so a maskable mark keeps well inside
- * the safe zone and lets the clay take the cropping.
+ * the safe zone and lets the accent take the cropping.
  */
 function draw(size, room) {
   const middle = size / 2;
@@ -79,7 +79,7 @@ function draw(size, room) {
       const mix = lit / (GRAIN * GRAIN);
       const into = (y * size + x) * 3;
       for (let channel = 0; channel < 3; channel += 1) {
-        pixels[into + channel] = Math.round(CLAY[channel] * (1 - mix) + CHALK[channel] * mix);
+        pixels[into + channel] = Math.round(ACCENT[channel] * (1 - mix) + CHALK[channel] * mix);
       }
     }
   }

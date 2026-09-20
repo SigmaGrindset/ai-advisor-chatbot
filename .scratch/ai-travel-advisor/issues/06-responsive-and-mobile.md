@@ -65,7 +65,7 @@ at its drawn 34px under a fine one.
   hover-reveals-visibility class.
 - A backend test asserts the manifest is served as `application/manifest+json` — a browser
   offers to install nothing whose manifest arrives as a generic download, and that would
-  have failed on the device rather than here. `scripts/icons.mjs` reads the clay out of
+  have failed on the device rather than here. `scripts/icons.mjs` reads the accent out of
   `tokens.css` so a re-theme cannot leave an old accent on somebody's home screen.
 
 Seven bugs found by driving the application, none of which a test would have caught.

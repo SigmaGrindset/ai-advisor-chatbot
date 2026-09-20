@@ -15,6 +15,7 @@ import { spent } from "./spend";
 import { failureLabel } from "./failures";
 import { LoadingTranscript, Skeleton } from "../shell/Skeleton";
 import type { Unrecorded } from "../../stream/useTurn";
+import { useWriting } from "../../stream/writing";
 
 /** One thing the live region has been given to read out, in its turn. */
 type Announcement = { at: number; text: string };
@@ -98,8 +99,29 @@ export function ConversationPane({
   const [following, setFollowing] = useState(true);
 
   const replying = arriving !== null;
+  // What the traveler is shown of the arriving reply, which trails what has
+  // arrived of it so that a burst of fragments reads as writing rather than
+  // as text landing in lumps. Only the drawing is paced: everything that
+  // acts on the reply — the live region below, the Message it becomes — is
+  // given the whole of what actually arrived.
+  const reply = useWriting(arriving);
   const said = conversation?.messages ?? [];
   const last = said[said.length - 1];
+  // The last of a reply is still being drawn after the last of it has
+  // arrived, and the Message it became stands aside until that is done.
+  // Swapping it in on time would put the held-back end of the reply onto the
+  // page in one piece, which is the one place the pacing would show.
+  //
+  // Only the Message this reply became waits, and it is recognised by
+  // carrying what has been drawn so far: a turn that was stopped or that
+  // failed before the advisor wrote anything leaves something else last, and
+  // that has its own account of itself to give and does not wait for this.
+  const standingIn =
+    arriving === null &&
+    reply.writing &&
+    last?.role === "advisor" &&
+    last.content.startsWith(reply.text);
+  const shown = standingIn ? said.slice(0, -1) : said;
 
   // Read during the render, which is the transcript as it stands *before* this
   // update reaches the page — the only moment that can say whether the
@@ -208,7 +230,7 @@ export function ConversationPane({
               />
             )}
 
-            {said.map((message) => (
+            {shown.map((message) => (
               <MessageView
                 key={message.id}
                 role={message.role}
@@ -235,7 +257,9 @@ export function ConversationPane({
                 the lookup does, which is before the answer lands. */}
             {consulting !== null && <Consulting activity={consulting} />}
 
-            {arriving !== null && <MessageView role="advisor" content={arriving} writing />}
+            {(arriving !== null || standingIn) && (
+              <MessageView role="advisor" content={reply.text} writing />
+            )}
 
             {stopped !== null && stopped !== "" && (
               <MessageView role="advisor" content={stopped}>

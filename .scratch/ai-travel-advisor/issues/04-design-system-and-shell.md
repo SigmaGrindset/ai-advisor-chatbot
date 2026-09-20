@@ -18,7 +18,7 @@ deliberate visual system rather than browser defaults.
       sparkle, bot, zap or wand glyph anywhere
 - [x] At 1100px and above the layout is three panes: Conversation list, chat, and a right
       pane carrying **Plan** and **Traveler** tabs (the tab contents may be placeholders)
-- [x] The clay accent and the four semantic tints — changed, verified, open, error — exist
+- [x] The accent and the four semantic tints — changed, verified, open, error — exist
       as tokens with verified contrast
 - [x] Each Trip has a deterministic pastel derived from its identity, available for use on
       chips
