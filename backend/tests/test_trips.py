@@ -229,3 +229,44 @@ async def test_attaching_a_conversation_to_a_trip_that_does_not_exist_is_refused
 
     assert refused.status_code == 404
     assert await _plan(api, conversation) is None
+
+
+async def test_deleting_a_trip_takes_its_plan_and_leaves_its_conversations(
+    api: httpx2.AsyncClient, outbound_routes: dict[str, Responder]
+) -> None:
+    kyoto, trip = await _trip_about(api, outbound_routes, "Kyoto")
+    second = await start(api)
+    await _attach(api, second, trip)
+
+    deleted = await api.delete(f"/api/trips/{trip}")
+
+    assert deleted.status_code == 204
+    assert (await api.get("/api/trips")).json() == []
+    # Both threads are still there, and now on no Trip at all — which is where
+    # every Conversation starts.
+    listed = (await api.get("/api/conversations")).json()
+    assert {row["id"] for row in listed} == {kyoto, second}
+    assert {row["trip_id"] for row in listed} == {None}
+    assert await _plan(api, kyoto) is None
+
+
+async def test_a_trip_takes_its_conversations_with_it_when_the_traveler_says_so(
+    api: httpx2.AsyncClient, outbound_routes: dict[str, Responder]
+) -> None:
+    kyoto, trip = await _trip_about(api, outbound_routes, "Kyoto")
+    lisbon, other = await _trip_about(api, outbound_routes, "Lisbon")
+
+    deleted = await api.delete(f"/api/trips/{trip}?conversations=delete")
+
+    assert deleted.status_code == 204
+    assert (await api.get(f"/api/conversations/{kyoto}")).status_code == 404
+    # The other journey is untouched: its plan is still listed and its thread
+    # is still on it.
+    assert [plan["trip_id"] for plan in (await api.get("/api/trips")).json()] == [other]
+    assert (await _plan(api, lisbon) or {}).get("trip_id") == other
+
+
+async def test_deleting_a_trip_that_does_not_exist_is_refused(api: httpx2.AsyncClient) -> None:
+    refused = await api.delete("/api/trips/00000000-0000-0000-0000-0000000000ff")
+
+    assert refused.status_code == 404

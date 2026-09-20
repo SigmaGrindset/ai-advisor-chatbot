@@ -12,9 +12,9 @@ that leaves it out is not asking about it at all. Pydantic keeps those apart;
 
 import uuid
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,6 +43,13 @@ Currency = Annotated[str, Field(pattern="^[A-Za-z]{3}$")]
 Day = Annotated[int, Field(ge=1, le=MAX_DAY)]
 Description = Annotated[str, Field(min_length=1, max_length=MAX_DESCRIPTION)]
 When = Annotated[str, Field(pattern=f"^({'|'.join(PARTS_OF_DAY)})$")]
+
+#: What becomes of a Trip's Conversations when the Trip goes. Two words rather
+#: than a flag, because a caller that forgets a flag gets `false` and reads as
+#: though it meant it, and the thing being defaulted here is whether a
+#: traveler's transcripts survive. Spelling it in the query string also makes
+#: the request say out loud what it is about to do.
+OnDeletingTrip = Literal["keep", "delete"]
 
 
 class ItineraryItemView(BaseModel):
@@ -137,6 +144,35 @@ async def list_trips(session: AsyncSession = Depends(get_session)) -> list[TripP
     between them.
     """
     return [TripPlanView.of(plan) for plan in await read_plans(session)]
+
+
+@router.delete("/trips/{trip_id}", status_code=204)
+async def delete_trip(
+    trip_id: uuid.UUID,
+    conversations: OnDeletingTrip = "keep",
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    """Remove a Trip and its Trip Plan, for good.
+
+    Its Itinerary Items and Open Questions are the plan rather than things
+    hanging off it, so they go without being asked about. Its Conversations
+    are not: what was said in a thread is worth keeping even when the journey
+    it was about is not, and a traveler may equally have meant the whole
+    episode. So the interface asks, and the answer arrives here — `keep`
+    unless they said otherwise, because the irreversible reading of an
+    ambiguous request is the wrong default.
+
+    Kept, they are listed under no Trip afterwards and the advisor will start
+    a fresh Trip for one the moment it records something about a journey
+    again. That is the honest outcome of keeping a live thread and it is what
+    the interface says will happen, rather than a surprise two messages later.
+
+    Asking the traveler first is the interface's job, because by the time the
+    request arrives the decision has been made.
+    """
+    trip = await _trip(session, trip_id)
+    await trips.remove_trip(session, trip, with_conversations=conversations == "delete")
+    return Response(status_code=204)
 
 
 @router.patch("/trips/{trip_id}")

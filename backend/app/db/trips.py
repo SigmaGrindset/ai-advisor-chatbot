@@ -204,3 +204,37 @@ async def remove(session: AsyncSession, row: ItineraryItem | OpenQuestion) -> No
     """
     await session.delete(row)
     await session.commit()
+
+
+async def conversations_on(session: AsyncSession, trip: Trip) -> list[Conversation]:
+    """Every Conversation refining this Trip, in no particular order.
+
+    Read rather than counted, because the only caller deletes them: the
+    database would take them off this Trip on its own, and taking them off is
+    exactly what it must not do when the traveler asked for them to go.
+    """
+    found = await session.scalars(select(Conversation).where(Conversation.trip_id == trip.id))
+    return list(found)
+
+
+async def remove_trip(session: AsyncSession, trip: Trip, *, with_conversations: bool) -> None:
+    """Delete a Trip and its Trip Plan, and the Conversations on it if asked.
+
+    The Itinerary Items and the Open Questions go with it on the database's
+    own cascade, because they are not attached to the plan — they are the
+    plan, and the plan is the Trip.
+
+    The Conversations are the one part that is a question, so the traveler
+    answers it. Kept, they come off this Trip and are listed under no Trip,
+    which is where every Conversation starts and is what the foreign key does
+    by itself. Deleted, everything said in them goes too, on the same cascade
+    a Conversation deleted on its own rides — and they are deleted here,
+    first, precisely because the alternative is the database quietly detaching
+    the very rows that were meant to go.
+    """
+    if with_conversations:
+        for conversation in await conversations_on(session, trip):
+            await session.delete(conversation)
+        await session.flush()
+    await session.delete(trip)
+    await session.commit()

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import {
   Luggage,
   MoreHorizontal,
@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 import type { ConversationSummary, TripPlan } from "../../api/types";
-import { anchored } from "../shell/anchoring";
+import { useAnchoredPanel } from "../shell/anchoredPanel";
 import { conversationName, MAX_NAME } from "./conversationName";
 import { smallIcon } from "../../design/icons";
 import { Skeleton } from "../shell/Skeleton";
@@ -255,11 +255,9 @@ export function ConversationList({
  * so a panel drawn inside it is clipped by it, and the frame the application
  * sits in is translated, so a `fixed` panel would be measured from the frame
  * rather than from the window. The browser's top layer is above and outside
- * both. `manual` rather than `auto`, because the automatic kind dismisses
- * itself on the way into a press on the very control that opened it, which
- * turns the press that should close this panel into one that closes and then
- * immediately reopens it. What that kind would have given for free — a press
- * elsewhere, Escape — is given below and by the list around it.
+ * both. Being one — where it goes, what puts it away, where the focus lands —
+ * is `shell/anchoredPanel`; Escape is the list's, above. What is left here is
+ * what this panel is actually for.
  */
 function RowMenu({
   name,
@@ -285,87 +283,15 @@ function RowMenu({
   onRename: () => void;
   onDelete: () => void;
 }) {
-  const trigger = useRef<HTMLButtonElement>(null);
-  const panel = useRef<HTMLDivElement>(null);
-  // Where focus goes when the panel opens, and again when what it is asking
-  // changes. `autofocus` cannot do it: the browser applies that while the
-  // panel is still `display: none`, which is to say it does not apply it.
-  const landing = useRef<HTMLButtonElement>(null);
-  // The way out, kept where a listener registered once can still read the
-  // current one: closing is the list's to do, and the list hands down a new
-  // function every render.
-  const close = useRef(onClose);
   const open = showing !== null;
   const confirming = showing?.confirming ?? false;
-
-  useEffect(() => {
-    close.current = onClose;
-  }, [onClose]);
-
-  // Shown, placed, and handed the focus — all before the frame it was opened
-  // in is painted, which is what makes this a layout effect. An ordinary one
-  // would let the browser paint the panel once where it parks a popover that
-  // has not been told where it goes, which is the middle of the window.
-  useLayoutEffect(() => {
-    const menu = panel.current;
-    const control = trigger.current;
-    if (menu === null || control === null) return;
-
-    if (!menu.matches(":popover-open")) menu.showPopover();
-    const place = anchored(control.getBoundingClientRect(), menu.getBoundingClientRect(), {
-      width: window.innerWidth,
-      height: window.innerHeight,
-    });
-    menu.style.top = `${place.top}px`;
-    menu.style.left = `${place.left}px`;
-    landing.current?.focus();
-  }, [open, confirming]);
-
-  // What puts it away: a press anywhere else, and anything that moves the row
-  // out from under it. The panel is in the top layer and the row is not, so a
-  // rail scrolled while this is open would leave the panel hanging over a
-  // Conversation it is not about. It is closed rather than followed, because a
-  // menu chasing a scrolling row is a menu nobody can hit.
-  useLayoutEffect(() => {
-    if (!open) return;
-    const menu = panel.current;
-
-    const away = () => close.current();
-    const pressed = (event: PointerEvent) => {
-      const at = event.target as Node | null;
-      if (at === null) return;
-      // The control itself is not "elsewhere". Pressing it again is how the
-      // panel is closed, and closing it here as well would leave that press
-      // with nothing left to close and a panel that opens straight back up.
-      if (menu?.contains(at) === true || trigger.current?.contains(at) === true) return;
-      close.current();
-    };
-
-    const scrolled = (event: Event) => {
-      // Only a scroll that takes this row with it. The transcript scrolls
-      // itself every time the advisor writes another line, and a menu the
-      // traveler opened should not be closed by something happening in
-      // another pane.
-      const what = event.target as Node | null;
-      if (what === null || what.contains(trigger.current)) close.current();
-    };
-
-    document.addEventListener("pointerdown", pressed, true);
-    window.addEventListener("resize", away);
-    // Captured, because what scrolls is the list this row is in, and a scroll
-    // does not bubble as far as the window.
-    window.addEventListener("scroll", scrolled, true);
-    return () => {
-      document.removeEventListener("pointerdown", pressed, true);
-      window.removeEventListener("resize", away);
-      window.removeEventListener("scroll", scrolled, true);
-      // The panel has gone from the page and the browser has dropped focus on
-      // the floor with it. Put focus back on the control that opened it —
-      // unless the traveler has already put it somewhere themselves, which is
-      // what a press on something else was.
-      if (document.activeElement === document.body) trigger.current?.focus();
-    };
-  }, [open]);
+  const { trigger, panel, landing } = useAnchoredPanel({
+    open,
+    // The panel asks one of two things and is a different size for each, so
+    // the switch between them is a placement and a focus of its own.
+    showing: confirming,
+    onClose,
+  });
 
   return (
     <>

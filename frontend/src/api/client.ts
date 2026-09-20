@@ -57,6 +57,24 @@ export async function attachConversation(
 }
 
 /**
+ * Delete a Trip and its Trip Plan, and say what becomes of its Conversations.
+ *
+ * The plan goes either way — the Itinerary Items and Open Questions are the
+ * plan rather than things hanging off it. The Conversations are the
+ * traveler's choice, made in the confirmation they were just shown, and it is
+ * sent as the word they chose rather than as a flag: what this request does
+ * is worth being able to read in the request.
+ */
+export async function deleteTrip(
+  tripId: string,
+  conversations: "keep" | "delete",
+): Promise<void> {
+  refused(
+    await fetch(`/api/trips/${tripId}?conversations=${conversations}`, { method: "DELETE" }),
+  );
+}
+
+/**
  * Changing the Trip Plan by hand.
  *
  * Every one of these answers with the whole plan, because every one of them

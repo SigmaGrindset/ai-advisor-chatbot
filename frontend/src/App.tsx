@@ -7,6 +7,7 @@ import {
   changePlan,
   clearEverything,
   deleteConversation,
+  deleteTrip,
   forgetProfileFact,
   listConversations,
   listTrips,
@@ -42,7 +43,7 @@ import { withPlan } from "./components/trip/listing";
 import { TripSwitcher } from "./components/trip/TripSwitcher";
 import { InstructionsPage } from "./routes/InstructionsPage";
 import { goTo, useRoute } from "./routes/routing";
-import { TripsPage } from "./routes/TripsPage";
+import { type OnDeletingTrip, TripsPage } from "./routes/TripsPage";
 import { useTurn } from "./stream/useTurn";
 
 /**
@@ -263,18 +264,74 @@ export function App() {
     setFailure(null);
     try {
       await deleteConversation(id);
-      const remaining = conversations.filter((conversation) => conversation.id !== id);
-      setConversations(remaining);
-      if (id !== current?.id) return;
-      clear();
-      // They deleted what they were reading, so something has to take its place:
-      // the next one down, or a blank Conversation if that was the last of them.
-      const next = remaining[0];
-      if (next === undefined) start();
-      else await show(next.id);
+      await afterDeleting(
+        conversations.filter((conversation) => conversation.id !== id),
+        (gone) => gone === id,
+      );
     } catch {
       setFailure("That conversation could not be deleted.");
     }
+  }
+
+  /**
+   * The list as it stands once some Conversations have gone, and the traveler
+   * put somewhere if they were reading one of them.
+   *
+   * Two gestures end here — deleting one Conversation, and deleting a Trip
+   * with its Conversations — and what has to happen afterwards is the same
+   * either way: something has to take the place of what they were reading.
+   * The next one down, or a blank Conversation if that was the last of them.
+   */
+  async function afterDeleting(
+    remaining: ConversationSummary[],
+    deleted: (id: string) => boolean,
+  ) {
+    setConversations(remaining);
+    if (current === null || !deleted(current.id)) return;
+    clear();
+    const next = remaining[0];
+    if (next === undefined) start();
+    else await show(next.id);
+  }
+
+  /**
+   * Delete a Trip, and do what the traveler decided about its Conversations.
+   *
+   * The plan goes either way. The Conversations are the part they answered a
+   * question about, and both answers have somewhere to land here: deleted,
+   * they leave the list the same way one deleted on its own does; kept, they
+   * come off the Trip and are listed under none, which is where every
+   * Conversation starts.
+   *
+   * Which ones those are is worked out from what this page was showing rather
+   * than read back from the server. It is the same answer, and it is the set
+   * of rows the traveler was actually looking at when they decided.
+   */
+  async function discard(tripId: string, going: OnDeletingTrip) {
+    setFailure(null);
+    try {
+      await deleteTrip(tripId, going);
+    } catch {
+      setFailure("That trip could not be deleted.");
+      return;
+    }
+    setTrips((sofar) => sofar.filter((trip) => trip.trip_id !== tripId));
+    // The plan pane is showing a Trip that no longer exists, whichever way
+    // they answered — so it is emptied before anything else is decided.
+    if (plan.plan?.trip_id === tripId && current !== null) plan.opened(current.id, null);
+    if (going === "keep") {
+      setConversations((sofar) =>
+        sofar.map((row) => (row.trip_id === tripId ? { ...row, trip_id: null } : row)),
+      );
+      return;
+    }
+    const gone = new Set(
+      conversations.filter((row) => row.trip_id === tripId).map((row) => row.id),
+    );
+    await afterDeleting(
+      conversations.filter((row) => !gone.has(row.id)),
+      (id) => gone.has(id),
+    );
   }
 
   /** Take one thing the advisor learned off the Traveler Profile. */
@@ -423,6 +480,8 @@ export function App() {
           trips={trips}
           conversations={conversations}
           currentId={current?.id ?? null}
+          failure={failure}
+          onDelete={(tripId, going) => void discard(tripId, going)}
           onOpen={(id) => {
             // Opening one is also the way back to it: a traveler who came
             // here to find a Conversation has found it.
