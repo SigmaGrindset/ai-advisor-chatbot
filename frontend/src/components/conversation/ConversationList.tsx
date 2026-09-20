@@ -1,9 +1,16 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
-import { Luggage, MoreHorizontal, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  Luggage,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  SlidersHorizontal,
+  Trash2,
+} from "lucide-react";
 
 import type { ConversationSummary, TripPlan } from "../../api/types";
 import { anchored } from "../shell/anchoring";
-import { conversationName } from "./conversationName";
+import { conversationName, MAX_NAME } from "./conversationName";
 import { smallIcon } from "../../design/icons";
 import { Skeleton } from "../shell/Skeleton";
 import { ThemeToggle } from "../shell/ThemeToggle";
@@ -23,9 +30,12 @@ export function ConversationList({
   trips,
   currentId,
   actions,
+  renaming,
   onStart,
   onOpen,
   onActions,
+  onRenaming,
+  onRename,
   onDelete,
   onTrips,
   onInstructions,
@@ -47,9 +57,14 @@ export function ConversationList({
   currentId: string | null;
   /** The row whose actions are open, if one of them is. */
   actions: RowActions | null;
+  /** The Conversation whose name the traveler is editing, if they are. */
+  renaming: string | null;
   onStart: () => void;
   onOpen: (id: string) => void;
   onActions: (actions: RowActions | null) => void;
+  /** Put a row's name under a cursor, or take it back out again. */
+  onRenaming: (id: string | null) => void;
+  onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
   /** Leave for the page that lists every Trip. */
   onTrips: () => void;
@@ -145,29 +160,49 @@ export function ConversationList({
             conversation.trip_id === null ? undefined : byId.get(conversation.trip_id);
           const open = conversation.id === currentId;
           const showing = actions?.id === conversation.id ? actions : null;
+          const editing = conversation.id === renaming;
           return (
             <li key={conversation.id}>
               <div
-                className={`flex items-center gap-1 rounded-control pr-1 pressable-row ${
-                  open ? "bg-surface shadow-raised" : "hover:bg-canvas"
+                className={`flex items-center gap-1 rounded-control pr-1 ${
+                  // A row being typed into is raised like the open one, and
+                  // presses like nothing at all: the give under a press is for
+                  // things that go somewhere when pressed, and a row that sank
+                  // a pixel under a click into its own text field would be
+                  // answering a click that was never aimed at it.
+                  editing
+                    ? "bg-surface shadow-raised"
+                    : `pressable-row ${open ? "bg-surface shadow-raised" : "hover:bg-canvas"}`
                 }`}
               >
-                <button
-                  type="button"
-                  aria-current={open ? "true" : undefined}
-                  className="flex min-w-0 flex-1 flex-col items-start gap-1 rounded-control py-2 pl-3 text-left text-meta text-ink"
-                  onClick={() => onOpen(conversation.id)}
-                >
-                  <span className={`max-w-full truncate ${open ? "font-medium" : ""}`}>
-                    {named}
-                  </span>
-                  {/* Which journey this Conversation is about, in that Trip's
-                      own colour, so several of them about one journey read as
-                      a group without being read at all. One on no Trip carries
-                      nothing: every Conversation begins that way, and a rail
-                      of "no trip" marks says nothing about any of them. */}
-                  {onTrip !== undefined && <TripChip plan={onTrip} />}
-                </button>
+                {editing ? (
+                  <div className="flex min-w-0 flex-1 flex-col items-start gap-1 py-1.5 pl-3">
+                    <RenameField
+                      title={conversation.title}
+                      name={named}
+                      onRename={(chosen) => onRename(conversation.id, chosen)}
+                      onClose={() => onRenaming(null)}
+                    />
+                    {onTrip !== undefined && <TripChip plan={onTrip} />}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    aria-current={open ? "true" : undefined}
+                    className="flex min-w-0 flex-1 flex-col items-start gap-1 rounded-control py-2 pl-3 text-left text-meta text-ink"
+                    onClick={() => onOpen(conversation.id)}
+                  >
+                    <span className={`max-w-full truncate ${open ? "font-medium" : ""}`}>
+                      {named}
+                    </span>
+                    {/* Which journey this Conversation is about, in that Trip's
+                        own colour, so several of them about one journey read as
+                        a group without being read at all. One on no Trip carries
+                        nothing: every Conversation begins that way, and a rail
+                        of "no trip" marks says nothing about any of them. */}
+                    {onTrip !== undefined && <TripChip plan={onTrip} />}
+                  </button>
+                )}
 
                 <RowMenu
                   name={named}
@@ -176,6 +211,12 @@ export function ConversationList({
                   onOpen={() => onActions({ id: conversation.id, confirming: false })}
                   onConfirm={() => onActions({ id: conversation.id, confirming: true })}
                   onClose={() => onActions(null)}
+                  onRename={() => {
+                    // The panel has said all it has to say; what it asked for
+                    // happens in the row itself.
+                    onActions(null);
+                    onRenaming(conversation.id);
+                  }}
                   onDelete={() => onDelete(conversation.id)}
                 />
               </div>
@@ -227,6 +268,7 @@ function RowMenu({
   onOpen,
   onConfirm,
   onClose,
+  onRename,
   onDelete,
 }: {
   /** What this Conversation is called, which is how the control is labelled. */
@@ -239,6 +281,8 @@ function RowMenu({
   /** Ask first. Deleting a Conversation cannot be taken back. */
   onConfirm: () => void;
   onClose: () => void;
+  /** Hand the naming of this Conversation back to the row it is written on. */
+  onRename: () => void;
   onDelete: () => void;
 }) {
   const trigger = useRef<HTMLButtonElement>(null);
@@ -381,19 +425,120 @@ function RowMenu({
               </div>
             </div>
           ) : (
-            <button
-              ref={landing}
-              type="button"
-              className="flex w-full items-center gap-2 rounded-control px-2 py-1.5 text-left text-ink pressable-row hover:bg-sunken hover:text-error"
-              onClick={onConfirm}
-            >
-              <Trash2 {...smallIcon} aria-hidden="true" />
-              Delete conversation
-            </button>
+            // The actions, named by what they do and nothing else. "Delete
+            // conversation" in a panel that already says whose actions these
+            // are is the same word twice, and two labels of that length read
+            // as a paragraph of controls rather than as a choice of two.
+            <div className="flex flex-col gap-0.5">
+              <button
+                ref={landing}
+                type="button"
+                className="flex w-full items-center gap-2 rounded-control px-2 py-1.5 text-left text-ink pressable-row hover:bg-sunken"
+                onClick={onRename}
+              >
+                <Pencil {...smallIcon} aria-hidden="true" />
+                Rename
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-control px-2 py-1.5 text-left text-ink pressable-row hover:bg-sunken hover:text-error"
+                onClick={onConfirm}
+              >
+                <Trash2 {...smallIcon} aria-hidden="true" />
+                Delete
+              </button>
+            </div>
           )}
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * A Conversation's name in the list, while the traveler is changing it.
+ *
+ * The row's own title becomes the field. Renaming is not a dialog and not a
+ * second place to look: what they are changing is the words they pressed
+ * Rename next to, so those are the words under the cursor.
+ *
+ * Blur saves, Enter saves, Escape cancels — the same three as every editable
+ * part of the Trip Plan (`plan/EditableField.tsx`), because a traveler learns
+ * that once and this application should only teach it once.
+ */
+function RenameField({
+  title,
+  name,
+  onRename,
+  onClose,
+}: {
+  /** The name it has, and null for a Conversation nothing has named yet. */
+  title: string | null;
+  /** What it is called in the list, which an unnamed one's field stands in as. */
+  name: string;
+  onRename: (title: string) => void;
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = useState(title ?? "");
+  const field = useRef<HTMLInputElement>(null);
+  // Whether this is still the traveler's to close, kept where a handler that
+  // runs after it has been closed can still read it. State cannot answer
+  // that: the handler closed over the render before the one that closed it.
+  const open = useRef(true);
+
+  // Before the frame is painted, and so a layout effect: the panel that was
+  // pressed to get here puts focus back on the control that opened it as it
+  // goes, and an ordinary effect would land after that — one painted frame
+  // with the ring on the wrong control and a field nobody can type in.
+  useLayoutEffect(() => {
+    field.current?.focus();
+    // Selected rather than left with a cursor at the end: renaming something
+    // that already has a name is usually replacing it.
+    field.current?.setSelectionRange(0, field.current.value.length, "backward");
+    // And wound back to the first word. Focusing a field whose text is longer
+    // than it is scrolls it to the end, and a name too long for a rail this
+    // narrow would open on its last few words — which is not what the
+    // traveler pressed Rename beside. Backwards above and here together:
+    // the cursor is at the front, so nothing scrolls it away again.
+    if (field.current !== null) field.current.scrollLeft = 0;
+  }, []);
+
+  function stop(saving: boolean) {
+    if (!open.current) return;
+    open.current = false;
+    const chosen = draft.trim();
+    onClose();
+    // Nothing is not a name. A field cleared to empty leaves the Conversation
+    // the name it had — and leaves an unnamed one unnamed, so the advisor can
+    // still name it after the next exchange rather than being locked out of a
+    // Conversation the traveler opened this on and wandered away from.
+    if (saving && chosen !== "" && chosen !== title) onRename(chosen);
+  }
+
+  return (
+    <input
+      ref={field}
+      type="text"
+      aria-label={`Rename ${name}`}
+      value={draft}
+      placeholder={name}
+      maxLength={MAX_NAME}
+      onChange={(typed) => setDraft(typed.target.value)}
+      onBlur={() => stop(true)}
+      onKeyDown={(pressed) => {
+        if (pressed.key === "Enter") stop(true);
+        else if (pressed.key === "Escape") {
+          // Not the sheet's Escape, and not the list's. One press is one thing.
+          pressed.preventDefault();
+          pressed.stopPropagation();
+          stop(false);
+        }
+      }}
+      // Set at the size everything typed into is set at rather than at the
+      // row's own, which is smaller: iOS zooms the page when a focused field
+      // is under 16px, and the rail is a sheet on a phone (ADR-0007).
+      className="w-full min-w-0 rounded-control border border-line-strong bg-surface px-1.5 py-0.5 text-input text-ink outline-none placeholder:text-ink-subtle focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+    />
   );
 }
 

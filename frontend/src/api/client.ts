@@ -107,6 +107,26 @@ async function sent(url: string, method: string, body?: unknown): Promise<TripPl
   );
 }
 
+/**
+ * Call a Conversation something the traveler will recognise it by.
+ *
+ * It answers with the row as the list now reads it, rather than with nothing:
+ * the name that is stored is the name trimmed and measured by the server, and
+ * a rail showing what was typed instead would be showing its own guess at it.
+ */
+export async function renameConversation(
+  id: string,
+  title: string,
+): Promise<ConversationSummary> {
+  return await expected<ConversationSummary>(
+    await fetch(`/api/conversations/${id}/title`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title }),
+    }),
+  );
+}
+
 export async function deleteConversation(id: string): Promise<void> {
   refused(await fetch(`/api/conversations/${id}`, { method: "DELETE" }));
 }

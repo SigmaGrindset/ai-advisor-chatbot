@@ -8,14 +8,14 @@ views the browser is sent, and the mapping from what happened to an event.
 import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import assert_never
+from typing import Annotated, assert_never
 
 import httpx2
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response, StreamingResponse
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletionMessageParam
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..advisor import failures
@@ -23,6 +23,7 @@ from ..advisor.client import OpenRouterKeyMissing, create_model_client
 from ..advisor.loop import Consulted, Consulting, ReplyFragment
 from ..advisor.prompt import compose_prompt
 from ..advisor.failures import Failure, FailureKind
+from ..advisor.titles import MAX_TITLE
 from ..advisor.tools import LiveDataTools
 from ..config import Settings, get_settings
 from ..db.connection import get_session
@@ -31,9 +32,11 @@ from ..db.conversations import (
     conversations_by_activity,
     discard_message,
     find_conversation,
+    last_activity_in,
     messages_in,
     record_message,
     remove_conversation,
+    retitle_conversation,
 )
 from ..db.tables import Conversation, Message, MessageRole, PromptVersion
 from ..db.trips import attach_conversation, find_trip
@@ -159,6 +162,23 @@ class ChosenTrip(BaseModel):
     trip_id: uuid.UUID | None
 
 
+class ChosenTitle(BaseModel):
+    """What the traveler wants this Conversation called.
+
+    Bounded at the length the advisor's own naming is bounded at, because it is
+    the same line in the same list: a title is what a Conversation is
+    recognised by in a rail one row high.
+
+    Trimmed before it is measured, so a name of nothing but spaces is refused
+    rather than stored. An unnamed Conversation can still be named by its next
+    exchange; one named the empty string could not be.
+    """
+
+    title: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_TITLE)
+    ]
+
+
 class TravelerMessage(BaseModel):
     """What the traveler wants to say."""
 
@@ -223,6 +243,33 @@ async def delete_conversation(
     """
     await remove_conversation(session, await _conversation(session, conversation_id))
     return Response(status_code=204)
+
+
+@router.put("/conversations/{conversation_id}/title")
+async def rename_conversation(
+    conversation_id: uuid.UUID,
+    chosen: ChosenTitle,
+    session: AsyncSession = Depends(get_session),
+) -> ConversationSummary:
+    """Call a Conversation something the traveler recognises it by.
+
+    The advisor names a Conversation after its first exchange and never again,
+    so this is the only thing that ever renames one — and a Conversation the
+    traveler names first is one the advisor then leaves alone, which is the
+    same rule read from the other side (`services/turns.py`).
+
+    A rename is not activity: it changes what the row says, never where the row
+    sits. What comes back is that row as the list now reads it, because the
+    list is the thing that was just renamed.
+    """
+    conversation = await _conversation(session, conversation_id)
+    await retitle_conversation(session, conversation, chosen.title)
+    return ConversationSummary(
+        id=conversation.id,
+        title=conversation.title,
+        last_activity_at=await last_activity_in(session, conversation),
+        trip_id=conversation.trip_id,
+    )
 
 
 @router.put("/conversations/{conversation_id}/trip")

@@ -49,6 +49,20 @@ async def conversations_by_activity(
     return [(conversation, last_activity_at) for conversation, last_activity_at in rows]
 
 
+async def last_activity_in(session: AsyncSession, conversation: Conversation) -> datetime:
+    """When something was last said in this Conversation, or when it was started.
+
+    The same reckoning the list is ordered by, asked of the one row that has
+    just changed rather than of all of them.
+    """
+    activity = await session.scalar(
+        select(LAST_ACTIVITY).where(Conversation.id == conversation.id)
+    )
+    # Coalesced in the database, so there is always one — narrowed here for the
+    # type checker, which knows only that a scalar select may find no row.
+    return activity if activity is not None else conversation.created_at
+
+
 async def conversations_apart_from(
     session: AsyncSession, conversation: Conversation | None
 ) -> Sequence[tuple[str, str | None]]:

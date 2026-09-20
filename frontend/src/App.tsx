@@ -14,6 +14,7 @@ import {
   readInstructions,
   readProfile,
   removeItineraryItem,
+  renameConversation,
   restoreInstructions,
   saveInstructions,
   settleOpenQuestion,
@@ -86,6 +87,10 @@ export function App() {
   const [instructions, setInstructions] = useState<AdvisorInstructions | null>(null);
   const [savingInstructions, setSavingInstructions] = useState(false);
   const [rowActions, setRowActions] = useState<RowActions | null>(null);
+  // The Conversation whose name the traveler is editing in the list, if they
+  // are. Held here rather than in the list, because the list is rebuilt from
+  // the top every time a turn moves a row to it.
+  const [renaming, setRenaming] = useState<string | null>(null);
   // True until the first read of everything has come back, however it came
   // back. Every pane holds an empty state, and an empty state shown before
   // anything has been read is a statement about the traveler's account that
@@ -203,6 +208,7 @@ export function App() {
   /** Everything the page is showing about a Conversation, put down. */
   function clear() {
     setRowActions(null);
+    setRenaming(null);
     setFailure(null);
     turn.forget();
   }
@@ -229,6 +235,27 @@ export function App() {
     const { plan: refining, ...conversation } = await readConversation(id);
     setCurrent(conversation);
     plan.opened(conversation.id, refining);
+  }
+
+  /**
+   * Call a Conversation something the traveler will recognise it by.
+   *
+   * What the server stored is what is shown afterwards, in both places a
+   * Conversation is named: the row they typed into, and the heading over the
+   * transcript if that is the one they are reading.
+   */
+  function rename(id: string, title: string) {
+    setFailure(null);
+    void renameConversation(id, title)
+      .then((renamed) => {
+        setConversations((sofar) =>
+          sofar.map((row) => (row.id === id ? { ...row, title: renamed.title } : row)),
+        );
+        setCurrent((reading) =>
+          reading?.id === id ? { ...reading, title: renamed.title } : reading,
+        );
+      })
+      .catch(() => setFailure("That conversation could not be renamed."));
   }
 
   async function remove(id: string) {
@@ -443,6 +470,7 @@ export function App() {
             trips={trips}
             currentId={current?.id ?? null}
             actions={rowActions}
+            renaming={renaming}
             onStart={() => {
               start();
               dismiss();
@@ -452,6 +480,8 @@ export function App() {
               void open(id);
             }}
             onActions={setRowActions}
+            onRenaming={setRenaming}
+            onRename={rename}
             onDelete={(id) => void remove(id)}
             onTrips={() => {
               dismiss();

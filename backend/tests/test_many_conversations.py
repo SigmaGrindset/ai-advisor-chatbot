@@ -255,6 +255,60 @@ async def test_deleting_a_conversation_twice_is_refused_the_second_time(
     assert (await api.delete(f"/api/conversations/{conversation}")).status_code == 404
 
 
+async def test_renaming_a_conversation_changes_what_the_list_calls_it(
+    api: httpx2.AsyncClient, outbound_routes: dict[str, Responder]
+) -> None:
+    """And leaves it where it was: a rename is not something said in it."""
+    outbound_routes["openrouter.ai"] = replying(
+        "April in Lisbon is mild.", utility=answering("Three days in Lisbon")
+    )
+    lisbon = await start(api)
+    await send(api, lisbon, "What is Lisbon like in April?")
+    outbound_routes["openrouter.ai"] = replying(
+        "Oslo is still cold.", utility=answering("A weekend in Oslo")
+    )
+    oslo = await start(api)
+    await send(api, oslo, "And Oslo?")
+
+    renamed = await api.put(
+        f"/api/conversations/{lisbon}/title", json={"title": "  Sintra day trip  "}
+    )
+
+    assert renamed.status_code == 200
+    assert renamed.json()["title"] == "Sintra day trip"
+    assert await listed(api) == [oslo, lisbon]
+    assert await titles(api) == ["A weekend in Oslo", "Sintra day trip"]
+    reopened = await api.get(f"/api/conversations/{lisbon}")
+    assert reopened.json()["title"] == "Sintra day trip"
+
+
+async def test_a_conversation_the_traveler_named_is_not_named_again_by_the_advisor(
+    api: httpx2.AsyncClient, conversation: str, outbound_routes: dict[str, Responder]
+) -> None:
+    outbound_routes["openrouter.ai"] = model = replying(
+        "April in Lisbon is mild.", utility=answering("Three days in Lisbon")
+    )
+    await api.put(
+        f"/api/conversations/{conversation}/title", json={"title": "Portugal in spring"}
+    )
+
+    events = await send(api, conversation, "What is Lisbon like in April?")
+
+    assert await titles(api) == ["Portugal in spring"]
+    assert [event["type"] for event in events if event["type"] == "conversation_titled"] == []
+    # Not asked for a name it would not have been allowed to give.
+    assert model.utility_calls == []
+
+
+async def test_a_conversation_cannot_be_named_nothing(
+    api: httpx2.AsyncClient, conversation: str
+) -> None:
+    refused = await api.put(f"/api/conversations/{conversation}/title", json={"title": "   "})
+
+    assert refused.status_code == 422
+    assert await titles(api) == [None]
+
+
 async def test_the_advisor_is_told_the_travelers_other_conversations_exist(
     api: httpx2.AsyncClient, outbound_routes: dict[str, Responder]
 ) -> None:

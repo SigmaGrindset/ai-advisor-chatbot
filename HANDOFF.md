@@ -258,10 +258,10 @@ cd D:/Antonio/ai-advisor-chatbot/backend && D:/Antonio/ai-advisor-chatbot/.venv/
 cd D:/Antonio/ai-advisor-chatbot/backend && D:/Antonio/ai-advisor-chatbot/.venv/Scripts/python.exe -m mypy
 ```
 
-After ticket 14: **110 frontend tests in 16 files** (~1.5s), `tsc` silent, build clean;
-**117 backend tests**, mypy clean over 63 files. Confirm those numbers *before* you start — if
-they do not match, something changed underneath you. Update this paragraph when a ticket
-legitimately moves them.
+As of renaming a Conversation: **126 frontend tests in 18 files** (~2s), `tsc` silent,
+build clean; **120 backend tests**, mypy clean over 63 files. Confirm those numbers
+*before* you start — if they do not match, something changed underneath you. Update this
+paragraph when a ticket legitimately moves them.
 
 09, 10 and 11 are the tickets that moved the frontend suite, because each brought pure
 modules with opinions in them: 09's merge rule, field readings and calendar, 10's three —
