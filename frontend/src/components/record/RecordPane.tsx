@@ -100,7 +100,7 @@ export function RecordPane({
                 if (element) tabs.current.set(each.id, element);
                 else tabs.current.delete(each.id);
               }}
-              className={`-mb-px flex items-center gap-2 border-b-2 px-3 pt-1.5 pb-2.5 text-meta font-medium transition-colors ${
+              className={`-mb-px flex items-center gap-2 border-b-2 px-3 pt-1.5 pb-2.5 text-meta font-medium pressable-row ${
                 showingThis
                   ? "border-accent text-ink"
                   : "border-surface text-ink-muted hover:text-ink"

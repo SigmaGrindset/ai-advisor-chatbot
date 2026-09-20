@@ -46,7 +46,7 @@ export function PlanPeek({
       type="button"
       aria-haspopup="dialog"
       aria-label="Trip Plan. Open the plan."
-      className={`flex w-full items-center gap-2 border-b border-line px-4 py-2 text-left transition-colors duration-500 ${
+      className={`flex w-full items-center gap-2 border-b border-line px-4 py-2 text-left transition-colors duration-500 active:translate-y-px ${
         changed ? "bg-changed-tint" : "bg-surface"
       }`}
       onClick={onOpen}

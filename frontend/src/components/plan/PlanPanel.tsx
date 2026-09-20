@@ -6,6 +6,7 @@ import { nights, showDate, showDay } from "./dates";
 import { EditableField } from "./EditableField";
 import { showAmount } from "./money";
 import { smallIcon } from "../../design/icons";
+import { Skeleton } from "../shell/Skeleton";
 import { valueOf } from "./fields";
 
 /**
@@ -22,6 +23,7 @@ import { valueOf } from "./fields";
  */
 export function PlanPanel({
   plan,
+  resuming,
   lit,
   suggestions,
   onEditing,
@@ -34,6 +36,12 @@ export function PlanPanel({
 }: {
   /** The plan on screen, and null while the Conversation is refining none. */
   plan: TripPlan | null;
+  /**
+   * True until the first read has come back. A plan that has not arrived and
+   * a Conversation that is about no trip are both null here, and only the
+   * second of them is the sentence below.
+   */
+  resuming: boolean;
   /** The fields the advisor changed a moment ago. */
   lit: ReadonlySet<string>;
   /** What the advisor wanted for a field the traveler had open, by field. */
@@ -48,6 +56,21 @@ export function PlanPanel({
   onAsk: (question: string) => void;
   onSettle: (questionId: string) => void;
 }) {
+  if (resuming) {
+    // The shape of the four facts at the head of a plan: a label and a value
+    // on each line, which is the row `Row` draws.
+    return (
+      <div className="flex flex-col gap-3" role="status" aria-label="Loading the trip plan">
+        {LOADING_ROWS.map((width, at) => (
+          <div key={at} className="flex items-baseline justify-between gap-3">
+            <Skeleton className="h-2.5 w-20" />
+            <Skeleton className={`h-3.5 ${width}`} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   if (plan === null) {
     return (
       <p className="text-meta text-ink-subtle">
@@ -282,7 +305,7 @@ function Entry({
       <button
         type="button"
         aria-label={`Remove ${item.description}`}
-        className="shrink-0 rounded-control p-1 text-ink-subtle transition-colors hover:bg-sunken hover:text-ink"
+        className="shrink-0 rounded-control p-1 text-ink-subtle pressable hover:bg-sunken hover:text-ink"
         onClick={onRemove}
       >
         <X {...smallIcon} aria-hidden="true" />
@@ -305,7 +328,7 @@ function AddItem({ label, onAdd }: { label: string; onAdd: (description: string)
     return (
       <button
         type="button"
-        className="flex items-center gap-1.5 self-start rounded-control px-1 py-0.5 text-meta text-ink-subtle transition-colors hover:bg-sunken hover:text-ink"
+        className="flex items-center gap-1.5 self-start rounded-control px-1 py-0.5 text-meta text-ink-subtle pressable hover:bg-sunken hover:text-ink"
         onClick={() => setDraft("")}
       >
         <Plus {...smallIcon} aria-hidden="true" />
@@ -374,7 +397,7 @@ function Questions({
             <li key={asked.id} className="flex items-stretch gap-1">
               <button
                 type="button"
-                className={`flex min-w-0 flex-1 items-start gap-2 rounded-control border border-line px-2 py-1.5 text-left text-meta text-open transition-colors duration-500 hover:border-line-strong ${
+                className={`flex min-w-0 flex-1 items-start gap-2 rounded-control border border-line px-2 py-1.5 text-left text-meta text-open transition-colors duration-500 hover:border-line-strong active:translate-y-px ${
                   lit.has(asked.id) ? "bg-changed-tint" : "bg-open-tint"
                 }`}
                 onClick={() => onAsk(asked.question)}
@@ -385,7 +408,7 @@ function Questions({
               <button
                 type="button"
                 aria-label={`Settle: ${asked.question}`}
-                className="shrink-0 rounded-control px-1 text-ink-subtle transition-colors hover:bg-sunken hover:text-ink"
+                className="shrink-0 rounded-control px-1 text-ink-subtle pressable hover:bg-sunken hover:text-ink"
                 onClick={() => onSettle(asked.id)}
               >
                 <X {...smallIcon} aria-hidden="true" />
@@ -397,3 +420,6 @@ function Questions({
     </section>
   );
 }
+
+/** The widths the plan's four facts stand in at while they are being read. */
+const LOADING_ROWS = ["w-28", "w-20", "w-24", "w-16"] as const;

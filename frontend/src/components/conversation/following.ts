@@ -30,3 +30,25 @@ export function atBottom({ scrollTop, scrollHeight, clientHeight }: Extent): boo
 export function toFoot(view: HTMLElement | null): void {
   if (view !== null) view.scrollTop = view.scrollHeight;
 }
+
+/**
+ * The same, but travelled rather than jumped.
+ *
+ * For the control that offers a traveler who has scrolled up the way back
+ * down, and for that alone. A reply arriving is followed instantly, because
+ * a smooth scroll chasing text that is still being written never catches it
+ * — it is still easing towards where the foot was two fragments ago. A
+ * traveler who pressed "Jump to latest" is not being chased by anything, and
+ * a page that travels the distance shows them how far they had come.
+ *
+ * The preference is read here rather than left to the stylesheet. `base.css`
+ * forces `scroll-behavior: auto` under reduced motion, and that is exactly
+ * the property a `behavior` passed to `scrollTo` overrules — asking for
+ * `smooth` in so many words is asking for it whatever the page says. So the
+ * ask itself is what has to be withdrawn.
+ */
+export function toFootSmoothly(view: HTMLElement | null): void {
+  if (view === null) return;
+  const asked = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  view.scrollTo({ top: view.scrollHeight, behavior: asked ? "auto" : "smooth" });
+}

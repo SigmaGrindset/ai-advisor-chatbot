@@ -3,6 +3,7 @@ import { ArrowLeft, RotateCcw } from "lucide-react";
 
 import type { AdvisorInstructions } from "../api/types";
 import { icon, smallIcon } from "../design/icons";
+import { Skeleton } from "../components/shell/Skeleton";
 
 /**
  * The Advisor Instructions, and the whole prompt they are composed into.
@@ -41,11 +42,11 @@ export function InstructionsPage({
   onBack: () => void;
 }) {
   return (
-    <div className="flex min-w-0 flex-1 flex-col bg-canvas">
+    <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col bg-canvas outline-none">
       <header className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-3 sm:px-6 sm:py-4">
         <button
           type="button"
-          className="flex shrink-0 items-center gap-2 rounded-control p-2 text-meta text-ink-muted transition-colors hover:bg-sunken hover:text-ink"
+          className="flex shrink-0 items-center gap-2 rounded-control p-2 text-meta text-ink-muted pressable hover:bg-sunken hover:text-ink"
           onClick={onBack}
         >
           <ArrowLeft {...icon} aria-hidden="true" />
@@ -56,7 +57,7 @@ export function InstructionsPage({
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-safe-bottom sm:px-6">
         <div className="mx-auto flex max-w-reading flex-col gap-8 py-8">
           <div className="flex flex-col gap-3">
-            <h1 className="font-display text-display text-ink">Advisor instructions</h1>
+            <h1 className="font-display text-display text-balance text-ink sm:text-page">Advisor instructions</h1>
             <p className="text-meta text-ink-subtle">
               This is what your advisor is told before it reads a word you have written.
               Change it and your very next message uses it — in this conversation and in
@@ -71,7 +72,18 @@ export function InstructionsPage({
           )}
 
           {instructions === null ? (
-            <p className="text-meta text-ink-subtle">Reading your advisor's instructions…</p>
+            // The shape of what is coming rather than a sentence about it: the
+            // editor and the composed prompt below it are both tall, and a
+            // line of text where a page is about to be is a page that jumps.
+            <div
+              className="flex flex-col gap-3"
+              role="status"
+              aria-label="Reading your advisor's instructions"
+            >
+              <Skeleton className="h-2.5 w-32" />
+              <Skeleton className="h-56 w-full sm:h-80" />
+              <Skeleton className="h-8 w-20" />
+            </div>
           ) : (
             <Editing
               // Keyed on the version, so a save or a restore replaces the
@@ -86,7 +98,7 @@ export function InstructionsPage({
           )}
         </div>
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -130,7 +142,7 @@ function Editing({
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <button
             type="button"
-            className="rounded-control bg-accent px-3 py-2 text-meta font-medium text-accent-contrast transition-colors hover:bg-accent-strong disabled:opacity-40"
+            className="rounded-control bg-accent px-3 py-2 text-meta font-medium text-accent-contrast pressable hover:bg-accent-strong disabled:opacity-40"
             disabled={!edited || emptied || saving}
             onClick={() => onSave(draft)}
           >
@@ -218,7 +230,7 @@ function Restoring({
     return (
       <button
         type="button"
-        className="flex items-center gap-1.5 self-start rounded-control px-1 py-0.5 text-meta text-ink-muted transition-colors hover:text-ink"
+        className="flex items-center gap-1.5 self-start rounded-control px-1 py-0.5 text-meta text-ink-muted pressable hover:text-ink"
         onClick={() => setConfirming(true)}
       >
         <RotateCcw {...smallIcon} aria-hidden="true" />

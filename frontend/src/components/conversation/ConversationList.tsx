@@ -1,8 +1,9 @@
-import { Compass, Luggage, MoreHorizontal, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Luggage, MoreHorizontal, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 
 import type { ConversationSummary, TripPlan } from "../../api/types";
 import { conversationName } from "./conversationName";
-import { icon, smallIcon } from "../../design/icons";
+import { smallIcon } from "../../design/icons";
+import { Skeleton } from "../shell/Skeleton";
 import { TripChip } from "../trip/TripChip";
 
 /**
@@ -15,6 +16,7 @@ export type RowActions = { id: string; confirming: boolean };
 
 export function ConversationList({
   conversations,
+  resuming,
   trips,
   currentId,
   actions,
@@ -26,6 +28,12 @@ export function ConversationList({
   onInstructions,
 }: {
   conversations: ConversationSummary[];
+  /**
+   * True until the first read has come back. An empty list is the ordinary
+   * state of a first visit and it says so, which is the wrong thing to say to
+   * somebody whose forty Conversations are still in flight.
+   */
+  resuming: boolean;
   /**
    * Every Trip the traveler has, which is what the rows are marked from. A
    * row knows the identifier of its Trip; what that Trip is called and what
@@ -60,14 +68,18 @@ export function ConversationList({
       }}
     >
       <div className="flex flex-col gap-4 px-4 pt-5 pb-4">
-        <p className="flex items-center gap-2 font-display text-title font-semibold text-ink">
-          <Compass {...icon} className="shrink-0 text-accent" aria-hidden="true" />
+        {/* The wordmark, and no glyph beside it. A compass next to the words
+            "Travel Advisor" is the picture the words already are — and it was
+            drawn in the accent, which this application spends on interaction
+            alone (see `tokens.css`): a mark that cannot be pressed had taken
+            the one colour that means something can be. */}
+        <p className="font-display text-title font-semibold tracking-tight text-ink">
           Travel Advisor
         </p>
 
         <button
           type="button"
-          className="flex items-center justify-center gap-2 rounded-control border border-line-strong bg-surface px-3 py-2 text-meta font-medium text-ink shadow-raised transition-colors hover:bg-canvas"
+          className="flex items-center justify-center gap-2 rounded-control border border-line-strong bg-surface px-3 py-2 text-meta font-medium text-ink shadow-raised pressable hover:bg-canvas"
           onClick={onStart}
         >
           <Plus {...smallIcon} aria-hidden="true" />
@@ -82,7 +94,7 @@ export function ConversationList({
         <div className="flex flex-col items-start gap-1">
           <button
             type="button"
-            className="flex items-center gap-2 rounded-control px-1 py-1 text-meta text-ink-muted transition-colors hover:text-ink"
+            className="flex items-center gap-2 rounded-control px-1 py-1 text-meta text-ink-muted pressable hover:text-ink"
             onClick={onTrips}
           >
             <Luggage {...smallIcon} aria-hidden="true" />
@@ -91,7 +103,7 @@ export function ConversationList({
 
           <button
             type="button"
-            className="flex items-center gap-2 rounded-control px-1 py-1 text-meta text-ink-muted transition-colors hover:text-ink"
+            className="flex items-center gap-2 rounded-control px-1 py-1 text-meta text-ink-muted pressable hover:text-ink"
             onClick={onInstructions}
           >
             <SlidersHorizontal {...smallIcon} aria-hidden="true" />
@@ -103,7 +115,17 @@ export function ConversationList({
       {/* Contained, so that flicking this list past its end scrolls neither
           the transcript behind it nor the page itself. */}
       <ul className="flex flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain px-2 pb-4">
-        {conversations.length === 0 && (
+        {resuming &&
+          // A row apiece, at a row's height, so the rail fills rather than
+          // jumps. The widths differ because Conversation titles do, and four
+          // identical bars read as a graphic rather than as a list arriving.
+          LOADING_ROWS.map((width, at) => (
+            <li key={at} className="px-3 py-2.5">
+              <Skeleton className={`h-3.5 ${width}`} />
+            </li>
+          ))}
+
+        {!resuming && conversations.length === 0 && (
           // An empty list is the ordinary state of a first visit, so it says
           // what will fill it rather than leaving the rail looking broken.
           <li className="px-3 py-2 text-meta text-ink-subtle">
@@ -121,7 +143,7 @@ export function ConversationList({
           return (
             <li key={conversation.id}>
               <div
-                className={`flex flex-col rounded-control transition-colors ${
+                className={`flex flex-col rounded-control pressable-row ${
                   open ? "bg-surface shadow-raised" : "hover:bg-canvas"
                 }`}
               >
@@ -188,7 +210,7 @@ export function ConversationList({
                     ) : (
                       <button
                         type="button"
-                        className="flex items-center gap-1.5 rounded-control px-2 py-1 text-ink-muted transition-colors hover:text-error"
+                        className="flex items-center gap-1.5 rounded-control px-2 py-1 text-ink-muted pressable hover:text-error"
                         onClick={() => onActions({ id: conversation.id, confirming: true })}
                       >
                         <Trash2 {...smallIcon} aria-hidden="true" />
@@ -205,3 +227,6 @@ export function ConversationList({
     </nav>
   );
 }
+
+/** The widths the rail stands in at, one per row it is waiting for. */
+const LOADING_ROWS = ["w-4/5", "w-3/5", "w-11/12", "w-2/3"] as const;

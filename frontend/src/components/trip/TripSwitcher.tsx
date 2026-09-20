@@ -66,7 +66,7 @@ export function TripSwitcher({
             ? "This conversation is not on a trip. Put it on one."
             : `Trip: ${tripName(plan)}. Move this conversation to another trip.`
         }
-        className="flex w-full items-center gap-2 rounded-control border border-line bg-canvas px-2 py-1.5 text-left transition-colors hover:border-line-strong"
+        className="flex w-full items-center gap-2 rounded-control border border-line bg-canvas px-2 py-1.5 text-left pressable-row hover:border-line-strong"
         onClick={() => setOpen(!open)}
       >
         {plan === null ? (
@@ -141,7 +141,7 @@ function Choice({
     <button
       type="button"
       aria-current={chosen ? "true" : undefined}
-      className="flex w-full min-w-0 items-center gap-2 rounded-control px-2 py-1.5 text-left transition-colors hover:bg-sunken"
+      className="flex w-full min-w-0 items-center gap-2 rounded-control px-2 py-1.5 text-left pressable-row hover:bg-sunken"
       onClick={onChoose}
     >
       <span className="flex min-w-0 flex-1 items-center gap-2">{children}</span>

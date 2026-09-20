@@ -86,6 +86,12 @@ export function App() {
   const [instructions, setInstructions] = useState<AdvisorInstructions | null>(null);
   const [savingInstructions, setSavingInstructions] = useState(false);
   const [rowActions, setRowActions] = useState<RowActions | null>(null);
+  // True until the first read of everything has come back, however it came
+  // back. Every pane holds an empty state, and an empty state shown before
+  // anything has been read is a statement about the traveler's account that
+  // nothing has checked — so until this is false the panes stand in shapes
+  // instead (`shell/Skeleton.tsx`).
+  const [resuming, setResuming] = useState(true);
   const [failure, setFailure] = useState<string | null>(null);
   const [tab, setTab] = useState<RecordTab>("plan");
   // The records that changed while their tab was not showing. The tab is
@@ -144,7 +150,11 @@ export function App() {
         setCurrent(conversation);
         plan.opened(conversation.id, refining);
       })
-      .catch(() => setFailure("Your conversations could not be loaded."));
+      .catch(() => setFailure("Your conversations could not be loaded."))
+      // Put down whether the read worked or not. A read that failed has said
+      // so in `failure`, and a pane left loading forever underneath the
+      // sentence explaining why it will not load is two accounts of one thing.
+      .finally(() => setResuming(false));
   }, []);
 
   useEffect(() => {
@@ -364,6 +374,7 @@ export function App() {
   const planPanel = (
     <PlanPanel
       plan={plan.plan}
+      resuming={resuming}
       lit={plan.lit}
       suggestions={plan.suggestions}
       onEditing={plan.editing}
@@ -428,6 +439,7 @@ export function App() {
         list={(dismiss) => (
           <ConversationList
             conversations={conversations}
+            resuming={resuming}
             trips={trips}
             currentId={current?.id ?? null}
             actions={rowActions}
@@ -454,6 +466,7 @@ export function App() {
         conversation={(folded) => (
           <ConversationPane
             conversation={current}
+            resuming={resuming}
             arriving={turn.arriving}
             consulting={turn.consulting}
             unrecorded={turn.unrecorded}

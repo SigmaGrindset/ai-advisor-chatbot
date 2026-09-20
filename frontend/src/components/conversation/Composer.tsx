@@ -89,7 +89,7 @@ export function Composer({
         <button
           type={onStop === null ? "submit" : "button"}
           aria-label={onStop === null ? "Send" : "Stop the reply"}
-          className={`flex shrink-0 items-center justify-center rounded-chip p-2 transition-colors ${
+          className={`flex shrink-0 items-center justify-center rounded-chip p-2 pressable ${
             onStop === null
               ? "bg-accent text-accent-contrast hover:bg-accent-strong disabled:opacity-40"
               : "border border-line-strong bg-surface text-ink hover:bg-sunken"

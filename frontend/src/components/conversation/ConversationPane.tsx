@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowDown, MapPinned, PanelLeft, Radar, RotateCcw, TriangleAlert } from "lucide-react";
+import { ArrowDown, ArrowDownLeft, MapPinned, PanelLeft, Radar, RotateCcw, TriangleAlert } from "lucide-react";
 
 import { settled } from "./announcing";
 import type { Citation, Conversation, Failure, Message } from "../../api/types";
@@ -7,12 +7,13 @@ import { Citations } from "./Citations";
 import { Composer } from "./Composer";
 import { conversationName } from "./conversationName";
 import { icon, smallIcon } from "../../design/icons";
-import { atBottom, toFoot } from "./following";
+import { atBottom, toFoot, toFootSmoothly } from "./following";
 import { GREETING, STARTERS } from "./firstRun";
 import { spoken } from "./markdown";
 import { Prose } from "./Prose";
 import { spent } from "./spend";
 import { failureLabel } from "./failures";
+import { LoadingTranscript, Skeleton } from "../shell/Skeleton";
 import type { Unrecorded } from "../../stream/useTurn";
 
 /** One thing the live region has been given to read out, in its turn. */
@@ -20,6 +21,7 @@ type Announcement = { at: number; text: string };
 
 export function ConversationPane({
   conversation,
+  resuming,
   arriving,
   consulting,
   unrecorded,
@@ -38,6 +40,13 @@ export function ConversationPane({
 }: {
   /** The Conversation being read, or null before the traveler has begun one. */
   conversation: Conversation | null;
+  /**
+   * True until the first read has come back. A Conversation and no
+   * Conversation look identical before either has arrived, and the greeting
+   * is only true of the second — so neither is drawn until it is known which
+   * one this is.
+   */
+  resuming: boolean;
   /** The reply as it is being written, if one is arriving into this Conversation. */
   arriving: string | null;
   /** What this turn is fetching right now, and null when it is fetching nothing. */
@@ -116,10 +125,16 @@ export function ConversationPane({
     rejoin();
   }, [conversation?.id]);
 
-  /** Go to the foot, where the reply is, and follow it from there. */
-  function rejoin() {
+  /**
+   * Go to the foot, where the reply is, and follow it from there.
+   *
+   * Gently when the traveler asked to go there, and at once when the
+   * Conversation changed under them — a Conversation opening at its end has
+   * no distance to travel that anybody watched.
+   */
+  function rejoin(gently = false) {
     setFollowing(true);
-    toFoot(transcript.current);
+    (gently ? toFootSmoothly : toFoot)(transcript.current);
   }
 
   const announcements = useAnnouncement({ replying, arriving, consulting, stopped, reply: last });
@@ -128,22 +143,33 @@ export function ConversationPane({
     said.length === 0 && arriving === null && unrecorded === null && stopped === null;
 
   return (
-    <main className="flex min-w-0 flex-1 flex-col bg-canvas">
+    // `tabIndex` so that focus actually lands here when the skip link is
+    // followed: a browser moves focus to the target of a fragment link only
+    // if the target can hold it, and a landmark cannot by default.
+    <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col bg-canvas outline-none">
       <header className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-3 sm:px-6 sm:py-4">
         {onShowConversations !== null && (
           <button
             type="button"
             aria-label="Conversations"
             aria-haspopup="dialog"
-            className="shrink-0 rounded-control p-2 text-ink-muted transition-colors hover:bg-sunken hover:text-ink"
+            className="shrink-0 rounded-control p-2 text-ink-muted pressable hover:bg-sunken hover:text-ink"
             onClick={onShowConversations}
           >
             <PanelLeft {...icon} aria-hidden="true" />
           </button>
         )}
 
-        <h1 className="min-w-0 flex-1 truncate font-display text-title font-semibold text-ink">
-          {conversationName(conversation?.title ?? null)}
+        <h1 className="flex min-w-0 flex-1 items-center truncate font-display text-title font-semibold text-ink">
+          {/* "New conversation" is what a Conversation with no title is called,
+              and before the read comes back nothing knows whether this is one.
+              The heading stands in at a title's height so the header does not
+              change height when the real one lands. */}
+          {resuming ? (
+            <Skeleton className="h-4 w-48" />
+          ) : (
+            conversationName(conversation?.title ?? null)
+          )}
         </h1>
 
         {onShowRecord !== null && (
@@ -151,7 +177,7 @@ export function ConversationPane({
             type="button"
             aria-label="Trip details"
             aria-haspopup="dialog"
-            className="shrink-0 rounded-control p-2 text-ink-muted transition-colors hover:bg-sunken hover:text-ink"
+            className="shrink-0 rounded-control p-2 text-ink-muted pressable hover:bg-sunken hover:text-ink"
             onClick={onShowRecord}
           >
             <MapPinned {...icon} aria-hidden="true" />
@@ -169,7 +195,9 @@ export function ConversationPane({
           className="h-full overflow-y-auto overscroll-contain px-4 py-8 sm:px-6"
         >
           <div className="mx-auto flex max-w-reading flex-col gap-8">
-            {untouched && (
+            {resuming && <LoadingTranscript />}
+
+            {!resuming && untouched && (
               <FirstRun
                 onStarter={(prompt) => {
                   // Filled, not sent: the opening is a starting point, and the
@@ -243,8 +271,8 @@ export function ConversationPane({
         {!following && (
           <button
             type="button"
-            className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-chip border border-line-strong bg-surface px-3 py-1.5 text-meta font-medium text-ink shadow-raised transition-colors hover:bg-canvas"
-            onClick={rejoin}
+            className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-chip border border-line-strong bg-surface px-3 py-1.5 text-meta font-medium text-ink shadow-floating pressable hover:bg-canvas"
+            onClick={() => rejoin(true)}
           >
             <ArrowDown {...smallIcon} aria-hidden="true" />
             Jump to latest
@@ -406,7 +434,7 @@ function NotAnswered({
       {onRetry !== null && (
         <button
           type="button"
-          className="flex items-center gap-2 rounded-control border border-line-strong bg-surface px-3 py-1.5 text-meta font-medium text-ink shadow-raised transition-colors hover:bg-canvas"
+          className="flex items-center gap-2 rounded-control border border-line-strong bg-surface px-3 py-1.5 text-meta font-medium text-ink shadow-raised pressable hover:bg-canvas"
           onClick={onRetry}
         >
           <RotateCcw {...smallIcon} aria-hidden="true" />
@@ -427,22 +455,56 @@ function Consulting({ activity }: { activity: string }) {
   );
 }
 
-/** The greeting and the openings, drawn. Why they exist is in `firstRun.ts`. */
+/**
+ * The greeting and the openings, drawn. Why they exist is in `firstRun.ts`.
+ *
+ * An index and a rule each, read down — not a grid of cards. Four bordered
+ * boxes in a two-by-two is the shape every chat application opens with, and
+ * it is the wrong shape besides: the four openings are not four choices of
+ * equal weight to be compared across, they are a list to be read down and
+ * abandoned as soon as one of them is close enough. A list is read down in
+ * one movement; a grid asks the eye to scan two axes to find that out.
+ *
+ * Nothing here is a card, so nothing here needs a border, a fill and a
+ * shadow to be told apart from the page. A hairline between each is enough,
+ * and the whole set costs the first screen four rules instead of four boxes.
+ */
 function FirstRun({ onStarter }: { onStarter: (prompt: string) => void }) {
   return (
-    <section className="flex flex-col gap-6 pt-2">
-      <p className="max-w-[26ch] font-display text-display text-ink">{GREETING}</p>
+    <section className="flex flex-col gap-8 pt-2">
+      {/* Balanced rather than ragged: the greeting is the largest thing on the
+          first screen anyone sees, and a last line holding one word is the
+          thing they would notice about it. */}
+      <p className="max-w-[24ch] font-display text-display text-balance text-ink">{GREETING}</p>
 
-      <ul className="grid gap-2 sm:grid-cols-2">
-        {STARTERS.map((starter) => (
-          <li key={starter.asks} className="flex">
+      <ul className="flex flex-col border-b border-line">
+        {STARTERS.map((starter, at) => (
+          <li key={starter.asks}>
             <button
               type="button"
-              className="flex w-full flex-col gap-1 rounded-panel border border-line bg-surface px-4 py-3 text-left transition-colors hover:border-line-strong"
+              // Pulled out past the measure and padded back in, so the row the
+              // pointer is on lights up with a margin around the words rather
+              // than clipping them at the edge of the highlight.
+              className="group -mx-3 flex w-[calc(100%+1.5rem)] items-baseline gap-4 border-t border-line px-3 py-3.5 text-left pressable-row hover:bg-sunken"
               onClick={() => onStarter(starter.prompt)}
             >
-              <span className="text-meta font-medium text-ink">{starter.label}</span>
-              <span className="text-meta text-ink-muted">{starter.prompt}</span>
+              <span className="shrink-0 font-mono text-micro tabular-nums text-ink-subtle">
+                {String(at + 1).padStart(2, "0")}
+              </span>
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-heading font-medium text-ink">{starter.label}</span>
+                <span className="text-meta text-ink-muted">{starter.prompt}</span>
+              </span>
+              {/* Where the question is going, which is the composer rather
+                  than the advisor: these fill the field, they do not send.
+                  Drawn only under a pointer that is on the row, because four
+                  arrows down the first screen is four times the same
+                  instruction. */}
+              <ArrowDownLeft
+                {...smallIcon}
+                className="ms-auto shrink-0 self-center text-ink-subtle opacity-0 transition-opacity group-hover:opacity-100"
+                aria-hidden="true"
+              />
             </button>
           </li>
         ))}

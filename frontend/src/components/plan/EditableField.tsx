@@ -101,7 +101,7 @@ export function EditableField({
           type="button"
           aria-label={`${label}: ${shown === "" ? placeholder : shown}. Click to edit.`}
           onClick={start}
-          className={`max-w-full rounded-control border-b border-dotted border-line-strong px-1 text-body transition-colors duration-500 hover:bg-sunken ${
+          className={`max-w-full rounded-control border-b border-dotted border-line-strong px-1 text-body transition-colors duration-500 hover:bg-sunken active:translate-y-px ${
             align === "right" ? "text-right" : "text-left"
           } ${lit ? "bg-changed-tint" : ""} ${
             shown === "" ? "text-ink-subtle italic" : "text-ink"

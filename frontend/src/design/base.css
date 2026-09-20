@@ -40,6 +40,43 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  /* The grain, laid over the whole page once.
+     A tile this small at this opacity is not a texture anybody will name; it
+     is what stops a flat fill reading as a screenshot of a colour. It is an
+     overlay rather than a background so that every surface gets it — the
+     canvas, the white of a panel, the sunken of the rail — at the same
+     strength, and one tile keeps the grain continuous across the seams
+     between them instead of restarting at each one.
+     `z-index: 1` is the whole scale: the only other layer in the application
+     is a sheet, and a sheet is a modal `dialog` in the browser's top layer,
+     which is above every z-index there is. So nothing has to be numbered to
+     out-rank this, and nothing is. */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background-image: var(--texture-grain);
+    opacity: var(--texture-grain-opacity);
+  }
+
+  /* Headings set their own line breaks rather than taking the browser's.
+     A title is read in one glance, and a glance at four words on one line
+     and one word on the next is a glance at the stray word. Only the
+     headings that are written in this repository: a reply's own headings
+     are streamed a token at a time, and re-balancing a line on every token
+     is a heading that shuffles while it is being read. */
+  :where(h1, h2) {
+    text-wrap: balance;
+  }
+
+  /* Paragraphs get the cheaper rule, which only adjusts the last lines and is
+     stable enough to apply to prose that is still arriving. */
+  :where(p, li, dd, blockquote) {
+    text-wrap: pretty;
+  }
+
   /* Controls are given a thumb's worth of room wherever they are being
      pressed by one, and left at their drawn size wherever they are being
      clicked. Asked as a question about the pointer rather than about the
@@ -72,11 +109,56 @@
   }
 }
 
+/*
+ * What it is to press something.
+ *
+ * Hovering says a control is a control; nothing in the interface said that a
+ * press had landed. On a touch screen there is no hover at all, so a thumb on
+ * a button got no acknowledgement whatsoever until the thing it did appeared
+ * — and the thing it did is sometimes a network round trip away.
+ *
+ * So every control gives way under the pointer by a hair, and gives way
+ * faster than it comes back: `--duration-press` going down, the interface's
+ * ordinary speed coming back up. A control that is disabled does not move,
+ * because it is not doing anything.
+ *
+ * Two of them, because the right amount of give depends on the shape. A
+ * button shrinks; a full-width row cannot, since scaling a row down pulls its
+ * edges away from the pane it is flush with, so a row sinks instead.
+ *
+ * The transition property is listed rather than `all`: `all` animates the
+ * height of a field that is growing with what is typed into it, and the
+ * composer grows on every keystroke.
+ */
+@utility pressable {
+  transition-property: color, background-color, border-color, box-shadow, scale, translate, opacity;
+  transition-timing-function: var(--default-transition-timing-function);
+  transition-duration: var(--default-transition-duration);
+
+  &:active:not(:disabled) {
+    scale: 0.97;
+    transition-duration: var(--duration-press);
+  }
+}
+
+@utility pressable-row {
+  transition-property: color, background-color, border-color, box-shadow, scale, translate, opacity;
+  transition-timing-function: var(--default-transition-timing-function);
+  transition-duration: var(--default-transition-duration);
+
+  &:active:not(:disabled) {
+    translate: 0 1px;
+    transition-duration: var(--duration-press);
+  }
+}
+
 /* Motion is the streaming caret, the changed-field highlight, sheet and panel
-   transitions and hover and focus transitions — and none of them when the
-   traveler has asked for less. A sheet still arrives and still leaves under
-   this preference; it simply does both at once, which is why the sheet reads
-   its own travel off the page rather than assuming how long it has. */
+   transitions, hover and focus transitions and the give under a press — and
+   none of them when the traveler has asked for less. A press still gives way
+   under this preference; it simply arrives at once rather than travelling,
+   because the acknowledgement is the point and the movement is not. A sheet
+   still arrives and still leaves too, which is why the sheet reads its own
+   travel off the page rather than assuming how long it has. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

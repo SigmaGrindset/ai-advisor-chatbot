@@ -43,11 +43,11 @@ export function TripsPage({
   const { trips: gatherings, unattached } = gathered(trips, conversations);
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col bg-canvas">
+    <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col bg-canvas outline-none">
       <header className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-3 sm:px-6 sm:py-4">
         <button
           type="button"
-          className="flex shrink-0 items-center gap-2 rounded-control p-2 text-meta text-ink-muted transition-colors hover:bg-sunken hover:text-ink"
+          className="flex shrink-0 items-center gap-2 rounded-control p-2 text-meta text-ink-muted pressable hover:bg-sunken hover:text-ink"
           onClick={onBack}
         >
           <ArrowLeft {...icon} aria-hidden="true" />
@@ -57,7 +57,7 @@ export function TripsPage({
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-8 sm:px-6">
         <div className="mx-auto flex max-w-reading flex-col gap-8">
-          <h1 className="font-display text-display text-ink">Your trips</h1>
+          <h1 className="font-display text-display text-balance text-ink sm:text-page">Your trips</h1>
 
           {gatherings.length === 0 ? (
             <p className="text-meta text-ink-subtle">
@@ -65,7 +65,7 @@ export function TripsPage({
               where you are going, when, or what you want to do.
             </p>
           ) : (
-            <ul className="flex flex-col gap-4">
+            <ul className="flex flex-col border-b border-line">
               {gatherings.map(({ plan, conversations: refining }) => (
                 <li key={plan.trip_id}>
                   <Trip
@@ -95,7 +95,7 @@ export function TripsPage({
           )}
         </div>
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -113,15 +113,22 @@ function Trip({
 }) {
   const running = nights(plan.starts_on, plan.ends_on);
   return (
-    <article className="flex flex-col gap-3 rounded-panel border border-line bg-surface px-4 py-4">
-      <h2 className="flex min-w-0 items-center gap-2 font-display text-title font-semibold text-ink">
+    // A rule and room, not a box. A Trip is a heading with things under it —
+    // its facts, then the Conversations writing them — and a border drawn
+    // round that says only that it ends, which the next heading says anyway.
+    // The white fill said even less: on this canvas the two are a shade
+    // apart, so the card was a hairline pretending to be a surface.
+    <article className="flex flex-col gap-3 border-t border-line pt-6 pb-7">
+      <h2 className="flex min-w-0 items-center gap-2.5 font-display text-title font-semibold text-ink">
         {/* The Trip's own colour, which is what its chip is drawn in wherever
             a Conversation mentions it. Said in a swatch rather than a second
             chip, because a heading that repeats itself in two type sizes is
-            not two facts. */}
+            not two facts. Squared off rather than round: the chip is the pill
+            in this application, and a second pill at a third the size reads
+            as a small chip rather than as a mark. */}
         <span
           aria-hidden="true"
-          className="size-2.5 shrink-0 rounded-chip"
+          className="size-3 shrink-0 rounded-[3px]"
           style={{ backgroundColor: tripPastel(plan.trip_id).border }}
         />
         <span className="min-w-0 truncate">{tripName(plan)}</span>
@@ -187,7 +194,7 @@ function Conversations({
             <button
               type="button"
               aria-current={open ? "true" : undefined}
-              className="flex w-full min-w-0 items-center gap-2 rounded-control px-2 py-1.5 text-left text-meta text-ink transition-colors hover:bg-sunken"
+              className="flex w-full min-w-0 items-center gap-2 rounded-control px-2 py-1.5 text-left text-meta text-ink pressable-row hover:bg-sunken"
               onClick={() => onOpen(conversation.id)}
             >
               <MessagesSquare

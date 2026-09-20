@@ -61,7 +61,7 @@ export function ProfilePanel({
               <button
                 type="button"
                 aria-label={`Delete: ${factSaid(fact)}`}
-                className="shrink-0 rounded-control p-1 text-ink-subtle transition-colors hover:bg-sunken hover:text-ink"
+                className="shrink-0 rounded-control p-1 text-ink-subtle pressable hover:bg-sunken hover:text-ink"
                 onClick={() => onForget(fact.id)}
               >
                 <X {...smallIcon} aria-hidden="true" />
@@ -134,7 +134,7 @@ function Erasing({ onClear }: { onClear: () => void }) {
           </p>
           <button
             type="button"
-            className="flex items-center gap-1.5 self-start rounded-control px-1 py-0.5 text-meta text-ink-muted transition-colors hover:text-error"
+            className="flex items-center gap-1.5 self-start rounded-control px-1 py-0.5 text-meta text-ink-muted pressable hover:text-error"
             onClick={() => setConfirming(true)}
           >
             <Trash2 {...smallIcon} aria-hidden="true" />

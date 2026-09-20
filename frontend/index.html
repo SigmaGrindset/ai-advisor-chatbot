@@ -27,6 +27,31 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192" />
     <title>AI Travel Advisor</title>
+
+    <!--
+      What this application looks like when its address is pasted somewhere
+      else. Without these a link to it unfurls as a bare hostname, which is
+      the one thing a traveler sending themselves the address will see before
+      they open it.
+
+      The image is the application's own icon, already in `public/` and
+      already being shipped, rather than a rendering of the interface: a
+      preview card is a small square next to a line of text, and a screenshot
+      of a three-pane layout at that size is a grey rectangle.
+
+      `og:url` is deliberately absent. It is an absolute address, and this
+      application is served from wherever it is run — a hostname written into
+      the markup at build time would be wrong for every deployment except the
+      one it was written for, and a wrong `og:url` is worse than none.
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="AI Travel Advisor" />
+    <meta
+      property="og:description"
+      content="Plan a trip by talking about one. The advisor looks things up rather than guessing, and the plan takes shape beside the conversation."
+    />
+    <meta property="og:image" content="/icon-512.png" />
+    <meta name="twitter:card" content="summary" />
   </head>
   <body>
     <div id="root"></div>

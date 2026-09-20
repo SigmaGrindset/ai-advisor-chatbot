@@ -175,7 +175,7 @@ export function Sheet({
       <div
         ref={panel}
         tabIndex={-1}
-        className={`absolute flex flex-col overflow-hidden bg-surface outline-none transition-transform duration-[var(--duration-sheet)] ease-panel ${
+        className={`absolute flex flex-col overflow-hidden bg-surface shadow-floating outline-none transition-transform duration-[var(--duration-sheet)] ease-panel ${
           side === "left"
             ? "inset-y-0 left-0 w-[min(20rem,82%)] border-r border-line pl-safe-left"
             : "inset-x-0 bottom-0 rounded-t-panel border-t border-line"
@@ -204,7 +204,7 @@ export function Sheet({
           <button
             type="button"
             aria-label={`Close ${label.toLowerCase()}`}
-            className="absolute top-1 right-2 rounded-control p-2 text-ink-subtle transition-colors hover:bg-canvas hover:text-ink"
+            className="absolute top-1 right-2 rounded-control p-2 text-ink-subtle pressable hover:bg-canvas hover:text-ink"
             onClick={onClose}
           >
             <X {...icon} aria-hidden="true" />

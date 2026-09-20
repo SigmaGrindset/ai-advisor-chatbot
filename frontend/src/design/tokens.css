@@ -71,14 +71,24 @@
   --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, "Cascadia Mono", monospace;
 
-  --text-display: 1.75rem;
-  --text-display--line-height: 2.125rem;
-  --text-display--letter-spacing: -0.02em;
+  /* A page's own name, which is the largest thing in the application and the
+     only thing on the screen it is on. Set tight: a heading this size at a
+     heading's tracking reads as a paragraph that has been enlarged. */
+  --text-page: 2.5rem;
+  --text-page--line-height: 2.625rem;
+  --text-page--letter-spacing: -0.032em;
+  --text-display: 2rem;
+  --text-display--line-height: 2.375rem;
+  --text-display--letter-spacing: -0.024em;
   --text-title: 1.125rem;
   --text-title--line-height: 1.75rem;
   --text-title--letter-spacing: -0.012em;
-  --text-heading: 0.9375rem;
-  --text-heading--line-height: 1.375rem;
+  /* A step above the body rather than the body in bold. A section heading set
+     at the size of the sentences under it is a weight change, and a weight
+     change is not a level — the eye reads the two as one block. */
+  --text-heading: 1.0625rem;
+  --text-heading--line-height: 1.5rem;
+  --text-heading--letter-spacing: -0.008em;
   --text-body: 0.9375rem;
   --text-body--line-height: 1.625rem;
   /* Anything the traveler types into. Never below 16px: iOS zooms the page
@@ -140,13 +150,44 @@
   --radius-panel: 0.75rem;
 
   /* ---- Depth ---------------------------------------------------------- */
-  /* Hairlines do the separating. A shadow is for something that floats. */
-  --shadow-raised: 0 1px 2px color-mix(in oklab, var(--color-ink) 8%, transparent);
+  /* Hairlines do the separating. A shadow is for something that floats, and
+     there are two heights to float at: a surface lifted off the canvas, and
+     a surface lifted over the rest of the page.
+     Both are mixed from the page's own ink rather than from black, so a
+     shadow on a warm canvas is a warm shadow. A single flat black at low
+     opacity is the grey haze that says a component was drawn somewhere else
+     and pasted here. Two offsets each: a tight one for the contact edge and
+     a wide one for the cast, which is one light source, from above. */
+  --shadow-raised:
+    0 1px 1px color-mix(in oklab, var(--color-ink) 5%, transparent),
+    0 2px 6px -2px color-mix(in oklab, var(--color-ink) 8%, transparent);
+  --shadow-floating:
+    0 1px 2px color-mix(in oklab, var(--color-ink) 6%, transparent),
+    0 12px 28px -10px color-mix(in oklab, var(--color-ink) 22%, transparent);
+
+  /* ---- Texture -------------------------------------------------------- */
+  /* The canvas is paper, and paper is not a flat fill. A single tile of
+     monochrome noise, laid over the whole page at an opacity that is felt
+     rather than seen, is the difference between a warm colour and a surface.
+     Generated here rather than fetched: it is four lines of SVG, and a
+     texture worth one network request is not worth having. */
+  --texture-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  --texture-grain-opacity: 0.035;
 
   /* ---- Motion --------------------------------------------------------- */
   /* Decelerating, never bouncing. Everything below is suppressed under a
      reduced-motion preference — see base.css. */
   --ease-panel: cubic-bezier(0.2, 0, 0, 1);
+  /* What every `transition-*` utility runs at unless it says otherwise.
+     Tailwind ships 150ms and a generic ease, which is fast enough to read as
+     a jump on a colour change and as a twitch on a transform. Named here so
+     the whole interface moves at one speed without a duration on every
+     control. */
+  --default-transition-duration: 200ms;
+  --default-transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  /* A press is the exception: the feedback has to arrive under the finger
+     that caused it, and 200ms is late enough to feel like lag. */
+  --duration-press: 90ms;
   --animate-caret: caret 1.1s steps(1, end) infinite;
   --animate-panel: panel 180ms var(--ease-panel);
   /* A sheet's travel is driven by a transition rather than an animation,
