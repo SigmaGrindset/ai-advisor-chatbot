@@ -3,7 +3,7 @@
 Every route here answers with the whole plan, because every one of them
 changed it and the pane beside the conversation is showing it. What they
 *write* is only ever what was named: the same field-level patching the advisor
-is held to (ADR-0002), through the same rows.
+is held to, through the same rows.
 
 A body that names a field with null is asking for it to be emptied, and a body
 that leaves it out is not asking about it at all. Pydantic keeps those apart;

@@ -85,7 +85,7 @@ export function App() {
   const [failure, setFailure] = useState<string | null>(null);
   const [tab, setTab] = useState<RecordTab>("plan");
   // Records that changed while their tab was hidden. Marked rather than
-  // switched to: ADR-0006 keeps the plan in view.
+  // switched to, so the plan stays in view.
   const [unseen, setUnseen] = useState<ReadonlySet<RecordTab>>(EMPTY);
   // Kept where a turn can read it. A turn outlives the render that started it,
   // so what it closed over is the tab open when they pressed send rather than
@@ -352,7 +352,7 @@ export function App() {
    *
    * The advisor is the one that decides what a Conversation is about, and it
    * is working from a list of Trips it was shown — so it can attach one to the
-   * wrong journey, and only the traveler can say so (ADR-0002).
+   * wrong journey, and only the traveler can say so.
    */
   function attach(tripId: string | null) {
     const conversationId = current?.id;

@@ -5,7 +5,7 @@ never write. Separate catalogues down separate branches of the loop is what
 makes it structurally impossible for a fetch to cause a write (ADR-0004).
 
 Every tool here patches one field or one entry. There is no whole-document
-write: ADR-0002 chose field-level patching so an edit the traveler made by
+write, so an edit the traveler made by
 hand between two turns is not read back and written over by the next one.
 
 Nothing here touches the database — a call is read into a typed change, and

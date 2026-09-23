@@ -58,7 +58,7 @@ class Patched:
     """The Trip Plan has just changed, and this is what moved.
 
     Reported the moment it happens: a plan taking shape *while* the traveler
-    talks is what the pane beside the conversation is for (ADR-0006).
+    talks is what the pane beside the conversation is for.
     """
 
     #: Named the way the interface names them.

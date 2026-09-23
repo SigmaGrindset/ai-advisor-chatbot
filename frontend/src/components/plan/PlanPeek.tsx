@@ -7,7 +7,7 @@ import { smallIcon } from "../../design/icons";
 /**
  * The peek state of the plan on a phone: where and when, above the composer.
  *
- * ADR-0006 asks for the plan to stay in view, and a strip is the only thing
+ * The plan has to stay in view, and a strip is the only thing
  * that can on a phone — where they see it while typing, and where the
  * highlight fires where they are looking.
  *

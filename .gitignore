@@ -1,11 +1,6 @@
 # Secrets — never commit API keys
 .env
 
-# Agent tooling and working notes
-.agents/
-.claude/
-.scratch/
-docs/
 
 # OS junk
 .DS_Store

@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
  *
  * The dotted underline is there at every width and without hovering: an
  * interface that only admits to being editable under a mouse has told half
- * its travelers nothing (ADR-0007).
+ * its travelers nothing.
  *
  * Blur saves, Enter saves, Escape cancels — stopped here rather than left to
  * bubble, because on a phone this sits in a sheet whose own Escape closes it.

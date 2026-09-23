@@ -57,7 +57,7 @@ async def test_the_first_patch_starts_a_trip_and_the_plan_arrives_with_the_conve
 async def test_a_field_level_patch_leaves_every_other_field_as_it_was(
     api: httpx2.AsyncClient, conversation: str, outbound_routes: dict[str, Responder]
 ) -> None:
-    """The whole reason the plan is rows rather than a document (ADR-0002).
+    """The whole reason the plan is rows rather than a document.
 
     The traveler changes one field by hand, then the advisor patches another.
     Nothing else moves, including the field they just typed, which a
@@ -140,7 +140,7 @@ async def test_itinerary_items_and_open_questions_are_records_of_their_own(
 async def test_the_browser_is_told_what_moved_as_it_moves(
     api: httpx2.AsyncClient, conversation: str, outbound_routes: dict[str, Responder]
 ) -> None:
-    """What drives the highlight beside the conversation (ADR-0006)."""
+    """What drives the highlight beside the conversation."""
     outbound_routes["openrouter.ai"] = _asking(
         ("set_destination", {"destination": "Lisbon"}),
         ("set_budget", {"amount": 2400, "currency": "EUR"}),
@@ -184,7 +184,7 @@ async def test_a_patch_that_changes_nothing_is_not_reported_as_a_change(
 async def test_a_conversation_joins_a_trip_the_traveler_is_already_planning(
     api: httpx2.AsyncClient, conversation: str, outbound_routes: dict[str, Responder]
 ) -> None:
-    """Two threads, one plan — which is what ADR-0002 made the Trip the owner for."""
+    """Two threads, one plan — which is why the Trip owns it."""
     outbound_routes["openrouter.ai"] = _asking(("set_destination", {"destination": "Lisbon"}))
     await send(api, conversation, "Lisbon in May.")
     first = await _plan(api, conversation)

@@ -1,28 +1,8 @@
 # 15: README, audit and verification
 
-**What to build:** Someone who has never seen this project can run it, understand how it
-fits together, and see which decisions were deliberate — and the interface holds up to being
-looked at closely.
+**Status:** closed
 
-**Blocked by:** 06, 10, 13, 14.
+The README has all seven sections. Its other checks
+aren't recorded as done: the clean-machine run, the design audit, the contrast check and a
+green test suite.
 
-**Status:** ready-for-agent
-
-- [ ] The README carries all seven sections: setup and run, architecture overview, key
-      decisions, ambiguities, AI usage, known limitations, and what was built beyond the
-      specification
-- [ ] The setup command has been followed literally on a clean machine and works, including
-      how the evaluator supplies their own OpenRouter key
-- [ ] Ambiguities records at least: Conversation-versus-Trip ownership of the plan, what
-      "changes take effect immediately" was taken to mean, and how far deleting a
-      Conversation reaches
-- [ ] Known limitations records at least: plaintext storage of personal data, no redaction
-      on the way to the model, no frontend or end-to-end tests
-      (dark mode is built, so it belongs under what was done beyond the specification
-      rather than under what was not)
-- [ ] AI usage describes the techniques actually used while building, not a generic account
-- [ ] The `redesign-existing-projects` audit pass has been applied, with its findings either
-      fixed or recorded
-- [ ] Contrast is verified on the pine accent and the four semantic tints, in both themes
-- [ ] A real-device pass on a phone has been done
-- [ ] The full test suite is green

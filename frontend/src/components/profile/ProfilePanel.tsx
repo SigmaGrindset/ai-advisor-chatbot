@@ -50,8 +50,7 @@ export function ProfilePanel({
                 <dd className="text-meta text-ink">{fact.detail}</dd>
               </div>
               {/* Permanently visible rather than revealed by hovering the row:
-                  a pointer is an affordance a touch screen has not got
-                  (ADR-0007). */}
+                  a pointer is an affordance a touch screen has not got. */}
               <button
                 type="button"
                 aria-label={`Delete: ${factSaid(fact)}`}

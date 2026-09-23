@@ -15,7 +15,7 @@ import { useSyncExternalStore } from "react";
 /** The narrowest window that shows the Conversation and the record together. */
 export const SHEET = 768;
 
-/** The narrowest window that shows all three panes at once (ADR-0006). */
+/** The narrowest window that shows all three panes at once. */
 export const SHELL = 1100;
 
 /**

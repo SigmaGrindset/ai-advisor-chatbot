@@ -14,7 +14,7 @@ import { valueOf } from "./fields";
  * heading are the record pane's, and where the pane goes is the shell's.
  *
  * Every value is the traveler's to change and says so permanently rather than
- * on hover (ADR-0007). What the advisor changed a moment ago is lit and
+ * on hover. What the advisor changed a moment ago is lit and
  * fading, so a plan moving while they read it says which part moved.
  */
 export function PlanPanel({

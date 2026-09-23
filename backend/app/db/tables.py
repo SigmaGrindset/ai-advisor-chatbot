@@ -129,7 +129,7 @@ class Trip(Base):
     """One journey the traveler is planning, and its one Trip Plan.
 
     The Trip *is* the plan: columns rather than keys in a document, which is
-    what ADR-0002's field-level patching needs. As one JSON document, every
+    what field-level patching needs. As one JSON document, every
     patch would be a read-modify-write, and a manual edit between two turns
     would be written over by the next one.
 
@@ -226,7 +226,7 @@ class Conversation(Base):
         UUID(as_uuid=True), ForeignKey("traveler.id", ondelete="cascade"), nullable=False
     )
     #: Null until something in it is worth planning. Several Conversations
-    #: point at one Trip (ADR-0002), so deleting one leaves the Trip alone.
+    #: point at one Trip, so deleting one leaves the Trip alone.
     trip_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("trip.id", ondelete="set null"), nullable=True
     )

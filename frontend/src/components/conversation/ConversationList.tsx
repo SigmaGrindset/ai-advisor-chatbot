@@ -93,7 +93,7 @@ export function ConversationList({
         </button>
 
         {/* Navigation lives where the traveler already goes to move between
-            things. The Trip Plan itself is never navigated to (ADR-0006). */}
+            things. The Trip Plan itself is never navigated to. */}
         <div className="flex flex-col items-start gap-1">
           <button
             type="button"
@@ -213,7 +213,7 @@ export function ConversationList({
  *
  * Behind a permanently visible control rather than hover or swipe: a touch
  * screen has no pointer, and a swipe would fight the sheet this sits in on a
- * phone (ADR-0007). A panel rather than a second storey on the row, which
+ * phone. A panel rather than a second storey on the row, which
  * would push every Conversation under it down the rail.
  *
  * It is a `popover` because the rail scrolls (so a panel inside is clipped)
@@ -398,7 +398,7 @@ function RenameField({
         }
       }}
       // At the size everything typed into is set at, not the row's smaller
-      // one: iOS zooms the page for a focused field under 16px (ADR-0007).
+      // one: iOS zooms the page for a focused field under 16px.
       className="w-full min-w-0 rounded-control border border-line-strong bg-surface px-1.5 py-0.5 text-input text-ink outline-none placeholder:text-ink-subtle focus:outline-2 focus:outline-offset-1 focus:outline-focus"
     />
   );

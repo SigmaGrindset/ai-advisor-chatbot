@@ -1,7 +1,7 @@
 """Several Trips: listing them, and moving a Conversation between them.
 
 The advisor decides which Trip a thread belongs to, and it can decide wrong,
-so the interface has to be able to say otherwise (ADR-0002). Every test here
+so the interface has to be able to say otherwise. Every test here
 drives that through the API the way the browser does, and asserts on what the
 traveler would see afterwards: which plan each Conversation reads back, and
 what is listed.

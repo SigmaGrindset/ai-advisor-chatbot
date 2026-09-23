@@ -3,7 +3,7 @@
 Nothing here raises an HTTP anything, and nothing here decides what a change
 means. A Trip Plan is rows: the scalar fields on the Trip, the Itinerary Items
 and the Open Questions in tables of their own, each row addressable on its own
-so that changing one leaves the rest exactly as it was (ADR-0002).
+so that changing one leaves the rest exactly as it was.
 """
 
 import uuid

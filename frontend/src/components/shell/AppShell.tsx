@@ -22,7 +22,7 @@ export type Folded = {
  * Three things, and which of them have a pane of their own is the width's
  * decision. On a laptop all three stand side by side; on a tablet the list
  * comes out as a sheet, the record being continuous context where the list is
- * occasional navigation (ADR-0006); on a phone only the conversation remains.
+ * occasional navigation; on a phone only the conversation remains.
  *
  * Each is given here once and put wherever the width has room. Rendering one
  * into both a pane and a sheet and hiding one would be two of everything —
@@ -117,7 +117,7 @@ export function AppShell({
 /**
  * Where the record sheet may rest on a phone, as fractions of the screen.
  *
- * Half and whole. ADR-0006's third state, the peek, is not a third number:
+ * Half and whole. The third state, the peek, is not a third number:
  * this sheet is a modal dialog, and one resting permanently over the composer
  * would leave the traveler unable to type. The peek is `PlanPeek`, a strip
  * above the composer, and dragging this sheet down lands back on it.

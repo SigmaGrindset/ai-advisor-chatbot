@@ -1,12 +1,6 @@
-# Hand-written tool loop over an agent framework
+# A hand-written tool loop, no agent framework
 
-OpenRouter is called through the official `openai` Python SDK pointed at its
-OpenAI-compatible base URL, and the multi-step tool loop is ours: accumulate streamed
-tool-call argument fragments, parse, dispatch, append the result, re-call until the model
-stops asking.
-
-A framework (`pydantic-ai`, LangChain) would reduce that to a few lines while sitting
-between the application and the exact request body at precisely the points where control
-matters — toggling the web plugin per request, injecting the Traveler Profile and Trip
-Plan, and reading `usage.cost` off the final stream chunk to meter a $5 budget. Eighty
-lines buys every request being visible in the source.
+The `openai` SDK points at OpenRouter, and the tool loop — stream, parse tool calls,
+dispatch, repeat — is about 80 lines of our own. A framework would sit exactly where
+control matters: switching the web plugin per request, injecting the Profile and Plan, and
+reading `usage.cost` to stay inside the $5 budget.

@@ -16,7 +16,7 @@ import { tripPastel } from "../design/tripPastel";
  * Every Trip the traveler is planning, in one place.
  *
  * The Trip Plan is not a page — it belongs beside the Conversation producing
- * it (ADR-0006) — but the *set* of Trips is, being the one thing here about
+ * it — but the *set* of Trips is, being the one thing here about
  * none of the open Conversations in particular. Each is shown with its plan
  * and the Conversations refining it, so several about one journey read as a
  * group; the ones on no Trip sit at the foot, where every Conversation starts.
@@ -303,7 +303,7 @@ function DeleteTrip({
           {refining > 0 && (
             <>
               {/* A label wrapping its control, so the words are as pressable
-                  as the box: a target this small is one nobody hits (ADR-0007). */}
+                  as the box: a target this small is one nobody hits. */}
               <label className="flex cursor-pointer items-center gap-2 rounded-control px-2 py-1.5 text-ink hover:bg-sunken">
                 <input
                   type="checkbox"

@@ -126,7 +126,7 @@
   --text-body--line-height: 1.625rem;
   /* Anything the traveler types into. Never below 16px: iOS zooms the page
      when a focused input is smaller, and they have to pinch back out of a
-     layout that is now the wrong width (ADR-0007). */
+     layout that is now the wrong width. */
   --text-input: 1rem;
   --text-input--line-height: 1.5rem;
   --text-meta: 0.8125rem;
@@ -139,7 +139,7 @@
   /* One step, from which the numeric spacing scale is derived. */
   --spacing: 0.25rem;
   /* The widths the shell is built out of: 240 / 400 for the two side panes,
-     leaving the conversation 640 at a 1280 window (ADR-0006), and a measure
+     leaving the conversation 640 at a 1280 window, and a measure
      the transcript never exceeds however wide the window gets. */
   --spacing-rail: 15rem;
   --spacing-aside: 25rem;
@@ -149,7 +149,7 @@
   --container-reading: 40rem;
   /* The composer sits against the bottom edge, so its own padding carries the
      device's safe area: a phone's home indicator must not come down on the
-     send control (ADR-0007). */
+     send control. */
   --spacing-composer: calc(1.5rem + env(safe-area-inset-bottom));
   /* The device's other encroachments. `viewport-fit=cover` runs the page
      under the notch and the rounded corners so the canvas reaches the edges

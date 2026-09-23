@@ -10,7 +10,7 @@ import { TripChip } from "./TripChip";
 /**
  * Which Trip this Conversation is refining, and the way to say otherwise.
  *
- * The advisor picks a Trip and can pick wrong (ADR-0002), so the correction
+ * The advisor picks a Trip and can pick wrong, so the correction
  * sits where the mistake shows: at the head of the plan.
  *
  * It opens in place rather than over anything. On a phone this is inside the

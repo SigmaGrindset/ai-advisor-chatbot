@@ -3,7 +3,7 @@
  *
  * A virtual keyboard takes half the screen without resizing anything the CSS
  * can see, so a shell sized in `100dvh` runs on underneath it with the
- * composer — the failure ADR-0007 names as invisible from a desktop browser.
+ * composer — a failure that is invisible from a desktop browser.
  *
  * `window.visualViewport` does know, and says so again whenever the keyboard,
  * the URL bar or a pinch changes it. The shell is given those numbers, and

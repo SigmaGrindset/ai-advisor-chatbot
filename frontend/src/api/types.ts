@@ -69,7 +69,7 @@ export type Conversation = {
 /**
  * What reading a Conversation back gives: the Conversation, and the Trip Plan
  * it is refining. The plan comes with the transcript rather than from a second
- * request, because the two are opened together and shown together (ADR-0006).
+ * request, because the two are opened together and shown together.
  */
 export type ConversationRead = Conversation & { plan: TripPlan | null };
 

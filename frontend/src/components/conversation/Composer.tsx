@@ -53,7 +53,7 @@ export function Composer({
         ref={field}
         // A share of the shell rather than of the window: `dvh` does not
         // shrink for a keyboard, so a field capped in it could grow to 40% of
-        // a screen only half shown, leaving the transcript nothing (ADR-0007).
+        // a screen only half shown, leaving the transcript nothing.
         className="max-h-[calc(var(--spacing-viewport)*0.4)] resize-none rounded-panel bg-surface px-4 pt-3 pb-2 text-input text-ink outline-none placeholder:text-ink-subtle"
         rows={1}
         value={draft}

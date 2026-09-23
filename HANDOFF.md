@@ -20,20 +20,8 @@ says whose problem it is and can be run again without asking the question twice.
 - `CLAUDE.md` — project rules. The prompt log and the commit rule are in here.
 - `CONTEXT.md` — the domain glossary. **Every term carries an `_Avoid_` list, and those
   lists bind file, module and component names.** See §3.
-- `TASK.md` and `README.md` — what was asked for, and how to run it. README §2–7 are still
-  placeholders and are 15's deliverable.
-- `docs/adr/` — the decisions already made, and the ones that still bind: 0004 (PII
-  boundary) with 0009 (the search query guard) and 0010 (the rule that keeps 0004's promise
-  now that writing tools exist), 0005 (the loop is hand-written), 0002 (Trips own Trip
-  Plans), 0006 (the plan is a pane and never a page) and **0012 (what is allowed to be a
-  page — a third thing wanting one has to argue with it)**. The numbering has two gaps:
-  0008 and 0011 were amendments, folded back into 0003 and 0006 once what they described
-  was simply how the thing works.
+- `docs/adr/` — the decisions already made
 - `docs/agents/` — the issue tracker, triage labels and domain-doc conventions.
-- `.scratch/ai-travel-advisor/spec.md` and `issues/01`–`16` — the work. Each ticket carries
-  a `**Status:**` line using the five canonical labels, ticked criteria, and a `## Comments`
-  section recording what was decided and what was deliberately left undone. A finished
-  ticket keeps its label, which is why the done ones still read `ready-for-agent`.
 
 ## 2. How the application is put together
 
@@ -146,13 +134,9 @@ write against it — this has been violated and undone more than once:
 ## 4. Working rules for this repo
 
 **Never run `git add`, `git commit` or any other git write on your own.** `CLAUDE.md` says
-so and the user has repeated it. Propose the message, wait for explicit approval. When a
-commit does happen, `PROMPTS.jsonl` goes in the *same* commit as the code, so the log and
-the history stay in sync. Commit messages are short: a one-line subject and at most a few
-tight paragraphs, in the style already in `git log`.
+so and the user has repeated it. Propose the message, wait for explicit approval. Commit messages are short: a one-line subject and at most a few
+sentences.
 
-**`PROMPTS.jsonl` is never edited, rewritten or truncated**, and the two logging hooks in
-`.claude/settings.json` stay enabled. If the log stops growing, repair the mechanism.
 
 ### The testing rule
 

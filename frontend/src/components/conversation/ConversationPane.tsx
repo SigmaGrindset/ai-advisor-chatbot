@@ -73,7 +73,7 @@ export function ConversationPane({
   onShowRecord: (() => void) | null;
   /**
    * The shell's Trip Plan peek, which lives here because the composer does:
-   * ADR-0006 wants destination and dates in view above it while they type.
+   * destination and dates stay in view above it while they type.
    */
   peek: React.ReactNode;
 }) {

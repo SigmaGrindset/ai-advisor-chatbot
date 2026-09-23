@@ -135,7 +135,7 @@ class ConversationView(BaseModel):
     title: str | None
     messages: list[MessageView]
     #: Comes back with the transcript rather than from a second request: the
-    #: plan sits beside the Conversation and the two open together (ADR-0006).
+    #: plan sits beside the Conversation and the two open together.
     plan: TripPlanView | None
 
 
@@ -261,7 +261,7 @@ async def attach_to_trip(
     """Move a Conversation to a different Trip, or take it off the one it is on.
 
     Which Trip it belongs to is the advisor's guess and can be wrong, so
-    correcting it is the traveler's (ADR-0002). What comes back is the plan the
+    correcting it is the traveler's. What comes back is the plan the
     pane beside it has to show next.
     """
     conversation = await _conversation(session, conversation_id)

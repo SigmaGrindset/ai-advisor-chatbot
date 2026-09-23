@@ -1,7 +1,7 @@
 /**
  * Which page the address bar is on, and how to move between them.
  *
- * Almost nothing here is a page: the Trip Plan deliberately is not (ADR-0006),
+ * Almost nothing here is a page: the Trip Plan deliberately is not,
  * and the Conversation and its list are panes of one screen. What is left is
  * genuinely elsewhere — every Trip, and the Advisor Instructions.
  *

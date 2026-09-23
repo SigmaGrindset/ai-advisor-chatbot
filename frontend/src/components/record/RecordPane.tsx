@@ -7,8 +7,8 @@ import { icon } from "../../design/icons";
  * The third pane: the two durable records a Conversation writes to.
  *
  * The Trip Plan is never navigated away to — it sits in view and changes as
- * they talk, which is the only way ADR-0006's promise happens on screen rather
- * than in a claim. The Profile shares the pane, filling the same way.
+ * they talk, so the traveler sees it take shape rather than being told it did.
+ * The Profile shares the pane, filling the same way.
  *
  * Where it goes is the shell's question, and so is which tab is open: the
  * peek strip opens this pane *at* the plan, so both need the answer.

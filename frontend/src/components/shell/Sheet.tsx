@@ -10,7 +10,7 @@ import { resting } from "./snapping";
  *
  * Everything the narrow layouts put away lives in one of these. The snap
  * points are why it is a primitive rather than three drawers: a sheet with a
- * peek, a half and a whole is the shape ADR-0006 asks the Trip Plan for.
+ * peek, a half and a whole is the shape the Trip Plan needs.
  *
  * It is a `dialog` opened modally, so the browser owns the focus trap, the
  * Escape key, the inertness behind it and the return of focus — a
