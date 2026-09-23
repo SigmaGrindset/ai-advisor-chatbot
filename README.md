@@ -21,11 +21,6 @@ If ports 8000 or 5432 are taken, set `APP_PORT` or `DB_PORT`.
 
 To run it against a different key instead, `cp .env.example .env` and put your own in it.
 
-The two models are optional and unset by default. The defaults are
-`anthropic/claude-sonnet-5` for the conversation and `anthropic/claude-haiku-4.5` for the
-utility work behind titles, summaries and web search; set `CONVERSATION_MODEL` and
-`UTILITY_MODEL` in `.env` if you want to change the default models. This is not required of course.
-
 ## 2. Architecture overview
 
 Two containers: Postgres, and one application image. That image is built in two stages —
