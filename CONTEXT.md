@@ -9,9 +9,20 @@ across conversations.
 ### People and conversation
 
 **Traveler**:
-The person planning a trip. The application has exactly one, implicitly — there are no
-accounts and no sign-in.
-_Avoid_: User, customer, client
+The person planning a trip. Everyone using the application is one, signed in or not.
+_Avoid_: User, customer, client, visitor
+
+**Account**:
+What a Traveler signs in with. Having one is what makes a Traveler's Conversations, Trips,
+Traveler Profile and Advisor Instructions last from one visit to the next.
+_Avoid_: User, login, profile (that is the Traveler Profile)
+
+**Guest**:
+A Traveler without an Account — a state a Traveler is in, not a different kind of person.
+Everything works the same for a Guest, but all of it is gone after a day without using
+the application. A Guest who signs up keeps everything, as the same Traveler; a Guest who
+signs in to an Account they already have leaves all of it behind.
+_Avoid_: Anonymous, visitor, user
 
 **Advisor**:
 The AI travel advisor the traveler talks to. Its behaviour is defined by the Advisor
@@ -84,7 +95,8 @@ _Avoid_: Memory, attribute, field
 
 **Advisor Instructions**:
 The editable part of the advisor's system prompt — its persona and the way it talks.
-Distinct from the injected Traveler Profile, Trip Plan, scope and tool guidance that are
+Each Traveler has their own, starting from the shipped default; editing them changes
+nobody else's advisor. Distinct from the injected Traveler Profile, Trip Plan, scope and tool guidance that are
 composed around it at runtime. What the advisor is *for* — one traveler's trip, and
 nothing booked or bought — is injected rather than editable.
 _Avoid_: System prompt (that is the composed whole), persona, preamble

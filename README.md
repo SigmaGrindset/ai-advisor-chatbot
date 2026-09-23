@@ -128,8 +128,9 @@ list can be shown. "Here is everything the advisor knows about you, delete any l
 a page you can build from that, and never from a pile of retrieved fragments.
 
 **Live data through typed keyless tools, with web search as a nested call**.
-Whoever runs this has one API key and nothing else, so nothing the advisor reaches for
-can require a second signup. That leaves the free, keyless sources: Open-Meteo for
+The OpenRouter key stays on the server, and it is the only credential a developer needs to
+run this — a traveler never provides anything — so nothing the advisor reaches for can
+require a second signup. That leaves the free, keyless sources: Open-Meteo for
 weather, Frankfurter for exchange rates, the World Bank for country facts. Web search
 has no free equivalent, so it goes through the one key there is — a second, small
 OpenRouter request with web search turned on, whose answer and sources come back into
