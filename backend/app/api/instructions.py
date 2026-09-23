@@ -17,13 +17,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..advisor.instructions import DEFAULT_ADVISOR_INSTRUCTIONS
 from ..db.connection import get_session
 from ..db.conversations import find_conversation
-from ..db.tables import PromptVersion
+from ..db.tables import PromptVersion, Traveler
 from ..services.instructions import (
     compose_around,
     current_version,
     restore_default_instructions,
     revise_instructions,
 )
+from .asking import who_is_asking
 
 router = APIRouter(tags=["advisor"])
 
@@ -59,9 +60,12 @@ class RevisedInstructions(BaseModel):
 async def read_advisor_instructions(
     conversation_id: uuid.UUID | None = None,
     session: AsyncSession = Depends(get_session),
+    traveler: Traveler = Depends(who_is_asking),
 ) -> AdvisorInstructionsView:
     """The Advisor Instructions in force, and the prompt they compose into."""
-    return await _shown(session, await current_version(session), conversation_id)
+    return await _shown(
+        session, traveler, await current_version(session, traveler), conversation_id
+    )
 
 
 @router.put("/advisor/instructions")
@@ -69,6 +73,7 @@ async def save_advisor_instructions(
     revised: RevisedInstructions,
     conversation_id: uuid.UUID | None = None,
     session: AsyncSession = Depends(get_session),
+    traveler: Traveler = Depends(who_is_asking),
 ) -> AdvisorInstructionsView:
     """Save the Advisor Instructions as a new Prompt Version.
 
@@ -76,7 +81,10 @@ async def save_advisor_instructions(
     one begun long before the edit, composes from what is saved here.
     """
     return await _shown(
-        session, await revise_instructions(session, revised.instructions), conversation_id
+        session,
+        traveler,
+        await revise_instructions(session, traveler, revised.instructions),
+        conversation_id,
     )
 
 
@@ -84,14 +92,20 @@ async def save_advisor_instructions(
 async def restore_advisor_instructions(
     conversation_id: uuid.UUID | None = None,
     session: AsyncSession = Depends(get_session),
+    traveler: Traveler = Depends(who_is_asking),
 ) -> AdvisorInstructionsView:
     """Put the shipped Advisor Instructions back: the way out of an edit that
     left the advisor worse, and the reason an edit is safe to make."""
-    return await _shown(session, await restore_default_instructions(session), conversation_id)
+    return await _shown(
+        session, traveler, await restore_default_instructions(session, traveler), conversation_id
+    )
 
 
 async def _shown(
-    session: AsyncSession, version: PromptVersion, conversation_id: uuid.UUID | None
+    session: AsyncSession,
+    traveler: Traveler,
+    version: PromptVersion,
+    conversation_id: uuid.UUID | None,
 ) -> AdvisorInstructionsView:
     """One Prompt Version, with the prompt it composes into right now.
 
@@ -101,12 +115,12 @@ async def _shown(
     """
     conversation = None
     if conversation_id is not None:
-        conversation = await find_conversation(session, conversation_id)
+        conversation = await find_conversation(session, traveler, conversation_id)
         if conversation is None:
             raise HTTPException(status_code=404, detail="No such Conversation.")
     return AdvisorInstructionsView(
         instructions=version.instructions,
         version_id=version.id,
-        composed=await compose_around(session, conversation, version.instructions),
+        composed=await compose_around(session, traveler, conversation, version.instructions),
         is_default=version.instructions == DEFAULT_ADVISOR_INSTRUCTIONS,
     )

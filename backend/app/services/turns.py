@@ -34,7 +34,7 @@ from ..advisor.tools import LiveDataTools
 from ..advisor.failures import Failure
 from ..config import Settings
 from ..db.conversations import record_message, retitle_conversation
-from ..db.tables import Conversation, Message, MessageRole, PromptVersion
+from ..db.tables import Conversation, Message, MessageRole, PromptVersion, Traveler
 from .plans import TripPlanning, plan_of
 from .profile import Remembering, read_profile
 
@@ -110,6 +110,7 @@ Happening = (
 
 async def take_turn(
     session: AsyncSession,
+    traveler: Traveler,
     conversation: Conversation,
     traveler_message: Message,
     model: AsyncOpenAI,
@@ -141,9 +142,9 @@ async def take_turn(
             tools=tools,
             # Built here, because everything they need is already here: the
             # plan tools write to this Conversation's Trip, or the one they
-            # start for it, and the profile tools to the one profile there is.
-            plan=TripPlanning(session, conversation),
-            profile=Remembering(session),
+            # start for it, and the profile tools to this traveler's profile.
+            plan=TripPlanning(session, traveler, conversation),
+            profile=Remembering(session, traveler),
         ):
             if isinstance(event, ReplyFragment):
                 written.append(event.text)
@@ -155,7 +156,7 @@ async def take_turn(
                 continue
 
             if isinstance(event, Patched):
-                plan = await plan_of(session, conversation)
+                plan = await plan_of(session, traveler, conversation)
                 # Only ever None if the Trip went away between the write and
                 # this read, which nothing in a turn does.
                 if plan is not None:
@@ -163,7 +164,7 @@ async def take_turn(
                 continue
 
             if isinstance(event, Remembered):
-                yield ProfileRevised(await read_profile(session))
+                yield ProfileRevised(await read_profile(session, traveler))
                 continue
 
             advisor_message = await record_message(

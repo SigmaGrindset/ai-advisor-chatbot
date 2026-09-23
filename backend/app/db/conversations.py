@@ -13,7 +13,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .tables import SOLE_TRAVELER_ID, Conversation, Message, MessageRole, Trip
+from .tables import Conversation, Message, MessageRole, Traveler, Trip
 
 #: How many other Conversations the advisor is told about — a bound, so the
 #: prompt does not grow without end. The most recently spoken in are the ones
@@ -33,12 +33,12 @@ LAST_ACTIVITY = func.coalesce(
 
 
 async def conversations_by_activity(
-    session: AsyncSession,
+    session: AsyncSession, traveler: Traveler
 ) -> Sequence[tuple[Conversation, datetime]]:
     """Every Conversation the traveler has, the most recently active first."""
     rows = await session.execute(
         select(Conversation, LAST_ACTIVITY.label("last_activity_at"))
-        .where(Conversation.traveler_id == SOLE_TRAVELER_ID)
+        .where(Conversation.traveler_id == traveler.id)
         # By id second, so a tie in activity still comes back settled.
         .order_by(LAST_ACTIVITY.desc(), Conversation.id)
     )
@@ -59,7 +59,7 @@ async def last_activity_in(session: AsyncSession, conversation: Conversation) ->
 
 
 async def conversations_apart_from(
-    session: AsyncSession, conversation: Conversation | None
+    session: AsyncSession, traveler: Traveler, conversation: Conversation | None
 ) -> Sequence[tuple[str, str | None]]:
     """Every *other* Conversation that has been spoken in, named and placed.
 
@@ -73,7 +73,7 @@ async def conversations_apart_from(
     apart = (
         select(Conversation.title, Trip.destination)
         .outerjoin(Trip, Conversation.trip_id == Trip.id)
-        .where(Conversation.traveler_id == SOLE_TRAVELER_ID)
+        .where(Conversation.traveler_id == traveler.id)
         .where(Conversation.title.is_not(None))
         .order_by(LAST_ACTIVITY.desc(), Conversation.id)
         .limit(MOST_RECENT_OTHERS)
@@ -99,9 +99,9 @@ async def fold_into_summary(
     await session.commit()
 
 
-async def begin_conversation(session: AsyncSession) -> Conversation:
-    """A new Conversation, belonging to the one traveler there is."""
-    conversation = Conversation(traveler_id=SOLE_TRAVELER_ID)
+async def begin_conversation(session: AsyncSession, traveler: Traveler) -> Conversation:
+    """A new Conversation, belonging to this traveler."""
+    conversation = Conversation(traveler_id=traveler.id)
     session.add(conversation)
     await session.commit()
     return conversation
@@ -115,11 +115,11 @@ async def remove_conversation(session: AsyncSession, conversation: Conversation)
 
 
 async def find_conversation(
-    session: AsyncSession, conversation_id: uuid.UUID
+    session: AsyncSession, traveler: Traveler, conversation_id: uuid.UUID
 ) -> Conversation | None:
     """The traveler's Conversation with this identifier, if they have one."""
     conversation = await session.get(Conversation, conversation_id)
-    if conversation is None or conversation.traveler_id != SOLE_TRAVELER_ID:
+    if conversation is None or conversation.traveler_id != traveler.id:
         return None
     return conversation
 

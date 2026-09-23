@@ -34,12 +34,14 @@ from ..advisor.planning import (
     TripSummary,
 )
 from ..db import trips
-from ..db.tables import Conversation, PartOfDay, Trip
+from ..db.tables import Conversation, PartOfDay, Traveler, Trip
 
 
-async def plan_of(session: AsyncSession, conversation: Conversation) -> TripPlan | None:
+async def plan_of(
+    session: AsyncSession, traveler: Traveler, conversation: Conversation
+) -> TripPlan | None:
     """The Trip Plan this Conversation is refining, if it is refining one."""
-    trip = await trips.trip_of(session, conversation)
+    trip = await trips.trip_of(session, traveler, conversation)
     return None if trip is None else await read_plan(session, trip)
 
 
@@ -70,17 +72,19 @@ async def read_plan(session: AsyncSession, trip: Trip) -> TripPlan:
     )
 
 
-async def read_plans(session: AsyncSession) -> list[TripPlan]:
+async def read_plans(session: AsyncSession, traveler: Traveler) -> list[TripPlan]:
     """Every Trip the traveler has, each with its plan, most recently first.
 
     Whole plans rather than summaries: the Trips page shows what is in one and
     the switcher labels them from the same read, and a second, thinner shape
     would be a second thing to keep true.
     """
-    return [await read_plan(session, trip) for trip in await trips.trips_by_age(session)]
+    return [
+        await read_plan(session, trip) for trip in await trips.trips_by_age(session, traveler)
+    ]
 
 
-async def summarise_trips(session: AsyncSession) -> Sequence[TripSummary]:
+async def summarise_trips(session: AsyncSession, traveler: Traveler) -> Sequence[TripSummary]:
     """Every Trip the traveler has, as the list `join_trip` picks out of."""
     return [
         TripSummary(
@@ -89,7 +93,7 @@ async def summarise_trips(session: AsyncSession) -> Sequence[TripSummary]:
             starts_on=trip.starts_on,
             ends_on=trip.ends_on,
         )
-        for trip in await trips.trips_by_age(session)
+        for trip in await trips.trips_by_age(session, traveler)
     ]
 
 
@@ -100,8 +104,11 @@ class TripPlanning:
     changing — including the moment that Conversation acquires one.
     """
 
-    def __init__(self, session: AsyncSession, conversation: Conversation) -> None:
+    def __init__(
+        self, session: AsyncSession, traveler: Traveler, conversation: Conversation
+    ) -> None:
         self._session = session
+        self._traveler = traveler
         self._conversation = conversation
 
     async def change(self, asked: PlanChange) -> Changed:
@@ -109,7 +116,7 @@ class TripPlanning:
         if isinstance(asked, JoinTrip):
             return await self._joined(asked)
 
-        trip = await trips.trip_of(self._session, self._conversation)
+        trip = await trips.trip_of(self._session, self._traveler, self._conversation)
         started = trip is None
         if trip is None:
             # Taking something off a plan that does not exist is no reason to
@@ -121,7 +128,7 @@ class TripPlanning:
                         "to take off."
                     )
                 )
-            trip = await trips.start_trip(self._session, self._conversation)
+            trip = await trips.start_trip(self._session, self._traveler, self._conversation)
 
         changed = await self._applied(trip, asked)
         if not started:
@@ -135,7 +142,7 @@ class TripPlanning:
         )
 
     async def _joined(self, asked: JoinTrip) -> Changed:
-        trip = await trips.find_trip(self._session, asked.trip_id)
+        trip = await trips.find_trip(self._session, self._traveler, asked.trip_id)
         if trip is None:
             return Changed(
                 told=(

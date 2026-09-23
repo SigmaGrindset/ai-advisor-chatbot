@@ -12,13 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..advisor import remembering
 from ..advisor.remembering import Fact, Forget, Learned, ProfileChange, Remember
-from ..db import traveler
-from ..db.tables import FactSubject, ProfileFact
+from ..db import traveler as travelers
+from ..db.tables import FactSubject, ProfileFact, Traveler
 
 
-async def read_profile(session: AsyncSession) -> list[Fact]:
+async def read_profile(session: AsyncSession, traveler: Traveler) -> list[Fact]:
     """Everything the advisor knows about the traveler, as one thing to show or send."""
-    return [_as_fact(fact) for fact in await traveler.facts_of(session)]
+    return [_as_fact(fact) for fact in await travelers.facts_of(session, traveler)]
 
 
 def _as_fact(fact: ProfileFact) -> Fact:
@@ -26,15 +26,16 @@ def _as_fact(fact: ProfileFact) -> Fact:
 
 
 class Remembering:
-    """The advisor's profile tools, applied to the one traveler's profile.
+    """The advisor's profile tools, applied to this traveler's profile.
 
     Nothing to be built around, unlike the plan's, but it exists for the same
     reason: the loop is handed something that can apply a change, and what a
     session is stays on this side of that line.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, traveler: Traveler) -> None:
         self._session = session
+        self._traveler = traveler
 
     async def change(self, asked: ProfileChange) -> Learned:
         """Apply one change, and answer with what to tell the advisor."""
@@ -46,8 +47,11 @@ class Remembering:
         said = remembering.LABELS[asked.subject]
         standing = await self._standing(asked)
         if standing is None:
-            fact = await traveler.record_fact(
-                self._session, subject=FactSubject(asked.subject), detail=asked.detail
+            fact = await travelers.record_fact(
+                self._session,
+                self._traveler,
+                subject=FactSubject(asked.subject),
+                detail=asked.detail,
             )
             return Learned(
                 told=(
@@ -61,7 +65,7 @@ class Remembering:
             # the profile must not see one happen.
             return Learned(told=f"The profile already says {said}: {asked.detail}.")
         was = standing.detail
-        await traveler.amend_fact(self._session, standing, asked.detail)
+        await travelers.amend_fact(self._session, standing, asked.detail)
         return Learned(
             told=f"[{standing.ref}] {said} is now {asked.detail}, where it said {was}.",
             revised=True,
@@ -74,13 +78,15 @@ class Remembering:
         subject. For a note, only one already saying the same thing — which
         stops a sentence accumulating rather than stopping a second note.
         """
-        about = await traveler.facts_about(self._session, FactSubject(asked.subject))
+        about = await travelers.facts_about(
+            self._session, self._traveler, FactSubject(asked.subject)
+        )
         if asked.subject in remembering.ONE_EACH:
             return next(iter(about), None)
         return next((fact for fact in about if fact.detail == asked.detail), None)
 
     async def _forgotten(self, asked: Forget) -> Learned:
-        fact = await traveler.fact_by_ref(self._session, asked.fact)
+        fact = await travelers.fact_by_ref(self._session, self._traveler, asked.fact)
         if fact is None:
             return Learned(
                 told=(
@@ -90,5 +96,5 @@ class Remembering:
             )
         said = remembering.LABELS[fact.subject.value]
         detail = fact.detail
-        await traveler.forget_fact(self._session, fact)
+        await travelers.forget_fact(self._session, fact)
         return Learned(told=f"[{asked.fact}] {said}: {detail} is off the profile.", revised=True)

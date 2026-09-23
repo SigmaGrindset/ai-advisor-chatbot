@@ -28,8 +28,9 @@ from ..advisor.planning import (
 )
 from ..db import trips
 from ..db.connection import get_session
-from ..db.tables import PartOfDay, Trip
+from ..db.tables import PartOfDay, Traveler, Trip
 from ..services.plans import read_plan, read_plans
+from .asking import who_is_asking
 
 router = APIRouter(tags=["trips"])
 
@@ -133,13 +134,16 @@ class ItineraryItemPatch(BaseModel):
 
 
 @router.get("/trips")
-async def list_trips(session: AsyncSession = Depends(get_session)) -> list[TripPlanView]:
+async def list_trips(
+    session: AsyncSession = Depends(get_session),
+    traveler: Traveler = Depends(who_is_asking),
+) -> list[TripPlanView]:
     """Every Trip the traveler is planning, the most recently started first.
 
     One read serves both the page listing them and the switcher that moves a
     Conversation between them.
     """
-    return [TripPlanView.of(plan) for plan in await read_plans(session)]
+    return [TripPlanView.of(plan) for plan in await read_plans(session, traveler)]
 
 
 @router.delete("/trips/{trip_id}", status_code=204)
@@ -147,6 +151,7 @@ async def delete_trip(
     trip_id: uuid.UUID,
     conversations: OnDeletingTrip = "keep",
     session: AsyncSession = Depends(get_session),
+    traveler: Traveler = Depends(who_is_asking),
 ) -> Response:
     """Remove a Trip and its Trip Plan, for good.
 
@@ -158,27 +163,33 @@ async def delete_trip(
     Kept, they are listed under no Trip and the advisor starts a fresh one the
     moment it records something about a journey again.
     """
-    trip = await _trip(session, trip_id)
+    trip = await _trip(session, traveler, trip_id)
     await trips.remove_trip(session, trip, with_conversations=conversations == "delete")
     return Response(status_code=204)
 
 
 @router.patch("/trips/{trip_id}")
 async def change_plan(
-    trip_id: uuid.UUID, patch: PlanPatch, session: AsyncSession = Depends(get_session)
+    trip_id: uuid.UUID,
+    patch: PlanPatch,
+    session: AsyncSession = Depends(get_session),
+    traveler: Traveler = Depends(who_is_asking),
 ) -> TripPlanView:
     """Change the fields of a Trip Plan the traveler named, and only those."""
-    trip = await _trip(session, trip_id)
+    trip = await _trip(session, traveler, trip_id)
     await trips.patch_trip(session, trip, patch.model_dump(exclude_unset=True))
     return await _plan(session, trip)
 
 
 @router.post("/trips/{trip_id}/itinerary", status_code=201)
 async def add_itinerary_item(
-    trip_id: uuid.UUID, adding: NewItineraryItem, session: AsyncSession = Depends(get_session)
+    trip_id: uuid.UUID,
+    adding: NewItineraryItem,
+    session: AsyncSession = Depends(get_session),
+    traveler: Traveler = Depends(who_is_asking),
 ) -> TripPlanView:
     """Put something of the traveler's own into a day of the Trip."""
-    trip = await _trip(session, trip_id)
+    trip = await _trip(session, traveler, trip_id)
     await trips.add_itinerary_item(
         session,
         trip,
@@ -195,8 +206,9 @@ async def change_itinerary_item(
     item_id: uuid.UUID,
     patch: ItineraryItemPatch,
     session: AsyncSession = Depends(get_session),
+    traveler: Traveler = Depends(who_is_asking),
 ) -> TripPlanView:
-    trip = await _trip(session, trip_id)
+    trip = await _trip(session, traveler, trip_id)
     item = await trips.item_by_id(session, trip, item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="No such Itinerary Item.")
@@ -206,9 +218,12 @@ async def change_itinerary_item(
 
 @router.delete("/trips/{trip_id}/itinerary/{item_id}")
 async def remove_itinerary_item(
-    trip_id: uuid.UUID, item_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+    trip_id: uuid.UUID,
+    item_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    traveler: Traveler = Depends(who_is_asking),
 ) -> TripPlanView:
-    trip = await _trip(session, trip_id)
+    trip = await _trip(session, traveler, trip_id)
     item = await trips.item_by_id(session, trip, item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="No such Itinerary Item.")
@@ -218,10 +233,13 @@ async def remove_itinerary_item(
 
 @router.delete("/trips/{trip_id}/questions/{question_id}")
 async def settle_open_question(
-    trip_id: uuid.UUID, question_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+    trip_id: uuid.UUID,
+    question_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    traveler: Traveler = Depends(who_is_asking),
 ) -> TripPlanView:
     """Take a question off the plan because the traveler has decided it."""
-    trip = await _trip(session, trip_id)
+    trip = await _trip(session, traveler, trip_id)
     question = await trips.question_by_id(session, trip, question_id)
     if question is None:
         raise HTTPException(status_code=404, detail="No such Open Question.")
@@ -229,9 +247,9 @@ async def settle_open_question(
     return await _plan(session, trip)
 
 
-async def _trip(session: AsyncSession, trip_id: uuid.UUID) -> Trip:
+async def _trip(session: AsyncSession, traveler: Traveler, trip_id: uuid.UUID) -> Trip:
     """The named Trip, or a refusal the interface can act on."""
-    trip = await trips.find_trip(session, trip_id)
+    trip = await trips.find_trip(session, traveler, trip_id)
     if trip is None:
         raise HTTPException(status_code=404, detail="No such Trip.")
     return trip

@@ -13,11 +13,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .tables import (
-    SOLE_TRAVELER_ID,
     Conversation,
     ItineraryItem,
     OpenQuestion,
     PartOfDay,
+    Traveler,
     Trip,
 )
 
@@ -32,38 +32,42 @@ ITINERARY_ORDER = (
 )
 
 
-async def find_trip(session: AsyncSession, trip_id: uuid.UUID) -> Trip | None:
+async def find_trip(session: AsyncSession, traveler: Traveler, trip_id: uuid.UUID) -> Trip | None:
     """The traveler's Trip with this identifier, if they have one."""
     trip = await session.get(Trip, trip_id)
-    if trip is None or trip.traveler_id != SOLE_TRAVELER_ID:
+    if trip is None or trip.traveler_id != traveler.id:
         return None
     return trip
 
 
-async def trip_of(session: AsyncSession, conversation: Conversation) -> Trip | None:
+async def trip_of(
+    session: AsyncSession, traveler: Traveler, conversation: Conversation
+) -> Trip | None:
     """The Trip this Conversation is refining, if it is refining one."""
     if conversation.trip_id is None:
         return None
-    return await find_trip(session, conversation.trip_id)
+    return await find_trip(session, traveler, conversation.trip_id)
 
 
-async def trips_by_age(session: AsyncSession) -> Sequence[Trip]:
+async def trips_by_age(session: AsyncSession, traveler: Traveler) -> Sequence[Trip]:
     """Every Trip the traveler has, the most recently started first."""
     trips = await session.scalars(
         select(Trip)
-        .where(Trip.traveler_id == SOLE_TRAVELER_ID)
+        .where(Trip.traveler_id == traveler.id)
         .order_by(Trip.created_at.desc(), Trip.id)
     )
     return list(trips)
 
 
-async def start_trip(session: AsyncSession, conversation: Conversation) -> Trip:
-    """A new Trip, belonging to the one traveler, with this Conversation on it.
+async def start_trip(
+    session: AsyncSession, traveler: Traveler, conversation: Conversation
+) -> Trip:
+    """A new Trip, belonging to this traveler, with this Conversation on it.
 
     There is no separate "create a Trip" gesture: a Trip is born attached to
     the Conversation that recorded the first thing about a journey.
     """
-    trip = Trip(traveler_id=SOLE_TRAVELER_ID)
+    trip = Trip(traveler_id=traveler.id)
     session.add(trip)
     await session.flush()
     conversation.trip_id = trip.id

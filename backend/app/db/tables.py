@@ -33,11 +33,6 @@ def _values(enum: type[StrEnum]) -> Sequence[str]:
     return [member.value for member in enum]
 
 
-#: One traveler, implicitly — there are no accounts. Every table still carries
-#: a real reference, so supporting more is a middleware change, not a migration.
-SOLE_TRAVELER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
-
-
 class Traveler(Base):
     __tablename__ = "traveler"
 

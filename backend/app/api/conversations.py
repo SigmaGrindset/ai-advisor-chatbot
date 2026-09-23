@@ -38,7 +38,7 @@ from ..db.conversations import (
     remove_conversation,
     retitle_conversation,
 )
-from ..db.tables import Conversation, Message, MessageRole, PromptVersion
+from ..db.tables import Conversation, Message, MessageRole, PromptVersion, Traveler
 from ..db.trips import attach_conversation, find_trip
 from ..privacy.outbound import get_http_client
 from ..services.compaction import compact
@@ -53,6 +53,7 @@ from ..services.turns import (
     Titled,
     take_turn,
 )
+from .asking import who_is_asking
 from .sse import event
 from .traveler import ProfileFactView
 from .trips import TripPlanView
@@ -172,6 +173,7 @@ class TravelerMessage(BaseModel):
 @router.get("/conversations")
 async def list_conversations(
     session: AsyncSession = Depends(get_session),
+    traveler: Traveler = Depends(who_is_asking),
 ) -> list[ConversationSummary]:
     """Every Conversation the traveler has, the most recently active first."""
     return [
@@ -181,16 +183,17 @@ async def list_conversations(
             last_activity_at=last_activity_at,
             trip_id=conversation.trip_id,
         )
-        for conversation, last_activity_at in await conversations_by_activity(session)
+        for conversation, last_activity_at in await conversations_by_activity(session, traveler)
     ]
 
 
 @router.post("/conversations", status_code=201)
 async def start_conversation(
     session: AsyncSession = Depends(get_session),
+    traveler: Traveler = Depends(who_is_asking),
 ) -> ConversationSummary:
     """Begin a separate line of thinking."""
-    conversation = await begin_conversation(session)
+    conversation = await begin_conversation(session, traveler)
     return ConversationSummary(
         id=conversation.id,
         title=conversation.title,
@@ -201,12 +204,14 @@ async def start_conversation(
 
 @router.get("/conversations/{conversation_id}")
 async def read_conversation(
-    conversation_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+    conversation_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    traveler: Traveler = Depends(who_is_asking),
 ) -> ConversationView:
     """One Conversation, with everything said in it so far."""
-    conversation = await _conversation(session, conversation_id)
+    conversation = await _conversation(session, traveler, conversation_id)
     said = await messages_in(session, conversation)
-    plan = await plan_of(session, conversation)
+    plan = await plan_of(session, traveler, conversation)
     return ConversationView(
         id=conversation.id,
         title=conversation.title,
@@ -217,14 +222,16 @@ async def read_conversation(
 
 @router.delete("/conversations/{conversation_id}", status_code=204)
 async def delete_conversation(
-    conversation_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+    conversation_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    traveler: Traveler = Depends(who_is_asking),
 ) -> Response:
     """Remove a Conversation and everything said in it, for good.
 
     No flag and no hidden row: the Messages go with it on the database's
     cascade. Asking first is the interface's job.
     """
-    await remove_conversation(session, await _conversation(session, conversation_id))
+    await remove_conversation(session, await _conversation(session, traveler, conversation_id))
     return Response(status_code=204)
 
 
@@ -233,6 +240,7 @@ async def rename_conversation(
     conversation_id: uuid.UUID,
     chosen: ChosenTitle,
     session: AsyncSession = Depends(get_session),
+    traveler: Traveler = Depends(who_is_asking),
 ) -> ConversationSummary:
     """Call a Conversation something the traveler recognises it by.
 
@@ -242,7 +250,7 @@ async def rename_conversation(
 
     A rename is not activity: it changes what the row says, not where it sits.
     """
-    conversation = await _conversation(session, conversation_id)
+    conversation = await _conversation(session, traveler, conversation_id)
     await retitle_conversation(session, conversation, chosen.title)
     return ConversationSummary(
         id=conversation.id,
@@ -257,6 +265,7 @@ async def attach_to_trip(
     conversation_id: uuid.UUID,
     chosen: ChosenTrip,
     session: AsyncSession = Depends(get_session),
+    traveler: Traveler = Depends(who_is_asking),
 ) -> TripPlanView | None:
     """Move a Conversation to a different Trip, or take it off the one it is on.
 
@@ -264,10 +273,10 @@ async def attach_to_trip(
     correcting it is the traveler's. What comes back is the plan the
     pane beside it has to show next.
     """
-    conversation = await _conversation(session, conversation_id)
+    conversation = await _conversation(session, traveler, conversation_id)
     trip = None
     if chosen.trip_id is not None:
-        trip = await find_trip(session, chosen.trip_id)
+        trip = await find_trip(session, traveler, chosen.trip_id)
         if trip is None:
             raise HTTPException(status_code=404, detail="No such Trip.")
     await attach_conversation(session, conversation, trip)
@@ -279,11 +288,12 @@ async def say(
     conversation_id: uuid.UUID,
     saying: TravelerMessage,
     session: AsyncSession = Depends(get_session),
+    traveler: Traveler = Depends(who_is_asking),
     http_client: httpx2.AsyncClient = Depends(get_http_client),
     settings: Settings = Depends(get_settings),
 ) -> StreamingResponse:
     """Say something to the advisor and watch the reply arrive."""
-    conversation = await _conversation(session, conversation_id)
+    conversation = await _conversation(session, traveler, conversation_id)
     # Before anything is recorded, so a machine with no key leaves the question
     # in the composer rather than in a transcript with nothing under it.
     model = _model(http_client, settings)
@@ -294,7 +304,14 @@ async def say(
         session, conversation, role=MessageRole.TRAVELER, content=saying.content
     )
     return await _turn(
-        session, conversation, traveler_message, model, http_client, settings, announce=True
+        session,
+        traveler,
+        conversation,
+        traveler_message,
+        model,
+        http_client,
+        settings,
+        announce=True,
     )
 
 
@@ -303,6 +320,7 @@ async def run_again(
     conversation_id: uuid.UUID,
     message_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
+    traveler: Traveler = Depends(who_is_asking),
     http_client: httpx2.AsyncClient = Depends(get_http_client),
     settings: Settings = Depends(get_settings),
 ) -> StreamingResponse:
@@ -315,7 +333,7 @@ async def run_again(
     Only the last turn can be run again: a reply arriving mid-transcript would
     answer a question the traveler has moved on from.
     """
-    conversation = await _conversation(session, conversation_id)
+    conversation = await _conversation(session, traveler, conversation_id)
     model = _model(http_client, settings)
     said = await messages_in(session, conversation)
     failed = said[-1] if said else None
@@ -333,7 +351,7 @@ async def run_again(
     # rather than asked to finish its own half-sentence.
     await discard_message(session, failed)
     return await _turn(
-        session, conversation, asked, model, http_client, settings, announce=False
+        session, traveler, conversation, asked, model, http_client, settings, announce=False
     )
 
 
@@ -349,6 +367,7 @@ def _model(http_client: httpx2.AsyncClient, settings: Settings) -> AsyncOpenAI:
 
 async def _turn(
     session: AsyncSession,
+    traveler: Traveler,
     conversation: Conversation,
     traveler_message: Message,
     model: AsyncOpenAI,
@@ -364,7 +383,7 @@ async def _turn(
     """
     # Read at the top of every turn rather than held, which is what makes an
     # edit to the Instructions take effect on the very next Message.
-    prompt_version = await current_version(session)
+    prompt_version = await current_version(session, traveler)
     # Folded before the prompt is composed, so a Conversation over the budget
     # never sends the long prompt even once. What comes back is what is still
     # sent verbatim; the rest is in the summary `compose_around` reads back.
@@ -372,11 +391,12 @@ async def _turn(
         await compact(session, conversation, model, settings),
         # From what is recorded at the top of the turn, so the advisor reads
         # the plan as it stands and the profile every Conversation is shown.
-        await compose_around(session, conversation, prompt_version.instructions),
+        await compose_around(session, traveler, conversation, prompt_version.instructions),
     )
     return StreamingResponse(
         _turn_events(
             session,
+            traveler,
             conversation,
             traveler_message,
             model,
@@ -393,6 +413,7 @@ async def _turn(
 
 async def _turn_events(
     session: AsyncSession,
+    traveler: Traveler,
     conversation: Conversation,
     traveler_message: Message,
     model: AsyncOpenAI,
@@ -411,7 +432,15 @@ async def _turn_events(
     if announce:
         yield _message_event("traveler_message", traveler_message)
     async for happening in take_turn(
-        session, conversation, traveler_message, model, prompt, prompt_version, tools, settings
+        session,
+        traveler,
+        conversation,
+        traveler_message,
+        model,
+        prompt,
+        prompt_version,
+        tools,
+        settings,
     ):
         yield _as_event(happening)
 
@@ -477,9 +506,11 @@ def _message_event(kind: str, message: Message) -> bytes:
     return event({"type": kind, "message": MessageView.of(message).model_dump(mode="json")})
 
 
-async def _conversation(session: AsyncSession, conversation_id: uuid.UUID) -> Conversation:
+async def _conversation(
+    session: AsyncSession, traveler: Traveler, conversation_id: uuid.UUID
+) -> Conversation:
     """The named Conversation, or a refusal the interface can act on."""
-    conversation = await find_conversation(session, conversation_id)
+    conversation = await find_conversation(session, traveler, conversation_id)
     if conversation is None:
         raise HTTPException(status_code=404, detail="No such Conversation.")
     return conversation

@@ -20,9 +20,11 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..advisor.remembering import Fact
-from ..db import traveler
+from ..db import traveler as travelers
 from ..db.connection import get_session
+from ..db.tables import Traveler
 from ..services.profile import read_profile
+from .asking import who_is_asking
 
 router = APIRouter(tags=["traveler"])
 
@@ -44,33 +46,39 @@ class ProfileFactView(BaseModel):
 @router.get("/traveler/profile")
 async def read_traveler_profile(
     session: AsyncSession = Depends(get_session),
+    traveler: Traveler = Depends(who_is_asking),
 ) -> list[ProfileFactView]:
     """Everything the advisor has learned about the traveler, in the order it learned it."""
-    return [ProfileFactView.of(fact) for fact in await read_profile(session)]
+    return [ProfileFactView.of(fact) for fact in await read_profile(session, traveler)]
 
 
 @router.delete("/traveler/profile/{fact_id}")
 async def forget_profile_fact(
-    fact_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+    fact_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    traveler: Traveler = Depends(who_is_asking),
 ) -> list[ProfileFactView]:
     """Remove one Profile Fact, and only that one.
 
     There is no flag and no hidden row. What comes back is the profile as it
     stands afterwards, which is what the traveler is looking at.
     """
-    fact = await traveler.fact_by_id(session, fact_id)
+    fact = await travelers.fact_by_id(session, traveler, fact_id)
     if fact is None:
         raise HTTPException(status_code=404, detail="No such Profile Fact.")
-    await traveler.forget_fact(session, fact)
-    return [ProfileFactView.of(remaining) for remaining in await read_profile(session)]
+    await travelers.forget_fact(session, fact)
+    return [ProfileFactView.of(remaining) for remaining in await read_profile(session, traveler)]
 
 
 @router.delete("/traveler/everything", status_code=204)
-async def erase_everything(session: AsyncSession = Depends(get_session)) -> Response:
+async def erase_everything(
+    session: AsyncSession = Depends(get_session),
+    traveler: Traveler = Depends(who_is_asking),
+) -> Response:
     """Leave nothing behind: every Conversation, every Trip and the whole profile.
 
     Asking the traveler first is the interface's job, because by the time the
     request arrives the decision has been made.
     """
-    await traveler.erase_everything(session)
+    await travelers.erase_everything(session, traveler)
     return Response(status_code=204)

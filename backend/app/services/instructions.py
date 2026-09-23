@@ -14,48 +14,55 @@ from ..advisor.conversations import OtherConversation
 from ..advisor.instructions import DEFAULT_ADVISOR_INSTRUCTIONS, compose_system_prompt
 from ..db import prompt_versions
 from ..db.conversations import conversations_apart_from
-from ..db.tables import Conversation, PromptVersion
+from ..db.tables import Conversation, PromptVersion, Traveler
 from .plans import plan_of, summarise_trips
 from .profile import read_profile
 
 
-async def current_version(session: AsyncSession) -> PromptVersion:
+async def current_version(session: AsyncSession, traveler: Traveler) -> PromptVersion:
     """The Prompt Version every turn is composed from until it is edited.
 
     The first turn saves the shipped default as the first version, rather than
     composing from it and forgetting: a Message stamped with a version that
     was never recorded would point at nothing.
     """
-    version = await prompt_versions.latest(session)
+    version = await prompt_versions.latest(session, traveler)
     if version is not None:
         return version
-    return await prompt_versions.record(session, DEFAULT_ADVISOR_INSTRUCTIONS)
+    return await prompt_versions.record(session, traveler, DEFAULT_ADVISOR_INSTRUCTIONS)
 
 
-async def revise_instructions(session: AsyncSession, instructions: str) -> PromptVersion:
+async def revise_instructions(
+    session: AsyncSession, traveler: Traveler, instructions: str
+) -> PromptVersion:
     """Save the Advisor Instructions, answering with the version now in force.
 
     Saving what is already in force leaves no new version: somebody who opened
     the page and pressed save has not changed their advisor, and a version
     nothing distinguishes from the last explains nothing.
     """
-    version = await current_version(session)
+    version = await current_version(session, traveler)
     if instructions == version.instructions:
         return version
-    return await prompt_versions.record(session, instructions)
+    return await prompt_versions.record(session, traveler, instructions)
 
 
-async def restore_default_instructions(session: AsyncSession) -> PromptVersion:
+async def restore_default_instructions(
+    session: AsyncSession, traveler: Traveler
+) -> PromptVersion:
     """Put the shipped Advisor Instructions back, as a revision of their own.
 
     A restore is a save, not an undo: the versions before it stay where they
     are, still explaining the Messages they produced.
     """
-    return await revise_instructions(session, DEFAULT_ADVISOR_INSTRUCTIONS)
+    return await revise_instructions(session, traveler, DEFAULT_ADVISOR_INSTRUCTIONS)
 
 
 async def compose_around(
-    session: AsyncSession, conversation: Conversation | None, instructions: str
+    session: AsyncSession,
+    traveler: Traveler,
+    conversation: Conversation | None,
+    instructions: str,
 ) -> str:
     """The system prompt one Conversation's next turn sends.
 
@@ -70,12 +77,14 @@ async def compose_around(
     return compose_system_prompt(
         instructions,
         today=date.today(),
-        plan=None if conversation is None else await plan_of(session, conversation),
-        trips=await summarise_trips(session),
-        profile=await read_profile(session),
+        plan=None if conversation is None else await plan_of(session, traveler, conversation),
+        trips=await summarise_trips(session, traveler),
+        profile=await read_profile(session, traveler),
         elsewhere=[
             OtherConversation(title=title, destination=destination)
-            for title, destination in await conversations_apart_from(session, conversation)
+            for title, destination in await conversations_apart_from(
+                session, traveler, conversation
+            )
         ],
         earlier=None if conversation is None else conversation.summary,
     )
