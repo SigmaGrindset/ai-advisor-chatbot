@@ -5,6 +5,8 @@
 **Where things stand:** tickets 01–14 and 16 are shipped. **15 is the only one unrun** —
 the README's remaining sections, the audit pass and the verification sweep. 06's last
 criterion (a pass on a real phone) and 16's wording check both need a human.
+In `.scratch/accounts-and-guests/`, 01–02 are shipped: whoever writes something is a Guest
+of their own. Expiry, Clerk Accounts and the split hosts (03–08) are still to come.
 
 The advisor fetches live data rather than guessing, searches the web through a guarded
 query, keeps a Trip Plan that fills in beside the conversation as the traveler talks,
@@ -49,6 +51,12 @@ This is **not** enforced by a test, deliberately — see §4.
 These seams do most of the design work, and new features should join them rather than go
 around them:
 
+- **`api/asking.py` is the one place a request becomes a Traveler.** Most routes take
+  `who_is_asking`, which never creates anyone: with no valid Guest token it answers with an
+  unsaved Traveler, so every list is empty and every named row is a 404. Only writes that can
+  start from nothing take `who_is_writing`, which makes a Guest, committed with that write,
+  and returns their token once in `X-Guest-Token`; only its hash is stored. The browser keeps it in local storage and
+  sends it on every request (`frontend/src/api/client.ts::request`).
 - **`services/turns.py` yields what happened, not what to send.** The wire format stays in
   `api/`, so a tool call or a Trip Plan patch can be added to a turn without the HTTP
   response shape being decided in the service.
@@ -172,7 +180,7 @@ cd D:/Antonio/ai-advisor-chatbot/backend && CONVERSATION_MODEL=anthropic/claude-
 cd D:/Antonio/ai-advisor-chatbot/backend && D:/Antonio/ai-advisor-chatbot/.venv/Scripts/python.exe -m mypy
 ```
 
-**121 frontend tests in 17 files** (~2s), `tsc` silent, build clean; **127 backend tests**
+**121 frontend tests in 17 files** (~2s), `tsc` silent, build clean; **130 backend tests**
 (~28s), mypy clean. Confirm those numbers *before* you start — if they do not match,
 something changed underneath you. Update this paragraph when a ticket legitimately moves
 them.

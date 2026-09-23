@@ -4,6 +4,8 @@
  * A turn is a POST that answers with server-sent events, so it is read with a
  * stream reader rather than an EventSource — EventSource can only GET. Lines
  * that are not `data:` lines, including keep-alive comments, are dropped.
+ *
+ * Every request goes as this browser's Traveler: see `request`.
  */
 
 import type { TurnEvent } from "../stream/events";
@@ -19,22 +21,22 @@ import type {
 } from "./types";
 
 export async function listConversations(): Promise<ConversationSummary[]> {
-  return await expected<ConversationSummary[]>(await fetch("/api/conversations"));
+  return await expected<ConversationSummary[]>(await request("/api/conversations"));
 }
 
 export async function startConversation(): Promise<ConversationSummary> {
   return await expected<ConversationSummary>(
-    await fetch("/api/conversations", { method: "POST" }),
+    await request("/api/conversations", { method: "POST" }),
   );
 }
 
 export async function readConversation(id: string): Promise<ConversationRead> {
-  return await expected<ConversationRead>(await fetch(`/api/conversations/${id}`));
+  return await expected<ConversationRead>(await request(`/api/conversations/${id}`));
 }
 
 /** Every Trip the traveler is planning, the most recently started first. */
 export async function listTrips(): Promise<TripPlan[]> {
-  return await expected<TripPlan[]>(await fetch("/api/trips"));
+  return await expected<TripPlan[]>(await request("/api/trips"));
 }
 
 /**
@@ -46,7 +48,7 @@ export async function attachConversation(
   tripId: string | null,
 ): Promise<TripPlan | null> {
   return await expected<TripPlan | null>(
-    await fetch(`/api/conversations/${conversationId}/trip`, {
+    await request(`/api/conversations/${conversationId}/trip`, {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ trip_id: tripId }),
@@ -66,7 +68,7 @@ export async function deleteTrip(
   conversations: "keep" | "delete",
 ): Promise<void> {
   refused(
-    await fetch(`/api/trips/${tripId}?conversations=${conversations}`, { method: "DELETE" }),
+    await request(`/api/trips/${tripId}?conversations=${conversations}`, { method: "DELETE" }),
   );
 }
 
@@ -111,7 +113,7 @@ export async function settleOpenQuestion(
 
 async function sent(url: string, method: string, body?: unknown): Promise<TripPlan> {
   return await expected<TripPlan>(
-    await fetch(url, {
+    await request(url, {
       method,
       ...(body === undefined
         ? {}
@@ -130,7 +132,7 @@ export async function renameConversation(
   title: string,
 ): Promise<ConversationSummary> {
   return await expected<ConversationSummary>(
-    await fetch(`/api/conversations/${id}/title`, {
+    await request(`/api/conversations/${id}/title`, {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ title }),
@@ -139,7 +141,7 @@ export async function renameConversation(
 }
 
 export async function deleteConversation(id: string): Promise<void> {
-  refused(await fetch(`/api/conversations/${id}`, { method: "DELETE" }));
+  refused(await request(`/api/conversations/${id}`, { method: "DELETE" }));
 }
 
 /**
@@ -148,18 +150,23 @@ export async function deleteConversation(id: string): Promise<void> {
  */
 
 export async function readProfile(): Promise<ProfileFact[]> {
-  return await expected<ProfileFact[]>(await fetch("/api/traveler/profile"));
+  return await expected<ProfileFact[]>(await request("/api/traveler/profile"));
 }
 
 export async function forgetProfileFact(factId: string): Promise<ProfileFact[]> {
   return await expected<ProfileFact[]>(
-    await fetch(`/api/traveler/profile/${factId}`, { method: "DELETE" }),
+    await request(`/api/traveler/profile/${factId}`, { method: "DELETE" }),
   );
 }
 
-/** Every Conversation, every Trip and the whole profile, gone. */
+/**
+ * Every Conversation, every Trip, the whole profile and the Advisor
+ * Instructions, gone. A Guest goes with them, so their token is let go of too
+ * and the next write starts a new one.
+ */
 export async function clearEverything(): Promise<void> {
-  refused(await fetch("/api/traveler/everything", { method: "DELETE" }));
+  refused(await request("/api/traveler/everything", { method: "DELETE" }));
+  forgetGuest();
 }
 
 /**
@@ -176,7 +183,7 @@ export async function readInstructions(
   conversationId: string | null,
 ): Promise<AdvisorInstructions> {
   return await expected<AdvisorInstructions>(
-    await fetch(`/api/advisor/instructions${asking(conversationId)}`),
+    await request(`/api/advisor/instructions${asking(conversationId)}`),
   );
 }
 
@@ -185,7 +192,7 @@ export async function saveInstructions(
   conversationId: string | null,
 ): Promise<AdvisorInstructions> {
   return await expected<AdvisorInstructions>(
-    await fetch(`/api/advisor/instructions${asking(conversationId)}`, {
+    await request(`/api/advisor/instructions${asking(conversationId)}`, {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ instructions }),
@@ -197,7 +204,7 @@ export async function restoreInstructions(
   conversationId: string | null,
 ): Promise<AdvisorInstructions> {
   return await expected<AdvisorInstructions>(
-    await fetch(`/api/advisor/instructions${asking(conversationId)}`, { method: "DELETE" }),
+    await request(`/api/advisor/instructions${asking(conversationId)}`, { method: "DELETE" }),
   );
 }
 
@@ -218,7 +225,7 @@ export async function* say(
   signal?: AbortSignal,
 ): AsyncGenerator<TurnEvent> {
   yield* turn(
-    await fetch(`/api/conversations/${conversationId}/messages`, {
+    await request(`/api/conversations/${conversationId}/messages`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ content }),
@@ -238,7 +245,7 @@ export async function* runAgain(
   signal?: AbortSignal,
 ): AsyncGenerator<TurnEvent> {
   yield* turn(
-    await fetch(`/api/conversations/${conversationId}/messages/${messageId}/again`, {
+    await request(`/api/conversations/${conversationId}/messages/${messageId}/again`, {
       method: "POST",
       signal,
     }),
@@ -273,6 +280,46 @@ async function* turn(response: Response): AsyncGenerator<TurnEvent> {
       }
       boundary = buffered.indexOf("\n\n");
     }
+  }
+}
+
+/**
+ * The Guest token: what the server knows this browser's Guest by. It is handed
+ * over once, on the write that made them a Guest, and never again, so it is
+ * kept across reloads and tabs rather than in memory.
+ */
+const GUEST_TOKEN_KEY = "travel-advisor.guest-token";
+const GUEST_TOKEN_HEADER = "X-Guest-Token";
+
+/**
+ * `fetch`, as this browser's Traveler. The token goes with every request, the
+ * streamed turn included, and one the response hands back replaces it. Read
+ * afresh each time, so a Guest begun in another tab is the one asking here.
+ */
+async function request(url: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  const token = stored(() => localStorage.getItem(GUEST_TOKEN_KEY));
+  if (token) headers.set(GUEST_TOKEN_HEADER, token);
+  const response = await fetch(url, { ...init, headers });
+  const issued = response.headers.get(GUEST_TOKEN_HEADER);
+  if (issued !== null) stored(() => localStorage.setItem(GUEST_TOKEN_KEY, issued));
+  return response;
+}
+
+function forgetGuest(): void {
+  stored(() => localStorage.removeItem(GUEST_TOKEN_KEY));
+}
+
+/**
+ * Storage a browser may refuse, in a private window or with site data
+ * blocked. Nothing is kept then and every write starts a new Guest, which is
+ * worse but still an application that answers.
+ */
+function stored<T>(using: () => T): T | null {
+  try {
+    return using();
+  } catch {
+    return null;
   }
 }
 

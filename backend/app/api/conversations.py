@@ -53,7 +53,7 @@ from ..services.turns import (
     Titled,
     take_turn,
 )
-from .asking import who_is_asking
+from .asking import who_is_asking, who_is_writing
 from .sse import event
 from .traveler import ProfileFactView
 from .trips import TripPlanView
@@ -190,9 +190,9 @@ async def list_conversations(
 @router.post("/conversations", status_code=201)
 async def start_conversation(
     session: AsyncSession = Depends(get_session),
-    traveler: Traveler = Depends(who_is_asking),
+    traveler: Traveler = Depends(who_is_writing),
 ) -> ConversationSummary:
-    """Begin a separate line of thinking."""
+    """Begin a separate line of thinking — for somebody new, their first write."""
     conversation = await begin_conversation(session, traveler)
     return ConversationSummary(
         id=conversation.id,

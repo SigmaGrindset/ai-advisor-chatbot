@@ -9,15 +9,19 @@
 
 **Blocked by:** 01.
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] The sole Traveler, and the startup step that seeds it, are gone. A fresh database needs nothing but the schema.
-- [ ] The Traveler row gains a unique, nullable Guest token hash.
-- [ ] The "who is asking" dependency has a read form (the Traveler, if any) and a write form (the Traveler, creating a Guest if none).
-- [ ] Reads with no token create nothing. That includes the Advisor Instructions page: the shipped default becomes a Traveler's first Prompt Version when their first turn is composed, not when the page is read.
-- [ ] One Guest can't read or change another's Conversations, Trips, Profile Facts or Advisor Instructions, including by identifier.
-- [ ] The Guest token never appears in a log.
-- [ ] "Delete everything" deletes a Guest's Traveler. The next write starts a new Guest with a new token.
-- [ ] The test client keeps any Guest token a response returns and sends it back, so the existing tests keep reading as one Traveler.
-- [ ] New tests cover isolation between two Guests, a read that creates nothing, and an instructions read that writes nothing.
-- [ ] `HANDOFF.md` no longer describes a single implicit Traveler.
+- [x] The sole Traveler, and the startup step that seeds it, are gone. A fresh database needs nothing but the schema.
+- [x] The Traveler row gains a unique, nullable Guest token hash.
+- [x] The "who is asking" dependency has a read form (the Traveler, if any) and a write form (the Traveler, creating a Guest if none).
+- [x] Reads with no token create nothing. That includes the Advisor Instructions page: the shipped default becomes a Traveler's first Prompt Version when their first turn is composed, not when the page is read.
+- [x] One Guest can't read or change another's Conversations, Trips, Profile Facts or Advisor Instructions, including by identifier.
+- [x] The Guest token never appears in a log.
+- [x] "Delete everything" deletes a Guest's Traveler. The next write starts a new Guest with a new token.
+- [x] The test client keeps any Guest token a response returns and sends it back, so the existing tests keep reading as one Traveler.
+- [x] New tests cover isolation between two Guests, a read that creates nothing, and an instructions read that writes nothing.
+- [x] `HANDOFF.md` no longer describes a single implicit Traveler.
+
+## Comments
+
+Only starting a Conversation and saving or restoring the Advisor Instructions take `who_is_writing`. Every other write names a row that nobody but a Guest can have, so it keeps the read form and 404s. The new Guest is flushed, not committed, and lands with the write that needed it, so 05 should create a Clerk user's Traveler the same way.

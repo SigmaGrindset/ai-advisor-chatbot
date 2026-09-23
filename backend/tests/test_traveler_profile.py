@@ -10,6 +10,8 @@ from typing import Any
 
 import httpx2
 
+from app.api.asking import GUEST_TOKEN_HEADER
+
 from .fakes.canned_model import CannedModel, calling, content, finish, searching, wants_tools
 from .fakes.canned_transport import Responder
 from .fakes.talking import send, start, transcript
@@ -220,6 +222,7 @@ async def test_clearing_everything_leaves_nothing_behind_and_the_application_sti
         ("add_open_question", {"question": "Which airport to fly into?"}),
     )
     await send(api, conversation, "Croatian, Lisbon, and sketch me a first day.")
+    guest = api.headers[GUEST_TOKEN_HEADER]
 
     cleared = await api.delete("/api/traveler/everything")
     assert cleared.status_code == 204
@@ -236,6 +239,8 @@ async def test_clearing_everything_leaves_nothing_behind_and_the_application_sti
         says="Starting fresh.",
     )
     afresh = await start(api)
+    # As a new Guest: the token the browser held knows nobody now.
+    assert api.headers[GUEST_TOKEN_HEADER] != guest
     await send(api, afresh, "Let us start again — I live in Split.")
 
     assert [_said(fact) for fact in await _profile(api)] == [("home_city", "Split")]

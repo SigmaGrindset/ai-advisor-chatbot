@@ -1,4 +1,5 @@
-"""The Traveler's own record: the Profile Facts, and how all of it goes away.
+"""The Traveler's own record: who they are, the Profile Facts, and how all of
+it goes away.
 
 Nothing here raises an HTTP anything and nothing here decides what a change
 means. A Profile Fact is a row, addressable on its own, so deleting one leaves
@@ -6,18 +7,45 @@ every other exactly as it was — which is the whole of what ADR-0001 made the
 profile enumerable for.
 """
 
+import hashlib
+import secrets
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import delete, insert, select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .tables import FactSubject, ProfileFact, Traveler
 
 
-async def traveler_by_id(session: AsyncSession, traveler_id: uuid.UUID) -> Traveler:
-    """The Traveler with this identifier, which is asked for only once known to exist."""
-    return await session.get_one(Traveler, traveler_id)
+async def guest_holding(session: AsyncSession, token: str) -> Traveler | None:
+    """The Guest this token was handed to, if they are still here."""
+    guest: Traveler | None = await session.scalar(
+        select(Traveler).where(Traveler.guest_token_hash == _hashed(token))
+    )
+    return guest
+
+
+async def begin_guest(session: AsyncSession) -> tuple[Traveler, str]:
+    """A new Guest, and the token that will know them again.
+
+    This is the only time the token can be told: what is kept is its hash.
+
+    Flushed but not committed: the write that needed a Guest commits them with
+    it. A request refused before it wrote anything leaves nobody behind, which
+    matters because its refusal never carries the token either.
+    """
+    token = secrets.token_urlsafe(32)
+    guest = Traveler(guest_token_hash=_hashed(token))
+    session.add(guest)
+    await session.flush()
+    return guest, token
+
+
+def _hashed(token: str) -> str:
+    """A plain digest rather than a password hash: the token is 256 random bits,
+    so there is no guessable space for a slow hash to protect."""
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 async def facts_of(session: AsyncSession, traveler: Traveler) -> Sequence[ProfileFact]:
@@ -106,18 +134,16 @@ async def forget_fact(session: AsyncSession, fact: ProfileFact) -> None:
 
 
 async def erase_everything(session: AsyncSession, traveler: Traveler) -> None:
-    """Leave nothing behind: every Conversation, every Trip, the whole profile.
+    """Leave nothing behind: every Conversation, every Trip, the whole profile,
+    the Advisor Instructions.
 
-    Every table hangs off the Traveler, so the Traveler goes and an empty one
-    takes its place. A table added later needs no line here, which is the
-    point: one kept in step by hand would one day leave something behind.
+    Every table hangs off the Traveler, so the Traveler goes and everything
+    with it. A table added later needs no line here, which is the point: one
+    kept in step by hand would one day leave something behind.
 
-    The row comes straight back under the same identifier, because the
-    Traveler who asked is still the one asking. `next_fact_ref` starts at one
-    again, which is right — nothing refers to the old numbers any more.
+    A Guest goes with it, token and all, and their next write starts a new one.
     """
     await session.execute(delete(Traveler).where(Traveler.id == traveler.id))
-    await session.execute(insert(Traveler).values(id=traveler.id))
     await session.commit()
     # The cascade took those rows underneath the session, which still holds
     # them in its identity map: a later read by identifier would answer with a

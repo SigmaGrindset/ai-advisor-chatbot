@@ -34,9 +34,14 @@ def _values(enum: type[StrEnum]) -> Sequence[str]:
 
 
 class Traveler(Base):
+    """Whoever is asking. Everything else hangs off one, and goes with it."""
+
     __tablename__ = "traveler"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    #: How a Guest is known again: the hash of the token their browser holds,
+    #: never the token, so a copy of this table identifies nobody.
+    guest_token_hash: Mapped[str | None] = mapped_column(Text, unique=True, nullable=True)
     #: The next number to list a Profile Fact under, counted here so a number
     #: is never handed out twice — see `Trip.next_item_ref`.
     next_fact_ref: Mapped[int] = mapped_column(

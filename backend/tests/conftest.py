@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from app.api.asking import GUEST_TOKEN_HEADER
 from app.config import Settings
 from app.db.connection import apply_schema, get_session
 from app.db.tables import Base
@@ -137,18 +138,28 @@ ApiFactory = Callable[[Settings], Awaitable[httpx2.AsyncClient]]
 async def api_for(
     session: AsyncSession, http_client: httpx2.AsyncClient
 ) -> AsyncIterator[ApiFactory]:
-    """Builds an HTTP client speaking to a differently-configured application."""
+    """Builds an HTTP client speaking to a differently-configured application.
+
+    Each client is a browser of its own: it keeps the Guest token a response
+    hands it and sends it back, so one client is one Traveler and two are two.
+    """
     async with AsyncExitStack() as stack:
 
         async def build(settings: Settings) -> httpx2.AsyncClient:
             app = create_app(settings)
             app.dependency_overrides[get_session] = lambda: session
             app.dependency_overrides[get_http_client] = lambda: http_client
-            return await stack.enter_async_context(
-                httpx2.AsyncClient(
-                    transport=httpx2.ASGITransport(app=app), base_url="http://testserver"
-                )
+
+            async def keep_guest_token(response: httpx2.Response) -> None:
+                if GUEST_TOKEN_HEADER in response.headers:
+                    client.headers[GUEST_TOKEN_HEADER] = response.headers[GUEST_TOKEN_HEADER]
+
+            client = httpx2.AsyncClient(
+                transport=httpx2.ASGITransport(app=app),
+                base_url="http://testserver",
+                event_hooks={"response": [keep_guest_token]},
             )
+            return await stack.enter_async_context(client)
 
         yield build
 

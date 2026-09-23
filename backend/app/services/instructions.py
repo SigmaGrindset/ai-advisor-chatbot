@@ -19,6 +19,13 @@ from .plans import plan_of, summarise_trips
 from .profile import read_profile
 
 
+async def saved_version(session: AsyncSession, traveler: Traveler) -> PromptVersion | None:
+    """The Prompt Version in force, or None while that is the shipped default
+    and nothing has recorded it yet. Reading only: looking at the Advisor
+    Instructions is never a write."""
+    return await prompt_versions.latest(session, traveler)
+
+
 async def current_version(session: AsyncSession, traveler: Traveler) -> PromptVersion:
     """The Prompt Version every turn is composed from until it is edited.
 
@@ -26,7 +33,7 @@ async def current_version(session: AsyncSession, traveler: Traveler) -> PromptVe
     composing from it and forgetting: a Message stamped with a version that
     was never recorded would point at nothing.
     """
-    version = await prompt_versions.latest(session, traveler)
+    version = await saved_version(session, traveler)
     if version is not None:
         return version
     return await prompt_versions.record(session, traveler, DEFAULT_ADVISOR_INSTRUCTIONS)

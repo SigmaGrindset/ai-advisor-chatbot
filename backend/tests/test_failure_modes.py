@@ -38,12 +38,11 @@ from .fakes.talking import again, messages, send, start, transcript
 
 
 async def test_without_a_key_the_turn_is_refused_and_names_the_setting(
-    api: httpx2.AsyncClient, api_for: ApiFactory, settings: Settings
+    api_for: ApiFactory, settings: Settings
 ) -> None:
-    # Started through the configured application, because starting a Conversation
-    # needs no model — only saying something in one does.
-    conversation = await start(api)
     keyless = await api_for(settings.model_copy(update={"openrouter_api_key": None}))
+    # Starting a Conversation needs no model — only saying something in one does.
+    conversation = await start(keyless)
 
     refusal = await keyless.post(
         f"/api/conversations/{conversation}/messages", json={"content": "Lisbon?"}
@@ -54,7 +53,7 @@ async def test_without_a_key_the_turn_is_refused_and_names_the_setting(
     assert refused["kind"] == "configuration"
     assert "OPENROUTER_API_KEY" in refused["detail"]
     # Nothing is kept, so the question is still theirs to send once the key is there.
-    assert await transcript(api, conversation) == []
+    assert await transcript(keyless, conversation) == []
 
 
 async def test_a_key_the_provider_will_not_take_is_a_configuration_problem(

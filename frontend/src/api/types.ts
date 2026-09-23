@@ -80,8 +80,11 @@ export type ConversationRead = Conversation & { plan: TripPlan | null };
 export type AdvisorInstructions = {
   /** The editable part: the advisor's persona and its rules. */
   instructions: string;
-  /** Recorded on every Message, which makes a change in behaviour explicable. */
-  version_id: string;
+  /**
+   * Recorded on every Message, which makes a change in behaviour explicable.
+   * Null until the first turn or save records the shipped default.
+   */
+  version_id: string | null;
   /** The system prompt exactly as the next message will send it. */
   composed: string;
   /** Whether what is in force is the shipped default. */
