@@ -1,9 +1,11 @@
 """Application configuration, read from the environment."""
 
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import Request
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # The checkout root, for the development defaults below. The container passes
 # configuration as environment variables and sets STATIC_DIR explicitly.
@@ -28,6 +30,19 @@ class Settings(BaseSettings):
     #: titles, Compaction summaries, and the nested web search.
     utility_model: str = "anthropic/claude-haiku-4.5"
     static_dir: Path = _CHECKOUT_ROOT / "frontend" / "dist"
+    #: The origins a frontend on a host of its own may call the API from,
+    #: comma-separated in the environment. None by default: the combined image
+    #: serves the frontend on the API's own origin, which needs no CORS.
+    frontend_origins: Annotated[list[str], NoDecode] = []
+
+    @field_validator("frontend_origins", mode="before")
+    @classmethod
+    def _listed(cls, value: object) -> object:
+        # A browser never sends an origin with a trailing slash, so one pasted
+        # with it would match nothing and fail silently.
+        if isinstance(value, str):
+            return [origin.strip().rstrip("/") for origin in value.split(",") if origin.strip()]
+        return value
 
 
 def get_settings(request: Request) -> Settings:

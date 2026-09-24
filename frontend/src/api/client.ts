@@ -5,7 +5,8 @@
  * stream reader rather than an EventSource — EventSource can only GET. Lines
  * that are not `data:` lines, including keep-alive comments, are dropped.
  *
- * Every request goes as this browser's Traveler: see `request`.
+ * Every request goes to `API_BASE_URL`, as this browser's Traveler: see
+ * `request`.
  */
 
 import type { TurnEvent } from "../stream/events";
@@ -284,6 +285,13 @@ async function* turn(response: Response): AsyncGenerator<TurnEvent> {
 }
 
 /**
+ * Where the API is, fixed at build time. Empty is the page's own origin, as
+ * the combined image and the Vite dev server's proxy serve it; a frontend on a
+ * host of its own is built with the backend's origin here.
+ */
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
+
+/**
  * The Guest token: what the server knows this browser's Guest by. It is handed
  * over once, on the write that made them a Guest, and never again, so it is
  * kept across reloads and tabs rather than in memory.
@@ -307,7 +315,7 @@ async function request(url: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   const token = stored(() => localStorage.getItem(GUEST_TOKEN_KEY));
   if (token) headers.set(GUEST_TOKEN_HEADER, token);
-  const response = await fetch(url, { ...init, headers });
+  const response = await fetch(API_BASE_URL + url, { ...init, headers });
   const issued = response.headers.get(GUEST_TOKEN_HEADER);
   if (issued !== null) {
     stored(() => localStorage.setItem(GUEST_TOKEN_KEY, issued));

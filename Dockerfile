@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1
 
 # One image: the frontend is built with Node, then served by the Python process
-# alongside the API. One origin, so there is no CORS configuration anywhere.
+# alongside the API. One origin, so the bundle is built with no API base URL and
+# the browser never makes a cross-origin request.
 
 FROM node:22-alpine AS frontend
 WORKDIR /build

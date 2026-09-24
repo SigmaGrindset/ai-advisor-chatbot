@@ -31,6 +31,7 @@ services:
       # them out leaves the application's own defaults in place.
       CONVERSATION_MODEL:
       UTILITY_MODEL:
+      FRONTEND_ORIGINS:
     ports:
       - "${APP_PORT:-8000}:8000"
     healthcheck:

@@ -6,9 +6,11 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from .api import conversations, health, instructions, traveler, trips
+from .api.asking import GUEST_TOKEN_HEADER
 from .config import Settings
 from .db.connection import apply_schema, create_engine
 from .frontend import mount_frontend
@@ -45,6 +47,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app(settings: Settings) -> FastAPI:
     app = FastAPI(title="AI Travel Advisor", lifespan=lifespan)
     app.state.settings = settings
+    # A frontend on another host is let in from the configured origins only.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.frontend_origins,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+        allow_headers=["Authorization", GUEST_TOKEN_HEADER],
+        # A new Guest's token arrives in a header, which a page on another
+        # origin can only read when it is named here.
+        expose_headers=[GUEST_TOKEN_HEADER],
+    )
     app.include_router(health.router, prefix="/api")
     app.include_router(conversations.router, prefix="/api")
     app.include_router(trips.router, prefix="/api")

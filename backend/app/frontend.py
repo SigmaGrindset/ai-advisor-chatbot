@@ -1,8 +1,8 @@
 """Serving the built frontend from the application, on a single origin.
 
-The bundle and the API share one origin, so there is no CORS configuration
-anywhere in the project. Any path the API does not claim resolves to the
-single-page application, so a client-side route survives a page reload.
+Served this way, the bundle and the API share one origin and CORS never comes
+into it. Any path the API does not claim resolves to the single-page
+application, so a client-side route survives a page reload.
 """
 
 import logging

@@ -5,9 +5,10 @@
 **Where things stand:** tickets 01–14 and 16 are shipped. **15 is the only one unrun** —
 the README's remaining sections, the audit pass and the verification sweep. 06's last
 criterion (a pass on a real phone) and 16's wording check both need a human.
-In `.scratch/accounts-and-guests/`, 01–03 are shipped: whoever writes something is a Guest
+In `.scratch/accounts-and-guests/`, 01–04 are shipped: whoever writes something is a Guest
 of their own, swept a day after their last request (`services/sweep.py`, hourly from the
-lifespan). Clerk Accounts and the split hosts (04–08) are still to come.
+lifespan), and the frontend can run on a host of its own. Clerk Accounts (05–08) are still
+to come.
 
 The advisor fetches live data rather than guessing, searches the web through a guarded
 query, keeps a Trip Plan that fills in beside the conversation as the traveler talks,
@@ -28,8 +29,17 @@ says whose problem it is and can be run again without asking the question twice.
 
 ## 2. How the application is put together
 
-One origin. FastAPI serves both `/api/*` and the built Vite bundle, so there is no CORS
-configuration anywhere and a client-side route survives a reload (`app/frontend.py`).
+It runs two ways:
+
+- **Combined**, the Docker image: FastAPI serves both `/api/*` and the built Vite bundle on
+  one origin, so no CORS is involved and a client-side route survives a reload
+  (`app/frontend.py`).
+- **Split**: the frontend on a host of its own (Vercel, in production), built with
+  `VITE_API_BASE_URL` naming the backend's origin, which `api/client.ts::request` puts in
+  front of every call. The backend lets in only the origins in `FRONTEND_ORIGINS`
+  (comma-separated, none by default), and exposes `X-Guest-Token` so the page can read a new
+  Guest's token (`main.py`).
+
 Postgres holds everything; the schema is applied at startup, so there is no migration step.
 
 ### Backend — `backend/app/`
@@ -181,7 +191,7 @@ cd D:/Antonio/ai-advisor-chatbot/backend && CONVERSATION_MODEL=anthropic/claude-
 cd D:/Antonio/ai-advisor-chatbot/backend && D:/Antonio/ai-advisor-chatbot/.venv/Scripts/python.exe -m mypy
 ```
 
-**121 frontend tests in 17 files** (~2s), `tsc` silent, build clean; **131 backend tests**
+**121 frontend tests in 17 files** (~2s), `tsc` silent, build clean; **134 backend tests**
 (~28s), mypy clean. Confirm those numbers *before* you start — if they do not match,
 something changed underneath you. Update this paragraph when a ticket legitimately moves
 them.
@@ -218,6 +228,11 @@ the other address. `netstat -ano | grep :8000`, then check the PID is the one yo
 - Running it: `docker compose up`, then <http://localhost:8000>. `APP_PORT` / `DB_PORT` in
   `.env` if those ports are taken. The app starts without an OpenRouter key and reports it
   missing at `/api/health`; the advisor cannot answer until one is supplied.
+- Running it split: start the backend with `FRONTEND_ORIGINS=http://localhost:5173` (and
+  `--host ::`), then `VITE_API_BASE_URL=http://localhost:8000 npm run dev` in `frontend/`.
+  Without that variable the dev server proxies `/api` and stays on one origin.
+  `.dockerignore` keeps every `.env*` out of the image, so the combined build always has
+  an empty base URL.
 
 ## 7. Open questions — raise these, do not decide them alone
 
