@@ -2,9 +2,11 @@
 
 Each test client is a browser, keeping the Guest token a write hands it, so
 two clients are two Guests; two signed in as different Clerk users are two
-Accounts. What is asserted is what each of them can see and
-change — and, for somebody who has only looked, that nothing was stored. The
-sweep is run by hand, at whatever "now" the test needs.
+Accounts. A Guest's client that signs in goes on sending its Guest token, as a
+browser does until its first signed-in request has answered. What is asserted
+is what each of them can see and change — and, for somebody who has only
+looked, that nothing was stored. The sweep is run by hand, at whatever "now"
+the test needs.
 """
 
 import json
@@ -14,6 +16,7 @@ from typing import Any
 
 import httpx2
 import pytest
+from cryptography.hazmat.primitives.asymmetric import rsa
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +29,7 @@ from app.services.sweep import sweep_idle_guests
 from .conftest import ApiFactory, Browser
 from .fakes.canned_model import CannedModel, calling, content, finish, wants_tools
 from .fakes.canned_transport import Responder
+from .fakes.clerk import session_token
 from .fakes.talking import messages, send, start, transcript
 
 
@@ -156,6 +160,66 @@ async def test_a_guest_a_day_without_use_is_swept_and_one_who_came_back_is_not(
     swept_token = api.headers[GUEST_TOKEN_HEADER]
     started = await api.post("/api/conversations")
     assert started.headers[GUEST_TOKEN_HEADER] != swept_token
+
+
+async def test_a_guest_who_signs_up_keeps_everything_as_the_same_traveler(
+    api: httpx2.AsyncClient,
+    api_for: ApiFactory,
+    settings: Settings,
+    browser: Browser,
+    clerk_key: rsa.RSAPrivateKey,
+    session: AsyncSession,
+    outbound_routes: dict[str, Responder],
+) -> None:
+    """The first signed-in request still carries the Guest token, and hands the
+    new Account the Guest's Traveler. Nothing is copied, and the token that
+    knew them opens nothing any more."""
+    outbound_routes["openrouter.ai"] = _asking(
+        ("set_destination", {"destination": "Lisbon"}),
+        ("remember_profile_fact", {"subject": "nationality", "detail": "Croatian"}),
+    )
+    theirs = await start(api)
+    await send(api, theirs, "Lisbon, on a Croatian passport.")
+    await api.put("/api/advisor/instructions", json={"instructions": "Talk like a sailor.\n"})
+    guest_token = api.headers[GUEST_TOKEN_HEADER]
+
+    api.headers["Authorization"] = f"Bearer {session_token(clerk_key, 'user_ada')}"
+    assert [row["id"] for row in (await api.get("/api/conversations")).json()] == [theirs]
+
+    phone = await browser("user_ada")
+    assert await transcript(phone, theirs) == [
+        ("traveler", "Lisbon, on a Croatian passport."),
+        ("advisor", "Noted."),
+    ]
+    assert [plan["destination"] for plan in (await phone.get("/api/trips")).json()] == ["Lisbon"]
+    profile = (await phone.get("/api/traveler/profile")).json()
+    assert [fact["detail"] for fact in profile] == ["Croatian"]
+    page = (await phone.get("/api/advisor/instructions")).json()
+    assert page["instructions"] == "Talk like a sailor.\n"
+    assert await session.scalar(select(func.count()).select_from(Traveler)) == 1
+
+    leftover = await api_for(settings)
+    leftover.headers[GUEST_TOKEN_HEADER] = guest_token
+    assert (await leftover.get("/api/conversations")).json() == []
+
+
+async def test_a_guest_who_signs_in_to_an_account_they_have_leaves_the_visit_behind(
+    api: httpx2.AsyncClient,
+    browser: Browser,
+    clerk_key: rsa.RSAPrivateKey,
+    session: AsyncSession,
+) -> None:
+    """Deleted by that first signed-in request, not left waiting for the sweep."""
+    laptop = await browser("user_ada")
+    kept = await start(laptop)
+    await start(api)
+    await api.put("/api/advisor/instructions", json={"instructions": "Talk like a sailor.\n"})
+
+    api.headers["Authorization"] = f"Bearer {session_token(clerk_key, 'user_ada')}"
+    assert [row["id"] for row in (await api.get("/api/conversations")).json()] == [kept]
+    assert await session.scalar(select(func.count()).select_from(Traveler)) == 1
+    page = (await api.get("/api/advisor/instructions")).json()
+    assert page["instructions"] == DEFAULT_ADVISOR_INSTRUCTIONS
 
 
 async def test_reading_the_instructions_records_nothing_until_the_first_turn(

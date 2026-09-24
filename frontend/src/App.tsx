@@ -65,6 +65,7 @@ import { useTurn } from "./stream/useTurn";
  */
 export function App({ accounts }: { accounts: Accounts }) {
   const signedIn = accounts === "signed-in";
+  const accountsAvailable = accounts !== "unavailable";
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   // Kept rather than re-read: a Trip is born mid-turn and the plan the turn
   // sends back is the whole of it, so a refetch would only say the same thing
@@ -505,7 +506,7 @@ export function App({ accounts }: { accounts: Accounts }) {
               dismiss();
               goTo("instructions");
             }}
-            signingIn={accounts !== "unavailable"}
+            signingIn={accountsAvailable}
           />
         )}
         conversation={(folded) => (
@@ -534,6 +535,7 @@ export function App({ accounts }: { accounts: Accounts }) {
                   }
                 : null
             }
+            canSignUp={accountsAvailable}
             peek={folded.peek}
           />
         )}

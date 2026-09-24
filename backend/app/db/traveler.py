@@ -2,7 +2,9 @@
 it goes away.
 
 Nothing here raises an HTTP anything and nothing here decides what a change
-means. A Profile Fact is a row, addressable on its own, so deleting one leaves
+means, bar one: what becomes of a Guest who signs in, which is only safe
+decided in the statements that carry it out (`account_holder`). A Profile Fact
+is a row, addressable on its own, so deleting one leaves
 every other exactly as it was — which is the whole of what ADR-0001 made the
 profile enumerable for.
 """
@@ -16,19 +18,43 @@ from datetime import datetime
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from .tables import FactSubject, ProfileFact, Traveler
 
 
-async def account_holder(session: AsyncSession, clerk_user_id: str) -> Traveler:
-    """The Traveler signed in as this Clerk user, made on their first request,
-    and marked as active as of now.
+async def account_holder(
+    session: AsyncSession, clerk_user_id: str, guest_token: str | None
+) -> Traveler:
+    """The Traveler signed in as this Clerk user, marked as active as of now,
+    once what becomes of the Guest this browser was until now is settled.
 
-    One statement that finds or makes them, because a first page load asks for
-    several things at once, and they must all land on one Traveler. Committed
-    here, reads included: a signed-in Traveler exists from the first request,
-    and there is no token to hand back that a refused write would lose.
+    A Clerk user with no Traveler yet takes over the Guest's, with everything
+    it holds: the same row, known from now on by the Clerk user rather than
+    the token, so nothing is copied and the token opens nothing any more. With
+    no Guest to take over, they are made a Traveler of their own. A Clerk user
+    who already has one leaves the Guest behind, deleted now rather than left
+    to the sweep.
+
+    A first page load asks for several things at once, all carrying both
+    tokens, and they must all land on one Traveler. The takeover is one
+    statement, so a second request to try it waits on the first and finds the
+    token already cleared; one statement finds or makes the Traveler, so the
+    rest find the one the first made. Committed here, reads included: a
+    signed-in Traveler exists from the first request, and there is no token to
+    hand back that a refused write would lose.
     """
+    guest = None if guest_token is None else _hashed(guest_token)
+    if guest is not None:
+        holder = aliased(Traveler)
+        await session.execute(
+            update(Traveler)
+            .where(
+                Traveler.guest_token_hash == guest,
+                ~select(holder.id).where(holder.clerk_user_id == clerk_user_id).exists(),
+            )
+            .values(clerk_user_id=clerk_user_id, guest_token_hash=None)
+        )
     found = await session.scalars(
         insert(Traveler)
         .values(clerk_user_id=clerk_user_id)
@@ -39,6 +65,10 @@ async def account_holder(session: AsyncSession, clerk_user_id: str) -> Traveler:
         execution_options={"populate_existing": True},
     )
     traveler = found.one()
+    if guest is not None:
+        # Still holding the token is what being left behind looks like: a
+        # Guest taken over above no longer does.
+        await session.execute(delete(Traveler).where(Traveler.guest_token_hash == guest))
     await session.commit()
     return traveler
 

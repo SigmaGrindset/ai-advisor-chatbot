@@ -334,8 +334,9 @@ async function request(url: string, init: RequestInit = {}): Promise<Response> {
   const bearer = clerkToken === null ? null : await clerkToken();
   if (bearer) headers.set("Authorization", `Bearer ${bearer}`);
   const response = await fetch(API_BASE_URL + url, { ...init, headers });
-  // A sign-in the server accepted wins over the Guest, who is left to the
-  // sweep. Let go of here, so signing out leaves this browser holding nothing.
+  // A sign-in the server accepted has settled the Guest, taken over by the
+  // Account or deleted, so the token opens nothing any more. Let go of here,
+  // so signing out leaves this browser holding nothing.
   if (bearer && response.ok) forgetGuest();
   const issued = response.headers.get(GUEST_TOKEN_HEADER);
   if (issued !== null) {
@@ -350,12 +351,17 @@ function forgetGuest(): void {
   stored(() => localStorage.removeItem(GUEST_TOKEN_KEY));
 }
 
-/** Somebody who has written nothing has nothing to lose, so is not told. */
+/**
+ * Whether this browser's Guest has written anything, which is what their token
+ * is handed over for. Somebody who has not has nothing to lose.
+ */
+export function guestHasWritten(): boolean {
+  return stored(() => localStorage.getItem(GUEST_TOKEN_KEY)) !== null;
+}
+
+/** Whether the notice that a Guest's work is deleted after a day is still to be put away. */
 export function guestNoticeDue(): boolean {
-  return (
-    stored(() => localStorage.getItem(GUEST_TOKEN_KEY)) !== null &&
-    stored(() => localStorage.getItem(GUEST_NOTICE_KEY)) === null
-  );
+  return guestHasWritten() && stored(() => localStorage.getItem(GUEST_NOTICE_KEY)) === null;
 }
 
 export function dismissGuestNotice(): void {

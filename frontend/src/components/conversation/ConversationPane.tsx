@@ -49,6 +49,7 @@ export function ConversationPane({
   onShowConversations,
   onShowRecord,
   onDismissNotice,
+  canSignUp,
   peek,
 }: {
   conversation: Conversation | null;
@@ -89,6 +90,8 @@ export function ConversationPane({
    * use. Null once they have, and for somebody who has written nothing.
    */
   onDismissNotice: (() => void) | null;
+  /** Whether there is an Account to sign up for: not without Clerk. */
+  canSignUp: boolean;
   /**
    * The shell's Trip Plan peek, which lives here because the composer does:
    * destination and dates stay in view above it while they type.
@@ -294,7 +297,9 @@ export function ConversationPane({
         )}
       </div>
 
-      {onDismissNotice !== null && answered && <GuestNotice onDismiss={onDismissNotice} />}
+      {onDismissNotice !== null && answered && (
+        <GuestNotice canSignUp={canSignUp} onDismiss={onDismissNotice} />
+      )}
 
       {peek}
 
@@ -452,10 +457,11 @@ function NotAnswered({
 
 /**
  * Told once, after a Guest's first reply: nothing of theirs outlasts a day
- * without use. Above the composer rather than in the transcript, because it
- * is about the application and not something the advisor said.
+ * without use, unless they sign up. Above the composer rather than in the
+ * transcript, because it is about the application and not something the
+ * advisor said.
  */
-function GuestNotice({ onDismiss }: { onDismiss: () => void }) {
+function GuestNotice({ canSignUp, onDismiss }: { canSignUp: boolean; onDismiss: () => void }) {
   return (
     <div className="shrink-0 px-4 pb-3 sm:px-6">
       <aside
@@ -465,7 +471,7 @@ function GuestNotice({ onDismiss }: { onDismiss: () => void }) {
         <Hourglass {...smallIcon} className="mt-0.5 shrink-0 text-ink-subtle" aria-hidden="true" />
         <p className="min-w-0 flex-1 text-meta text-ink">
           Everything here is deleted after a day without use — your conversations, trips,
-          profile and advisor instructions.
+          profile and advisor instructions.{canSignUp && " Signing up keeps all of it."}
         </p>
         <button
           type="button"

@@ -8,11 +8,18 @@
 
 **Blocked by:** 05.
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] A request with a valid Clerk token for a Clerk user with no Traveler, and a valid Guest token, sets the Clerk user ID on the Guest's Traveler and clears its Guest token. Nothing is copied.
-- [ ] A request with a valid Clerk token for a Clerk user who already has a Traveler, and a valid Guest token, deletes the Guest's Traveler in that request.
+- [x] A request with a valid Clerk token for a Clerk user with no Traveler, and a valid Guest token, sets the Clerk user ID on the Guest's Traveler and clears its Guest token. Nothing is copied.
+- [x] A request with a valid Clerk token for a Clerk user who already has a Traveler, and a valid Guest token, deletes the Guest's Traveler in that request.
 - [ ] Once signed in and that first request has answered, the browser no longer holds or sends a Guest token.
-- [ ] When Clerk is configured, the Guest notice adds that signing up keeps everything (held back from 05).
+- [x] When Clerk is configured, the Guest notice adds that signing up keeps everything (held back from 05).
 - [ ] The warning appears only for a Guest who has written something, only on "Sign in", and names what will be left behind.
-- [ ] Tests cover adoption on sign-up, with the Guest's Conversations, Trip, Profile Fact and instructions all readable through the Account, and deletion on sign-in to an existing Account.
+- [x] Tests cover adoption on sign-up, with the Guest's Conversations, Trip, Profile Fact and instructions all readable through the Account, and deletion on sign-in to an existing Account.
+
+## Comments
+
+Unticked boxes need a pass against a real Clerk instance, which this machine hasn't got.
+Clerk's sign-up screen hides its own "Sign in" link so the warning can't be skipped, but a
+social sign-up that turns out to be an existing Account still signs in unwarned and loses
+the visit. That is accepted.

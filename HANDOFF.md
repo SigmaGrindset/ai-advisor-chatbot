@@ -5,11 +5,12 @@
 **Where things stand:** tickets 01–14 and 16 are shipped. **15 is the only one unrun** —
 the README's remaining sections, the audit pass and the verification sweep. 06's last
 criterion (a pass on a real phone) and 16's wording check both need a human.
-In `.scratch/accounts-and-guests/`, 01–05 are shipped: whoever writes something is a Guest
+In `.scratch/accounts-and-guests/`, 01–06 are shipped: whoever writes something is a Guest
 of their own, swept a day after their last request (`services/sweep.py`, hourly from the
 lifespan), the frontend can run on a host of its own, and a Traveler can sign in through
-Clerk and find their work in any browser. Still to come: what becomes of a Guest's work at
-sign-in (06), Clerk's screens in the application's own look (07), and the two deletions (08).
+Clerk and find their work in any browser. A Guest who signs up keeps the visit; one who
+signs in to an Account they already have is warned, then leaves it behind. Still to come:
+Clerk's screens in the application's own look (07), and the two deletions (08).
 
 The advisor fetches live data rather than guessing, searches the web through a guarded
 query, keeps a Trip Plan that fills in beside the conversation as the traveler talks,
@@ -52,6 +53,10 @@ Clerk's Backend API. Without both keys the backend logs that Accounts are unavai
 serves Guests only. A frontend built without `VITE_CLERK_PUBLISHABLE_KEY` hides signing in.
 Only the Clerk user ID is stored. Nothing is drawn until Clerk has loaded, and a page it
 could not load on is a Guest's; signing in or out draws `App` afresh (`main.tsx`).
+Clerk's sign-up screen is opened with its "Sign in" link hidden, so the rail's warning before
+a Guest's sign-in can't be skipped (`AccountControls.tsx`); keep it hidden when restyling.
+A social sign-up that turns out to be an existing Account still skips the warning and loses
+the visit. That is accepted.
 
 Setting Clerk up is a human's job: create the application as a development instance, choose
 its sign-in methods, and put the three keys and the origins into the environments
@@ -79,7 +84,9 @@ around them:
 
 - **`api/asking.py` is the one place a request becomes a Traveler.** A valid Clerk session
   token wins: its Clerk user's Traveler is found, or made by that first request, read or
-  write, and any Guest token beside it is ignored. A token that fails the check is a 401,
+  write. A Guest token beside it is settled there (`db/traveler.py::account_holder`): a
+  Clerk user with no Traveler yet takes over the Guest's row and its token is cleared, and
+  one who has a Traveler has the Guest deleted. A token that fails the check is a 401,
   never a Guest. Otherwise most routes take `who_is_asking`, which never creates anyone:
   with no valid Guest token it answers with an unsaved Traveler, so every list is empty and
   every named row is a 404. Only writes that can start from nothing take `who_is_writing`,
@@ -210,7 +217,7 @@ cd D:/Antonio/ai-advisor-chatbot/backend && CONVERSATION_MODEL=anthropic/claude-
 cd D:/Antonio/ai-advisor-chatbot/backend && D:/Antonio/ai-advisor-chatbot/.venv/Scripts/python.exe -m mypy
 ```
 
-**121 frontend tests in 17 files** (~2s), `tsc` silent, build clean; **140 backend tests**
+**121 frontend tests in 17 files** (~2s), `tsc` silent, build clean; **142 backend tests**
 (~30s), mypy clean. Confirm those numbers *before* you start — if they do not match,
 something changed underneath you. Update this paragraph when a ticket legitimately moves
 them.

@@ -4,8 +4,9 @@ Every route takes the Traveler from here and hands it down, and nothing below
 this decides whose rows it is reading.
 
 A signed-in Traveler is known by Clerk's session token, and is the same
-Traveler from any browser, made on their first request. Anyone else is known
-by their Guest token, if they have one.
+Traveler from any browser: the Guest they were when they signed up, or one
+made on their first request. Anyone else is known by their Guest token, if
+they have one.
 
 It comes in two forms. Most routes take `who_is_asking`, which never makes a
 Guest: somebody who has written nothing is answered as an empty Traveler
@@ -64,12 +65,13 @@ async def _traveler(
 ) -> Traveler | None:
     """The Traveler the request's tokens name, if there is one.
 
-    A sign-in wins. A Guest token sent with it is not even looked up, so the
-    Guest it names is left to the sweep. A Guest token nobody holds any more
-    is the same as no token.
+    A sign-in wins, and a Guest token sent with it is settled there and then:
+    the Guest becomes the Account's Traveler if the Account has none yet, and
+    is deleted if it has. A Guest token nobody holds any more is the same as
+    no token.
     """
     if clerk_user is not None:
-        return await account_holder(session, clerk_user)
+        return await account_holder(session, clerk_user, guest_token)
     return None if guest_token is None else await guest_returning(session, guest_token)
 
 
