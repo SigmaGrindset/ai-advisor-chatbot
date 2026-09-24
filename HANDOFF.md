@@ -24,7 +24,7 @@ says whose problem it is and can be run again without asking the question twice.
 
 ## 1. Read these first
 
-- `CLAUDE.md` — project rules. The prompt log and the commit rule are in here.
+- `CLAUDE.md` — project rules. The commit rule is in here.
 - `CONTEXT.md` — the domain glossary. **Every term carries an `_Avoid_` list, and those
   lists bind file, module and component names.** See §3.
 - `docs/adr/` — the decisions already made

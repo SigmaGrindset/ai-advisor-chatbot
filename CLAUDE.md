@@ -1,7 +1,5 @@
 # Project notes for Claude
 
-This assignment records the development process.
-
 Rules for this project:
 
 - **Committing is my decision — do not run `git add`, `git commit`, or any
