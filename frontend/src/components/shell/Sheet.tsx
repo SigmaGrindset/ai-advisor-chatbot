@@ -104,6 +104,15 @@ export function Sheet({
     },
   });
 
+  // Inside this dialog but not in the panel: Clerk's screens and its menu,
+  // which `AccountControls` draws here because nothing outside a modal dialog
+  // can be reached while it is open. Their keys are theirs to act on.
+  const drawnOver = (node: unknown) =>
+    node instanceof Node &&
+    node !== frame.current &&
+    frame.current?.contains(node) === true &&
+    panel.current?.contains(node) === false;
+
   // Nothing eases while a thumb is on it: a sheet lagging behind the finger
   // does not read as a sheet being dragged.
   const following = dragging ? "0ms" : undefined;
@@ -127,6 +136,9 @@ export function Sheet({
         // front of — a row putting its own actions away would take the whole
         // sheet with it. Stopped here, one press is one thing.
         pressed.preventDefault();
+        // Pressed in something drawn over the panel, the key goes on to it,
+        // and only the dialog's own close request stays held back.
+        if (drawnOver(pressed.target)) return;
         pressed.stopPropagation();
         onClose();
       }}
@@ -134,6 +146,10 @@ export function Sheet({
         // Every other way of asking for this to close: a phone's back
         // gesture, a hardware back button, whatever a browser adds next.
         asked.preventDefault();
+        // Not from under one of Clerk's screens, which would stay open,
+        // unseen, holding the rest of the page inert — unless the browser
+        // will close the dialog regardless, when the sheet has to follow it.
+        if (asked.cancelable && drawnOver(document.activeElement)) return;
         onClose();
       }}
     >

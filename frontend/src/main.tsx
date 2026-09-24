@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 
 import { askClerkWith } from "./api/client";
 import { App } from "./App";
+import { appearance } from "./components/account/appearance";
 import "./design/base.css";
 
 /**
@@ -31,7 +32,7 @@ if (!container) throw new Error("No #root element to mount into");
 createRoot(container).render(
   <StrictMode>
     {CLERK_PUBLISHABLE_KEY ? (
-      <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>
+      <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} appearance={appearance}>
         {/* Nothing is drawn until Clerk has said who is signed in, so nothing
             is read, or written, as anyone else. */}
         <ClerkLoaded>

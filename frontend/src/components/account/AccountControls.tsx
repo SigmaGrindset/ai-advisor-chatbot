@@ -1,6 +1,6 @@
-import { Show, UserButton, useClerk } from "@clerk/react";
+import { Show, UNSAFE_PortalProvider, UserButton, useClerk } from "@clerk/react";
 import { LogIn } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { guestHasWritten } from "../../api/client";
 import { smallIcon } from "../../design/icons";
@@ -20,16 +20,25 @@ import { smallIcon } from "../../design/icons";
 export function AccountControls() {
   const clerk = useClerk();
   const [confirming, setConfirming] = useState(false);
+  const here = useRef<HTMLDivElement>(null);
+
+  // Where Clerk draws. On a phone or a tablet these controls stand in the
+  // conversations sheet, a modal dialog the browser keeps above everything
+  // else and makes everything else inert, so Clerk's screens and its menu are
+  // drawn inside that dialog. Anywhere else, null leaves them on the page.
+  const within = () => here.current?.closest("dialog") ?? null;
 
   // Without Clerk's own link across to signing in, which would sign a Guest
   // in without being asked. Somebody with an Account signs in from here.
   const signUp = () =>
     clerk.openSignUp({
+      getContainer: within,
       appearance: { elements: { footerAction__signIn: { display: "none" } } },
     });
+  const signIn = () => clerk.openSignIn({ getContainer: within });
 
   return (
-    <>
+    <div ref={here} className="contents">
       <Show when="signed-out">
         {confirming ? (
           <LeavingBehind
@@ -39,7 +48,7 @@ export function AccountControls() {
             }}
             onSignIn={() => {
               setConfirming(false);
-              clerk.openSignIn();
+              signIn();
             }}
             onCancel={() => setConfirming(false)}
           />
@@ -58,7 +67,7 @@ export function AccountControls() {
               // Asked when they press it rather than when it is drawn: the
               // token that says they have written something arrives in a
               // response, not through React.
-              onClick={() => (guestHasWritten() ? setConfirming(true) : clerk.openSignIn())}
+              onClick={() => (guestHasWritten() ? setConfirming(true) : signIn())}
             >
               <LogIn {...smallIcon} aria-hidden="true" />
               Sign in
@@ -67,9 +76,12 @@ export function AccountControls() {
         )}
       </Show>
       <Show when="signed-in">
-        <UserButton showName />
+        {/* The menu, and the account screen it opens, drawn where the button is. */}
+        <UNSAFE_PortalProvider getContainer={within}>
+          <UserButton showName />
+        </UNSAFE_PortalProvider>
       </Show>
-    </>
+    </div>
   );
 }
 

@@ -5,12 +5,12 @@
 **Where things stand:** tickets 01–14 and 16 are shipped. **15 is the only one unrun** —
 the README's remaining sections, the audit pass and the verification sweep. 06's last
 criterion (a pass on a real phone) and 16's wording check both need a human.
-In `.scratch/accounts-and-guests/`, 01–06 are shipped: whoever writes something is a Guest
+In `.scratch/accounts-and-guests/`, 01–07 are shipped: whoever writes something is a Guest
 of their own, swept a day after their last request (`services/sweep.py`, hourly from the
 lifespan), the frontend can run on a host of its own, and a Traveler can sign in through
 Clerk and find their work in any browser. A Guest who signs up keeps the visit; one who
-signs in to an Account they already have is warned, then leaves it behind. Still to come:
-Clerk's screens in the application's own look (07), and the two deletions (08).
+signs in to an Account they already have is warned, then leaves it behind. Clerk's screens
+are drawn in the application's own look. Still to come: the two deletions (08).
 
 The advisor fetches live data rather than guessing, searches the web through a guarded
 query, keeps a Trip Plan that fills in beside the conversation as the traveler talks,
@@ -57,10 +57,15 @@ Clerk's sign-up screen is opened with its "Sign in" link hidden, so the rail's w
 a Guest's sign-in can't be skipped (`AccountControls.tsx`); keep it hidden when restyling.
 A social sign-up that turns out to be an existing Account still skips the warning and loses
 the visit. That is accepted.
+Clerk's screens are styled in `account/appearance.ts`: variables name tokens as custom
+properties, so a theme switch reaches an open modal, and element classes win because Clerk's
+CSS sits in the `clerk` layer below the utilities (`base.css`). Inside a sheet, Clerk draws
+into the sheet's dialog (`AccountControls.tsx`), and `Sheet.tsx` leaves Escape to it.
 
 Setting Clerk up is a human's job: create the application as a development instance, choose
-its sign-in methods, and put the three keys and the origins into the environments
-(`.env.example`; compose passes them through, the publishable key as a build argument).
+its sign-in methods, set its default avatar's colours, and put the three keys and the origins
+into the environments (`.env.example`; compose passes them through, the publishable key as a
+build argument).
 
 ### Backend — `backend/app/`
 

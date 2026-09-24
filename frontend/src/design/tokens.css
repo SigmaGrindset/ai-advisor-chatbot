@@ -245,6 +245,9 @@
      because a thumb is allowed to interrupt it halfway. This is only how
      long it takes when nobody does. */
   --duration-sheet: 260ms;
+  /* Clerk's screens arrive as a sheet on a phone too, but one no thumb can
+     take hold of, so the same travel is an animation. */
+  --animate-sheet: sheet var(--duration-sheet) var(--ease-panel);
 }
 
 @keyframes caret {
@@ -265,6 +268,15 @@
   }
   to {
     opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sheet {
+  from {
+    transform: translateY(100%);
+  }
+  to {
     transform: none;
   }
 }

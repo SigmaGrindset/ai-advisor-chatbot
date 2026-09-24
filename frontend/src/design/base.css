@@ -1,3 +1,11 @@
+/* Clerk's screens bring their own stylesheet, which it puts in a cascade layer
+   of its own (`cssLayerName` in `account/appearance.ts`). Named here, before
+   anything else declares a layer, so it stands above Tailwind's reset, which
+   would otherwise unpick Clerk's layout, and below the utilities, so the
+   application's own classes handed to Clerk's elements win over its styles
+   whatever their selectors. */
+@layer theme, base, clerk, components, utilities;
+
 @import "tailwindcss";
 
 /* The typefaces are part of the build, not a request to a font service. The
