@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 
 import {
   addItineraryItem,
@@ -8,7 +8,9 @@ import {
   clearEverything,
   deleteConversation,
   deleteTrip,
+  dismissGuestNotice,
   forgetProfileFact,
+  guestNoticeDue,
   listConversations,
   listTrips,
   readConversation,
@@ -94,6 +96,11 @@ export function App() {
   useEffect(() => {
     showingTab.current = tab;
   }, [tab]);
+
+  // Whether the Guest notice is due is read from storage on every render rather
+  // than held here: the token it is kept against arrives in a response, not
+  // through React. Putting it away only needs a render to notice.
+  const [, noticeDismissed] = useReducer((dismissals: number) => dismissals + 1, 0);
 
   const plan = usePlanHolding();
   const route = useRoute();
@@ -514,6 +521,14 @@ export function App() {
             onAskAgain={turn.again}
             onShowConversations={folded.conversations}
             onShowRecord={folded.record}
+            onDismissNotice={
+              guestNoticeDue()
+                ? () => {
+                    dismissGuestNotice();
+                    noticeDismissed();
+                  }
+                : null
+            }
             peek={folded.peek}
           />
         )}

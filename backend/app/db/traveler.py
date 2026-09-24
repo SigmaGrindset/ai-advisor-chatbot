@@ -11,19 +11,49 @@ import hashlib
 import secrets
 import uuid
 from collections.abc import Sequence
+from datetime import datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .tables import FactSubject, ProfileFact, Traveler
 
 
-async def guest_holding(session: AsyncSession, token: str) -> Traveler | None:
-    """The Guest this token was handed to, if they are still here."""
+async def guest_returning(session: AsyncSession, token: str) -> Traveler | None:
+    """The Guest this token was handed to, if they are still here, marked as
+    active as of now.
+
+    Found by the update itself rather than read and then updated, so a sweep
+    between the two cannot delete them underneath the request. Committed here
+    because most requests never write, and a read is still use.
+    """
     guest: Traveler | None = await session.scalar(
-        select(Traveler).where(Traveler.guest_token_hash == _hashed(token))
+        update(Traveler)
+        .where(Traveler.guest_token_hash == _hashed(token))
+        .values(last_active_at=func.now())
+        .returning(Traveler)
     )
+    await session.commit()
     return guest
+
+
+async def forget_guests_idle_since(session: AsyncSession, since: datetime) -> int:
+    """Delete every Guest who has made no request since then, with everything
+    they own, and say how many went.
+
+    Only a Traveler holding a Guest token can match. An Account's Traveler
+    never holds one, so no Account is ever swept.
+    """
+    swept = await session.scalars(
+        delete(Traveler)
+        .where(Traveler.guest_token_hash.is_not(None), Traveler.last_active_at < since)
+        .returning(Traveler.id)
+    )
+    count = len(swept.all())
+    await session.commit()
+    # Same reason as `erase_everything`: the cascade went round the session.
+    session.expunge_all()
+    return count
 
 
 async def begin_guest(session: AsyncSession) -> tuple[Traveler, str]:

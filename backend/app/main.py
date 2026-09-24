@@ -1,8 +1,9 @@
 """The application: API, built frontend, and the resources both need."""
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import async_sessionmaker
@@ -12,6 +13,7 @@ from .config import Settings
 from .db.connection import apply_schema, create_engine
 from .frontend import mount_frontend
 from .privacy.outbound import create_http_client
+from .services.sweep import sweep_every_hour
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
@@ -29,9 +31,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.engine = engine
     app.state.session_factory = async_sessionmaker(engine, expire_on_commit=False)
     app.state.http_client = create_http_client()
+    sweeping = asyncio.create_task(sweep_every_hour(app.state.session_factory))
     try:
         yield
     finally:
+        sweeping.cancel()
+        with suppress(asyncio.CancelledError):
+            await sweeping
         await app.state.http_client.aclose()
         await engine.dispose()
 

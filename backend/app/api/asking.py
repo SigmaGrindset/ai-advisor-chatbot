@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.connection import get_session
 from ..db.tables import Traveler
-from ..db.traveler import begin_guest, guest_holding
+from ..db.traveler import begin_guest, guest_returning
 
 #: Where a Guest's token travels, both ways. Never logged, and never in a URL,
 #: where an access log would keep it.
@@ -31,7 +31,7 @@ async def _guest(
 ) -> Traveler | None:
     """The Guest whose token came with the request. A token nobody holds any
     more is the same as no token."""
-    return None if guest_token is None else await guest_holding(session, guest_token)
+    return None if guest_token is None else await guest_returning(session, guest_token)
 
 
 async def who_is_asking(guest: Traveler | None = Depends(_guest)) -> Traveler:

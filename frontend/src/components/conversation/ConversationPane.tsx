@@ -1,5 +1,17 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowDownLeft, Check, Copy, MapPinned, PanelLeft, Radar, RotateCcw, TriangleAlert } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowDownLeft,
+  Check,
+  Copy,
+  Hourglass,
+  MapPinned,
+  PanelLeft,
+  Radar,
+  RotateCcw,
+  TriangleAlert,
+  X,
+} from "lucide-react";
 
 import { settled } from "./announcing";
 import type { Citation, Conversation, Failure, Message } from "../../api/types";
@@ -36,6 +48,7 @@ export function ConversationPane({
   onAskAgain,
   onShowConversations,
   onShowRecord,
+  onDismissNotice,
   peek,
 }: {
   conversation: Conversation | null;
@@ -71,6 +84,11 @@ export function ConversationPane({
    */
   onShowConversations: (() => void) | null;
   onShowRecord: (() => void) | null;
+  /**
+   * Puts away the notice that a Guest's work is deleted after a day without
+   * use. Null once they have, and for somebody who has written nothing.
+   */
+  onDismissNotice: (() => void) | null;
   /**
    * The shell's Trip Plan peek, which lives here because the composer does:
    * destination and dates stay in view above it while they type.
@@ -140,6 +158,9 @@ export function ConversationPane({
 
   const untouched =
     said.length === 0 && arriving === null && unrecorded === null && stopped === null;
+  // From `shown` rather than `said`, so the notice waits until the first reply
+  // has finished being drawn rather than landing in the middle of it.
+  const answered = shown.some((message) => message.role === "advisor" && message.failure === null);
 
   return (
     // `tabIndex` so focus lands here when the skip link is followed: a browser
@@ -272,6 +293,8 @@ export function ConversationPane({
           </button>
         )}
       </div>
+
+      {onDismissNotice !== null && answered && <GuestNotice onDismiss={onDismissNotice} />}
 
       {peek}
 
@@ -423,6 +446,36 @@ function NotAnswered({
           Ask again
         </button>
       )}
+    </div>
+  );
+}
+
+/**
+ * Told once, after a Guest's first reply: nothing of theirs outlasts a day
+ * without use. Above the composer rather than in the transcript, because it
+ * is about the application and not something the advisor said.
+ */
+function GuestNotice({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <div className="shrink-0 px-4 pb-3 sm:px-6">
+      <aside
+        aria-label="Keeping your work"
+        className="mx-auto flex max-w-reading animate-panel items-start gap-3 rounded-panel border border-line bg-surface py-3 ps-4 pe-2 shadow-raised"
+      >
+        <Hourglass {...smallIcon} className="mt-0.5 shrink-0 text-ink-subtle" aria-hidden="true" />
+        <p className="min-w-0 flex-1 text-meta text-ink">
+          Everything here is deleted after a day without use — your conversations, trips,
+          profile and advisor instructions.
+        </p>
+        <button
+          type="button"
+          aria-label="Dismiss"
+          className="-my-1 shrink-0 rounded-control p-1 text-ink-subtle pressable hover:bg-sunken hover:text-ink"
+          onClick={onDismiss}
+        >
+          <X {...smallIcon} aria-hidden="true" />
+        </button>
+      </aside>
     </div>
   );
 }

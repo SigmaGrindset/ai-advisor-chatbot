@@ -19,5 +19,6 @@
 - [ ] Signing out leaves the browser with no token of either kind, and the application reads as empty. Signing back in brings everything back.
 - [ ] Settings gain the Clerk public key and secret key. Without them, the backend starts, logs that Accounts are unavailable, and serves Guests only. A frontend built without a publishable key hides the sign-in controls.
 - [ ] Neither kind of token appears in a log.
-- [ ] Tests sign their own session tokens with a test key whose public half is in the test settings, so the real verification runs. They cover finding and creating an Account's Traveler, isolation between Accounts, and the 401.
+- [ ] When Clerk is configured, the Guest notice adds that signing up keeps everything. The Profile panel's line about keeping data mentions the day without use only to a Guest.
+- [ ] Tests sign their own session tokens with a test key whose public half is in the test settings, so the real verification runs. They cover finding and creating an Account's Traveler, isolation between Accounts, the 401, and the sweep leaving an Account idle for a day untouched.
 - [ ] `HANDOFF.md` covers Clerk and its settings. The original spec's out-of-scope line about authentication and multiple travelers no longer claims either is out of scope.

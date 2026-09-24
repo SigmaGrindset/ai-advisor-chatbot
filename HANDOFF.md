@@ -5,8 +5,9 @@
 **Where things stand:** tickets 01–14 and 16 are shipped. **15 is the only one unrun** —
 the README's remaining sections, the audit pass and the verification sweep. 06's last
 criterion (a pass on a real phone) and 16's wording check both need a human.
-In `.scratch/accounts-and-guests/`, 01–02 are shipped: whoever writes something is a Guest
-of their own. Expiry, Clerk Accounts and the split hosts (03–08) are still to come.
+In `.scratch/accounts-and-guests/`, 01–03 are shipped: whoever writes something is a Guest
+of their own, swept a day after their last request (`services/sweep.py`, hourly from the
+lifespan). Clerk Accounts and the split hosts (04–08) are still to come.
 
 The advisor fetches live data rather than guessing, searches the web through a guarded
 query, keeps a Trip Plan that fills in beside the conversation as the traveler talks,
@@ -180,7 +181,7 @@ cd D:/Antonio/ai-advisor-chatbot/backend && CONVERSATION_MODEL=anthropic/claude-
 cd D:/Antonio/ai-advisor-chatbot/backend && D:/Antonio/ai-advisor-chatbot/.venv/Scripts/python.exe -m mypy
 ```
 
-**121 frontend tests in 17 files** (~2s), `tsc` silent, build clean; **130 backend tests**
+**121 frontend tests in 17 files** (~2s), `tsc` silent, build clean; **131 backend tests**
 (~28s), mypy clean. Confirm those numbers *before* you start — if they do not match,
 something changed underneath you. Update this paragraph when a ticket legitimately moves
 them.

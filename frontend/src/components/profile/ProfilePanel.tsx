@@ -121,7 +121,7 @@ function Erasing({ onClear }: { onClear: () => void }) {
         <>
           <p className="text-meta text-ink-subtle">
             Your conversations, your trips and this profile are kept until you delete
-            them.
+            them, or until a day passes without you using the application.
           </p>
           <button
             type="button"

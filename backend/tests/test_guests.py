@@ -2,21 +2,24 @@
 
 Each test client is a browser, keeping the Guest token a write hands it, so
 two clients are two Guests. What is asserted is what each of them can see and
-change — and, for somebody who has only looked, that nothing was stored.
+change — and, for somebody who has only looked, that nothing was stored. The
+sweep is run by hand, at whatever "now" the test needs.
 """
 
 import json
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx2
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.advisor.instructions import DEFAULT_ADVISOR_INSTRUCTIONS
 from app.api.asking import GUEST_TOKEN_HEADER
 from app.config import Settings
 from app.db.tables import Traveler
+from app.services.sweep import sweep_idle_guests
 
 from .conftest import ApiFactory
 from .fakes.canned_model import CannedModel, calling, content, finish, wants_tools
@@ -112,6 +115,35 @@ async def test_two_guests_never_see_or_change_each_others_work(
     assert (await api.get("/api/traveler/profile")).json() == [fact]
     mine = (await api.get("/api/advisor/instructions")).json()
     assert mine["instructions"] == "Talk like a sailor.\n"
+
+
+async def test_a_guest_a_day_without_use_is_swept_and_one_who_came_back_is_not(
+    api: httpx2.AsyncClient, api_for: ApiFactory, settings: Settings, session: AsyncSession
+) -> None:
+    """Any request is use, a read included, and a swept Guest's token reads as nobody's."""
+    gone = await start(api)
+    await api.put("/api/advisor/instructions", json={"instructions": "Talk like a sailor.\n"})
+    returning = await api_for(settings)
+    kept = await start(returning)
+
+    # Both went quiet a day and an hour ago, and then one of them only looked.
+    await session.execute(
+        update(Traveler).values(last_active_at=Traveler.last_active_at - timedelta(hours=25))
+    )
+    await returning.get("/api/trips")
+
+    await sweep_idle_guests(session, datetime.now(UTC))
+
+    assert (await api.get("/api/conversations")).json() == []
+    assert (await api.get(f"/api/conversations/{gone}")).status_code == 404
+    page = (await api.get("/api/advisor/instructions")).json()
+    assert page["instructions"] == DEFAULT_ADVISOR_INSTRUCTIONS
+    assert [row["id"] for row in (await returning.get("/api/conversations")).json()] == [kept]
+
+    # Coming back after the sweep is a new visit, with a new token.
+    swept_token = api.headers[GUEST_TOKEN_HEADER]
+    started = await api.post("/api/conversations")
+    assert started.headers[GUEST_TOKEN_HEADER] != swept_token
 
 
 async def test_reading_the_instructions_records_nothing_until_the_first_turn(

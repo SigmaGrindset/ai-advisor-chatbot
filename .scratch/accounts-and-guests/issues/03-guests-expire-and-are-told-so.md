@@ -4,12 +4,16 @@
 
 **Blocked by:** 02.
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] The Traveler row gains a last-active timestamp, updated by every request that carries a valid Guest token, reads included.
-- [ ] The sweep deletes every Traveler identified by a Guest token whose last activity is more than 24 hours before the given "now". Everything they own goes on the existing cascades.
-- [ ] An Account's Traveler never holds a Guest token (05 creates it without one, and 06 clears it on adoption), so the sweep can never touch an Account.
-- [ ] The hourly timer starts and stops with the application, and a failing sweep logs and waits for the next hour rather than taking the application down.
-- [ ] A test moves a Guest's last activity back 25 hours, runs the sweep, and finds over HTTP that the Guest's token now reads as empty, while a recently active Guest is spared.
-- [ ] The notice appears after a Guest's first completed turn, once per Guest. A new Guest after a deleted visit sees it again. It's remembered in the browser against that Guest's token.
-- [ ] The notice matches the application's design in light and dark, on desktop and phone.
+- [x] The Traveler row gains a last-active timestamp, updated by every request that carries a valid Guest token, reads included.
+- [x] The sweep deletes every Traveler identified by a Guest token whose last activity is more than 24 hours before the given "now". Everything they own goes on the existing cascades.
+- [x] An Account's Traveler never holds a Guest token (05 creates it without one, and 06 clears it on adoption), so the sweep can never touch an Account.
+- [x] The hourly timer starts and stops with the application, and a failing sweep logs and waits for the next hour rather than taking the application down.
+- [x] A test moves a Guest's last activity back 25 hours, runs the sweep, and finds over HTTP that the Guest's token now reads as empty, while a recently active Guest is spared.
+- [x] The notice appears after a Guest's first completed turn, once per Guest. A new Guest after a deleted visit sees it again. It's remembered in the browser against that Guest's token.
+- [x] The notice matches the application's design in light and dark, on desktop and phone.
+
+## Comments
+
+The notice leaves out "signing up keeps it", since there is nothing to sign up with yet: 05 adds that clause, shown only when Clerk is configured, and extends the sweep test with an Account that is spared.

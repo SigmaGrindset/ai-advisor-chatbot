@@ -292,6 +292,13 @@ const GUEST_TOKEN_KEY = "travel-advisor.guest-token";
 const GUEST_TOKEN_HEADER = "X-Guest-Token";
 
 /**
+ * Whether this browser's Guest has put away the notice that their work is
+ * deleted after a day without use. Kept against their token: a new one clears
+ * it, so a Guest whose visit was swept or deleted is told again on the next.
+ */
+const GUEST_NOTICE_KEY = "travel-advisor.guest-notice-dismissed";
+
+/**
  * `fetch`, as this browser's Traveler. The token goes with every request, the
  * streamed turn included, and one the response hands back replaces it. Read
  * afresh each time, so a Guest begun in another tab is the one asking here.
@@ -302,12 +309,28 @@ async function request(url: string, init: RequestInit = {}): Promise<Response> {
   if (token) headers.set(GUEST_TOKEN_HEADER, token);
   const response = await fetch(url, { ...init, headers });
   const issued = response.headers.get(GUEST_TOKEN_HEADER);
-  if (issued !== null) stored(() => localStorage.setItem(GUEST_TOKEN_KEY, issued));
+  if (issued !== null) {
+    stored(() => localStorage.setItem(GUEST_TOKEN_KEY, issued));
+    // A new token is a new Guest, who has not been told yet.
+    stored(() => localStorage.removeItem(GUEST_NOTICE_KEY));
+  }
   return response;
 }
 
 function forgetGuest(): void {
   stored(() => localStorage.removeItem(GUEST_TOKEN_KEY));
+}
+
+/** Somebody who has written nothing has nothing to lose, so is not told. */
+export function guestNoticeDue(): boolean {
+  return (
+    stored(() => localStorage.getItem(GUEST_TOKEN_KEY)) !== null &&
+    stored(() => localStorage.getItem(GUEST_NOTICE_KEY)) === null
+  );
+}
+
+export function dismissGuestNotice(): void {
+  stored(() => localStorage.setItem(GUEST_NOTICE_KEY, "dismissed"));
 }
 
 /**

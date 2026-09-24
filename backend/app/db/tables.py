@@ -42,6 +42,11 @@ class Traveler(Base):
     #: How a Guest is known again: the hash of the token their browser holds,
     #: never the token, so a copy of this table identifies nobody.
     guest_token_hash: Mapped[str | None] = mapped_column(Text, unique=True, nullable=True)
+    #: When a request last came from this Traveler, reads included. What the
+    #: sweep measures a Guest's day without use from.
+    last_active_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
     #: The next number to list a Profile Fact under, counted here so a number
     #: is never handed out twice — see `Trip.next_item_ref`.
     next_fact_ref: Mapped[int] = mapped_column(
