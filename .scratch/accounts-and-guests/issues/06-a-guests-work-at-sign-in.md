@@ -13,5 +13,6 @@
 - [ ] A request with a valid Clerk token for a Clerk user with no Traveler, and a valid Guest token, sets the Clerk user ID on the Guest's Traveler and clears its Guest token. Nothing is copied.
 - [ ] A request with a valid Clerk token for a Clerk user who already has a Traveler, and a valid Guest token, deletes the Guest's Traveler in that request.
 - [ ] Once signed in and that first request has answered, the browser no longer holds or sends a Guest token.
+- [ ] When Clerk is configured, the Guest notice adds that signing up keeps everything (held back from 05).
 - [ ] The warning appears only for a Guest who has written something, only on "Sign in", and names what will be left behind.
 - [ ] Tests cover adoption on sign-up, with the Guest's Conversations, Trip, Profile Fact and instructions all readable through the Account, and deletion on sign-in to an existing Account.

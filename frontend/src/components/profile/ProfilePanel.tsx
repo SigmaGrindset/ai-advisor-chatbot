@@ -18,11 +18,14 @@ import { factSaid, inReadingOrder, SUBJECT_LABELS } from "./listing";
  */
 export function ProfilePanel({
   profile,
+  guest,
   onForget,
   onClear,
 }: {
   /** Everything the advisor knows, as the server last said it. */
   profile: ProfileFact[];
+  /** Whether they are a Guest, whose work also goes after a day without use. */
+  guest: boolean;
   /** Delete one fact, and only that one. */
   onForget: (factId: string) => void;
   /** Delete every Conversation, every Trip and the whole profile. */
@@ -64,7 +67,7 @@ export function ProfilePanel({
         </dl>
       )}
 
-      <Erasing onClear={onClear} />
+      <Erasing guest={guest} onClear={onClear} />
     </div>
   );
 }
@@ -74,7 +77,7 @@ export function ProfilePanel({
  * two-step the Conversation list deletes a row with, this being that decision
  * about everything at once.
  */
-function Erasing({ onClear }: { onClear: () => void }) {
+function Erasing({ guest, onClear }: { guest: boolean; onClear: () => void }) {
   const [confirming, setConfirming] = useState(false);
 
   return (
@@ -121,7 +124,7 @@ function Erasing({ onClear }: { onClear: () => void }) {
         <>
           <p className="text-meta text-ink-subtle">
             Your conversations, your trips and this profile are kept until you delete
-            them, or until a day passes without you using the application.
+            them{guest && ", or until a day passes without you using the application"}.
           </p>
           <button
             type="button"

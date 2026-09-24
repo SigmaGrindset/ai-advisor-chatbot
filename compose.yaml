@@ -17,7 +17,11 @@ services:
       - pgdata:/var/lib/postgresql/data
 
   app:
-    build: .
+    build:
+      context: .
+      args:
+        # Built into the bundle, which is public anyway. Empty hides signing in.
+        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-}
     depends_on:
       db:
         # Wait for Postgres to answer, rather than racing it and restarting.
@@ -32,6 +36,8 @@ services:
       CONVERSATION_MODEL:
       UTILITY_MODEL:
       FRONTEND_ORIGINS:
+      CLERK_PUBLIC_KEY:
+      CLERK_SECRET_KEY:
     ports:
       - "${APP_PORT:-8000}:8000"
     healthcheck:

@@ -30,10 +30,28 @@ class Settings(BaseSettings):
     #: titles, Compaction summaries, and the nested web search.
     utility_model: str = "anthropic/claude-haiku-4.5"
     static_dir: Path = _CHECKOUT_ROOT / "frontend" / "dist"
-    #: The origins a frontend on a host of its own may call the API from,
-    #: comma-separated in the environment. None by default: the combined image
-    #: serves the frontend on the API's own origin, which needs no CORS.
+    #: The origins the frontend is served from, comma-separated in the
+    #: environment. A frontend on a host of its own may call the API from these,
+    #: and a Clerk session token is only accepted if it was issued to one of
+    #: them. None by default: the combined image serves the frontend on the
+    #: API's own origin, which needs no CORS, but with Accounts on it lists
+    #: that origin here too.
     frontend_origins: Annotated[list[str], NoDecode] = []
+    #: The Clerk instance's public key, as PEM, which session tokens are checked
+    #: against offline. Accounts need it and the secret key; without both,
+    #: everyone is a Guest.
+    clerk_public_key: str | None = None
+    #: For Clerk's Backend API.
+    clerk_secret_key: str | None = None
+
+    @field_validator("clerk_public_key", mode="before")
+    @classmethod
+    def _unescaped(cls, value: object) -> object:
+        # A PEM spans lines, which a one-line environment field often holds as
+        # a literal "\n".
+        if isinstance(value, str):
+            return value.replace("\\n", "\n")
+        return value
 
     @field_validator("frontend_origins", mode="before")
     @classmethod

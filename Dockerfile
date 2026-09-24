@@ -5,6 +5,9 @@
 # the browser never makes a cross-origin request.
 
 FROM node:22-alpine AS frontend
+# Clerk's publishable key, if there are Accounts. Vite reads it from the build's
+# environment; without it the bundle hides signing in.
+ARG VITE_CLERK_PUBLISHABLE_KEY=""
 WORKDIR /build
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci

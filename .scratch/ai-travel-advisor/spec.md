@@ -32,7 +32,6 @@ on their own page, and changes take effect on the next message.
 
 ## Out of Scope
 
-- Authentication, user accounts, and multiple travelers in one deployment.
 - Dark mode. Token naming accommodates it; the theme is not built.
 - Frontend unit tests, component tests, and browser end-to-end tests.
 - Touch gestures such as swipe-to-delete, beyond a sheet's own standard dismissal.

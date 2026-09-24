@@ -5,10 +5,11 @@
 **Where things stand:** tickets 01–14 and 16 are shipped. **15 is the only one unrun** —
 the README's remaining sections, the audit pass and the verification sweep. 06's last
 criterion (a pass on a real phone) and 16's wording check both need a human.
-In `.scratch/accounts-and-guests/`, 01–04 are shipped: whoever writes something is a Guest
+In `.scratch/accounts-and-guests/`, 01–05 are shipped: whoever writes something is a Guest
 of their own, swept a day after their last request (`services/sweep.py`, hourly from the
-lifespan), and the frontend can run on a host of its own. Clerk Accounts (05–08) are still
-to come.
+lifespan), the frontend can run on a host of its own, and a Traveler can sign in through
+Clerk and find their work in any browser. Still to come: what becomes of a Guest's work at
+sign-in (06), Clerk's screens in the application's own look (07), and the two deletions (08).
 
 The advisor fetches live data rather than guessing, searches the web through a guarded
 query, keeps a Trip Plan that fills in beside the conversation as the traveler talks,
@@ -42,6 +43,20 @@ It runs two ways:
 
 Postgres holds everything; the schema is applied at startup, so there is no migration step.
 
+**Accounts go through a Clerk development instance**, by decision: nothing may cost money
+apart from the OpenRouter key. The browser sends Clerk's session token as a bearer
+`Authorization` header. `api/clerk.py` checks it offline against `CLERK_PUBLIC_KEY` (the
+dashboard's PEM key), and checks that it was issued to one of `FRONTEND_ORIGINS`, so the
+combined image lists its own origin there once Accounts are on. `CLERK_SECRET_KEY` is for
+Clerk's Backend API. Without both keys the backend logs that Accounts are unavailable and
+serves Guests only. A frontend built without `VITE_CLERK_PUBLISHABLE_KEY` hides signing in.
+Only the Clerk user ID is stored. Nothing is drawn until Clerk has loaded, and a page it
+could not load on is a Guest's; signing in or out draws `App` afresh (`main.tsx`).
+
+Setting Clerk up is a human's job: create the application as a development instance, choose
+its sign-in methods, and put the three keys and the origins into the environments
+(`.env.example`; compose passes them through, the publishable key as a build argument).
+
 ### Backend — `backend/app/`
 
 | Layer | Holds |
@@ -62,12 +77,16 @@ This is **not** enforced by a test, deliberately — see §4.
 These seams do most of the design work, and new features should join them rather than go
 around them:
 
-- **`api/asking.py` is the one place a request becomes a Traveler.** Most routes take
-  `who_is_asking`, which never creates anyone: with no valid Guest token it answers with an
-  unsaved Traveler, so every list is empty and every named row is a 404. Only writes that can
-  start from nothing take `who_is_writing`, which makes a Guest, committed with that write,
-  and returns their token once in `X-Guest-Token`; only its hash is stored. The browser keeps it in local storage and
-  sends it on every request (`frontend/src/api/client.ts::request`).
+- **`api/asking.py` is the one place a request becomes a Traveler.** A valid Clerk session
+  token wins: its Clerk user's Traveler is found, or made by that first request, read or
+  write, and any Guest token beside it is ignored. A token that fails the check is a 401,
+  never a Guest. Otherwise most routes take `who_is_asking`, which never creates anyone:
+  with no valid Guest token it answers with an unsaved Traveler, so every list is empty and
+  every named row is a 404. Only writes that can start from nothing take `who_is_writing`,
+  which makes a Guest, committed with that write, and returns their token once in
+  `X-Guest-Token`; only its hash is stored. The browser keeps it in local storage and sends
+  it on every request, and lets go of it once a signed-in request succeeds
+  (`frontend/src/api/client.ts::request`).
 - **`services/turns.py` yields what happened, not what to send.** The wire format stays in
   `api/`, so a tool call or a Trip Plan patch can be added to a turn without the HTTP
   response shape being decided in the service.
@@ -191,8 +210,8 @@ cd D:/Antonio/ai-advisor-chatbot/backend && CONVERSATION_MODEL=anthropic/claude-
 cd D:/Antonio/ai-advisor-chatbot/backend && D:/Antonio/ai-advisor-chatbot/.venv/Scripts/python.exe -m mypy
 ```
 
-**121 frontend tests in 17 files** (~2s), `tsc` silent, build clean; **134 backend tests**
-(~28s), mypy clean. Confirm those numbers *before* you start — if they do not match,
+**121 frontend tests in 17 files** (~2s), `tsc` silent, build clean; **140 backend tests**
+(~30s), mypy clean. Confirm those numbers *before* you start — if they do not match,
 something changed underneath you. Update this paragraph when a ticket legitimately moves
 them.
 
@@ -233,6 +252,10 @@ the other address. `netstat -ano | grep :8000`, then check the PID is the one yo
   Without that variable the dev server proxies `/api` and stays on one origin.
   `.dockerignore` keeps every `.env*` out of the image, so the combined build always has
   an empty base URL.
+- Signing in under the dev server: Vite reads env files from `frontend/`, not the root
+  `.env`, so `VITE_CLERK_PUBLISHABLE_KEY` goes in `frontend/.env` or the command line.
+  The page's origin, `http://localhost:5173`, must be in the backend's `FRONTEND_ORIGINS`
+  even when the proxy keeps it on one origin, or every sign-in is refused.
 
 ## 7. Open questions — raise these, do not decide them alone
 

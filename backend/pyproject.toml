@@ -11,6 +11,7 @@ dependencies = [
     "pydantic-settings>=2.11",
     "httpx2>=2.13",
     "openai>=2.2",
+    "pyjwt[crypto]>=2.10",
 ]
 
 [project.optional-dependencies]

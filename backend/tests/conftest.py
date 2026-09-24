@@ -3,7 +3,8 @@
 Every test drives the application through its own HTTP API, against a real
 Postgres instance, inside a transaction that is rolled back afterwards, with the
 application's one outbound HTTP client replaced by a transport that answers by
-host. There is no other seam.
+host. The settings hold the public half of a test Clerk key, so a test signs its
+own session tokens and the real verification checks them. There is no other seam.
 """
 
 import os
@@ -14,6 +15,7 @@ from pathlib import Path
 import asyncpg
 import httpx2
 import pytest
+from cryptography.hazmat.primitives.asymmetric import rsa
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
     AsyncConnection,
@@ -32,6 +34,7 @@ from app.privacy.outbound import get_http_client
 
 from .fakes import talking
 from .fakes.canned_transport import CannedTransport, Responder
+from .fakes.clerk import FRONTEND, public_pem, session_token, signing_key
 
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL",
@@ -122,12 +125,22 @@ def static_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return directory
 
 
+@pytest.fixture(scope="session")
+def clerk_key() -> rsa.RSAPrivateKey:
+    """Stands in for the Clerk instance's signing key. Its public half is in the
+    test settings."""
+    return signing_key()
+
+
 @pytest.fixture
-def settings(static_dir: Path) -> Settings:
+def settings(static_dir: Path, clerk_key: rsa.RSAPrivateKey) -> Settings:
     return Settings(
         database_url=TEST_DATABASE_URL,
         openrouter_api_key="test-openrouter-key",
         static_dir=static_dir,
+        clerk_public_key=public_pem(clerk_key),
+        clerk_secret_key="sk_test_clerk_secret_key",
+        frontend_origins=[FRONTEND],
     )
 
 
@@ -167,6 +180,23 @@ async def api_for(
 @pytest.fixture
 async def api(api_for: ApiFactory, settings: Settings) -> httpx2.AsyncClient:
     return await api_for(settings)
+
+
+Browser = Callable[[str | None], Awaitable[httpx2.AsyncClient]]
+
+
+@pytest.fixture
+def browser(api_for: ApiFactory, settings: Settings, clerk_key: rsa.RSAPrivateKey) -> Browser:
+    """Opens a browser of its own: a Guest's for None, or one signed in as that
+    Clerk user, sending the session token with every request as Clerk's does."""
+
+    async def opened(clerk_user: str | None) -> httpx2.AsyncClient:
+        client = await api_for(settings)
+        if clerk_user is not None:
+            client.headers["Authorization"] = f"Bearer {session_token(clerk_key, clerk_user)}"
+        return client
+
+    return opened
 
 
 @pytest.fixture

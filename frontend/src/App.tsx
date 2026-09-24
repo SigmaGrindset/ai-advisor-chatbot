@@ -59,8 +59,12 @@ import { useTurn } from "./stream/useTurn";
  *
  * The turn itself is `useTurn`, what becomes of a plan two people are writing
  * to is `plan/holding`, and the arrangement of panes and sheets is `AppShell`.
+ *
+ * It is drawn for one Traveler. Signing in or out draws it afresh (`main.tsx`),
+ * so nothing shown to one survives onto the next one's screen.
  */
-export function App() {
+export function App({ accounts }: { accounts: Accounts }) {
+  const signedIn = accounts === "signed-in";
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   // Kept rather than re-read: a Trip is born mid-turn and the plan the turn
   // sends back is the whole of it, so a refetch would only say the same thing
@@ -501,6 +505,7 @@ export function App() {
               dismiss();
               goTo("instructions");
             }}
+            signingIn={accounts !== "unavailable"}
           />
         )}
         conversation={(folded) => (
@@ -522,7 +527,7 @@ export function App() {
             onShowConversations={folded.conversations}
             onShowRecord={folded.record}
             onDismissNotice={
-              guestNoticeDue()
+              !signedIn && guestNoticeDue()
                 ? () => {
                     dismissGuestNotice();
                     noticeDismissed();
@@ -548,7 +553,12 @@ export function App() {
             }
             plan={planPanel}
             traveler={
-              <ProfilePanel profile={profile} onForget={forget} onClear={erase} />
+              <ProfilePanel
+                profile={profile}
+                guest={!signedIn}
+                onForget={forget}
+                onClear={erase}
+              />
             }
           />
         }
@@ -569,6 +579,13 @@ export function App() {
     </AppFrame>
   );
 }
+
+/**
+ * Where this page stands with Accounts. Unavailable in a build without Clerk,
+ * and on a page Clerk could not load on: there is nothing to sign in to, and
+ * everyone is a Guest. Otherwise the Traveler is a Guest or signed in.
+ */
+export type Accounts = "unavailable" | "guest" | "signed-in";
 
 /** No record has changed unseen, which is how every visit starts. */
 const EMPTY: ReadonlySet<RecordTab> = new Set();

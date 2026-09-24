@@ -39,6 +39,9 @@ class Traveler(Base):
     __tablename__ = "traveler"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    #: The Clerk user an Account holder signs in as. The only thing kept about
+    #: an Account: who they are otherwise stays with Clerk.
+    clerk_user_id: Mapped[str | None] = mapped_column(Text, unique=True, nullable=True)
     #: How a Guest is known again: the hash of the token their browser holds,
     #: never the token, so a copy of this table identifies nobody.
     guest_token_hash: Mapped[str | None] = mapped_column(Text, unique=True, nullable=True)

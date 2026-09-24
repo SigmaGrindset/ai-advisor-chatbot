@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from .api import conversations, health, instructions, traveler, trips
 from .api.asking import GUEST_TOKEN_HEADER
+from .api.clerk import clerk_verifier_for
 from .config import Settings
 from .db.connection import apply_schema, create_engine
 from .frontend import mount_frontend
@@ -27,6 +28,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
     if not settings.openrouter_api_key:
         logger.warning("OPENROUTER_API_KEY is not set — the advisor cannot answer")
+    if app.state.clerk_verifier is None:
+        logger.warning(
+            "CLERK_PUBLIC_KEY or CLERK_SECRET_KEY is not set — Accounts are unavailable,"
+            " and everyone is a Guest"
+        )
+    elif not settings.frontend_origins:
+        logger.warning(
+            "FRONTEND_ORIGINS is empty, so every sign-in is refused — list the origin"
+            " the frontend is served from"
+        )
     engine = create_engine(settings.database_url)
     # Before the first request is served, never during one.
     await apply_schema(engine)
@@ -47,6 +58,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app(settings: Settings) -> FastAPI:
     app = FastAPI(title="AI Travel Advisor", lifespan=lifespan)
     app.state.settings = settings
+    app.state.clerk_verifier = clerk_verifier_for(settings)
     # A frontend on another host is let in from the configured origins only.
     app.add_middleware(
         CORSMiddleware,

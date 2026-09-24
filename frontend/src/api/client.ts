@@ -307,15 +307,36 @@ const GUEST_TOKEN_HEADER = "X-Guest-Token";
 const GUEST_NOTICE_KEY = "travel-advisor.guest-notice-dismissed";
 
 /**
- * `fetch`, as this browser's Traveler. The token goes with every request, the
- * streamed turn included, and one the response hands back replaces it. Read
- * afresh each time, so a Guest begun in another tab is the one asking here.
+ * How to ask Clerk for the signed-in Traveler's session token. Handed over
+ * once Clerk has loaded (`main.tsx`), and never in a build without Accounts
+ * or on a page Clerk could not load on: nobody is signed in there, and no
+ * request waits on a Clerk that is not coming.
+ */
+let clerkToken: (() => Promise<string | null>) | null = null;
+
+export function askClerkWith(getToken: () => Promise<string | null>): void {
+  clerkToken = getToken;
+}
+
+/**
+ * `fetch`, as this browser's Traveler. The tokens go with every request, the
+ * streamed turn included, and a Guest token the response hands back replaces
+ * the one held. Read afresh each time, so a Guest begun or a sign-in made in
+ * another tab is the one asking here.
+ *
+ * Clerk's session token is asked of Clerk every time rather than kept: it
+ * lasts a minute, and Clerk renews it before it runs out.
  */
 async function request(url: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   const token = stored(() => localStorage.getItem(GUEST_TOKEN_KEY));
   if (token) headers.set(GUEST_TOKEN_HEADER, token);
+  const bearer = clerkToken === null ? null : await clerkToken();
+  if (bearer) headers.set("Authorization", `Bearer ${bearer}`);
   const response = await fetch(API_BASE_URL + url, { ...init, headers });
+  // A sign-in the server accepted wins over the Guest, who is left to the
+  // sweep. Let go of here, so signing out leaves this browser holding nothing.
+  if (bearer && response.ok) forgetGuest();
   const issued = response.headers.get(GUEST_TOKEN_HEADER);
   if (issued !== null) {
     stored(() => localStorage.setItem(GUEST_TOKEN_KEY, issued));

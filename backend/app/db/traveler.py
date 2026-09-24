@@ -14,9 +14,33 @@ from collections.abc import Sequence
 from datetime import datetime
 
 from sqlalchemy import delete, func, select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .tables import FactSubject, ProfileFact, Traveler
+
+
+async def account_holder(session: AsyncSession, clerk_user_id: str) -> Traveler:
+    """The Traveler signed in as this Clerk user, made on their first request,
+    and marked as active as of now.
+
+    One statement that finds or makes them, because a first page load asks for
+    several things at once, and they must all land on one Traveler. Committed
+    here, reads included: a signed-in Traveler exists from the first request,
+    and there is no token to hand back that a refused write would lose.
+    """
+    found = await session.scalars(
+        insert(Traveler)
+        .values(clerk_user_id=clerk_user_id)
+        .on_conflict_do_update(
+            index_elements=[Traveler.clerk_user_id], set_={"last_active_at": func.now()}
+        )
+        .returning(Traveler),
+        execution_options={"populate_existing": True},
+    )
+    traveler = found.one()
+    await session.commit()
+    return traveler
 
 
 async def guest_returning(session: AsyncSession, token: str) -> Traveler | None:
@@ -172,6 +196,7 @@ async def erase_everything(session: AsyncSession, traveler: Traveler) -> None:
     kept in step by hand would one day leave something behind.
 
     A Guest goes with it, token and all, and their next write starts a new one.
+    An Account holder's next request makes them a new, empty Traveler.
     """
     await session.execute(delete(Traveler).where(Traveler.id == traveler.id))
     await session.commit()

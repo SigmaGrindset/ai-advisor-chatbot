@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 import type { ConversationSummary, TripPlan } from "../../api/types";
+import { AccountControls } from "../account/AccountControls";
 import { useAnchoredPanel } from "../shell/anchoredPanel";
 import { conversationName, MAX_NAME } from "./conversationName";
 import { smallIcon } from "../../design/icons";
@@ -37,6 +38,7 @@ export function ConversationList({
   onDelete,
   onTrips,
   onInstructions,
+  signingIn,
 }: {
   conversations: ConversationSummary[];
   /**
@@ -59,6 +61,8 @@ export function ConversationList({
   onDelete: (id: string) => void;
   onTrips: () => void;
   onInstructions: () => void;
+  /** Whether there is anywhere to sign in: not without Clerk. */
+  signingIn: boolean;
 }) {
   const byId = new Map(trips.map((trip) => [trip.trip_id, trip]));
   return (
@@ -199,9 +203,11 @@ export function ConversationList({
         })}
       </ul>
 
-      {/* Below the navigation and after it in the document: it is a setting
-          rather than somewhere to go. It does not scroll with the list. */}
-      <div className="shrink-0 border-t border-line px-4 pt-3 pb-4">
+      {/* Below the navigation and after it in the document: who is signed in
+          and the theme are settings rather than somewhere to go. It does not
+          scroll with the list. */}
+      <div className="flex shrink-0 flex-col items-start gap-3 border-t border-line px-4 pt-3 pb-4">
+        {signingIn && <AccountControls />}
         <ThemeToggle />
       </div>
     </nav>

@@ -10,15 +10,25 @@
 
 **Blocked by:** 02.
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] The Traveler row gains a unique, nullable Clerk user ID. No email address, name or other identity detail is stored.
-- [ ] A request with a valid Clerk token resolves to that Clerk user's Traveler, created on the first such request, whether it's a read or a write.
-- [ ] A Clerk token that is present but invalid, expired or from another authorized party gets a 401. It never falls back to a Guest.
-- [ ] Two Accounts can't read or change each other's data, including by identifier.
+- [x] The Traveler row gains a unique, nullable Clerk user ID. No email address, name or other identity detail is stored.
+- [x] A request with a valid Clerk token resolves to that Clerk user's Traveler, created on the first such request, whether it's a read or a write.
+- [x] A Clerk token that is present but invalid, expired or from another authorized party gets a 401. It never falls back to a Guest.
+- [x] Two Accounts can't read or change each other's data, including by identifier.
 - [ ] Signing out leaves the browser with no token of either kind, and the application reads as empty. Signing back in brings everything back.
-- [ ] Settings gain the Clerk public key and secret key. Without them, the backend starts, logs that Accounts are unavailable, and serves Guests only. A frontend built without a publishable key hides the sign-in controls.
-- [ ] Neither kind of token appears in a log.
+- [x] Settings gain the Clerk public key and secret key. Without them, the backend starts, logs that Accounts are unavailable, and serves Guests only. A frontend built without a publishable key hides the sign-in controls.
+- [x] Neither kind of token appears in a log.
 - [ ] When Clerk is configured, the Guest notice adds that signing up keeps everything. The Profile panel's line about keeping data mentions the day without use only to a Guest.
-- [ ] Tests sign their own session tokens with a test key whose public half is in the test settings, so the real verification runs. They cover finding and creating an Account's Traveler, isolation between Accounts, the 401, and the sweep leaving an Account idle for a day untouched.
-- [ ] `HANDOFF.md` covers Clerk and its settings. The original spec's out-of-scope line about authentication and multiple travelers no longer claims either is out of scope.
+- [x] Tests sign their own session tokens with a test key whose public half is in the test settings, so the real verification runs. They cover finding and creating an Account's Traveler, isolation between Accounts, the 401, and the sweep leaving an Account idle for a day untouched.
+- [x] `HANDOFF.md` covers Clerk and its settings. The original spec's out-of-scope line about authentication and multiple travelers no longer claims either is out of scope.
+
+## Comments
+
+Not driven by hand: there is no Clerk instance on this machine, so signing in and out still
+needs a pass once one exists. The notice's clause about signing up is held back until 06,
+because until then signing up doesn't keep the visit; the Profile panel half of that box is
+done. The browser already forgets its Guest token after the first signed-in request succeeds,
+which is 06's browser half. The combined image names its own origin in `FRONTEND_ORIGINS`,
+and an Account's Traveler is committed by its first request rather than with a write, since
+there is no token to lose.

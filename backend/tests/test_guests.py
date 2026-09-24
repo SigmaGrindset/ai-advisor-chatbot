@@ -1,7 +1,8 @@
 """Guests: everyone is a Traveler of their own, and looking costs nothing.
 
 Each test client is a browser, keeping the Guest token a write hands it, so
-two clients are two Guests. What is asserted is what each of them can see and
+two clients are two Guests; two signed in as different Clerk users are two
+Accounts. What is asserted is what each of them can see and
 change — and, for somebody who has only looked, that nothing was stored. The
 sweep is run by hand, at whatever "now" the test needs.
 """
@@ -12,6 +13,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx2
+import pytest
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,7 +23,7 @@ from app.config import Settings
 from app.db.tables import Traveler
 from app.services.sweep import sweep_idle_guests
 
-from .conftest import ApiFactory
+from .conftest import ApiFactory, Browser
 from .fakes.canned_model import CannedModel, calling, content, finish, wants_tools
 from .fakes.canned_transport import Responder
 from .fakes.talking import messages, send, start, transcript
@@ -62,13 +64,16 @@ async def test_somebody_who_has_only_looked_has_nothing_stored_about_them(
     assert await session.scalar(select(func.count()).select_from(Traveler)) == 1
 
 
-async def test_two_guests_never_see_or_change_each_others_work(
-    api: httpx2.AsyncClient,
-    api_for: ApiFactory,
-    settings: Settings,
+@pytest.mark.parametrize(
+    "clerk_users", [(None, None), ("user_ada", "user_bea")], ids=["guests", "accounts"]
+)
+async def test_two_travelers_never_see_or_change_each_others_work(
+    clerk_users: tuple[str | None, str | None],
+    browser: Browser,
     outbound_routes: dict[str, Responder],
 ) -> None:
     """Not by listing, and not by naming an identifier they were never given."""
+    api, stranger = [await browser(clerk_user) for clerk_user in clerk_users]
     outbound_routes["openrouter.ai"] = _asking(
         ("set_destination", {"destination": "Lisbon"}),
         ("remember_profile_fact", {"subject": "nationality", "detail": "Croatian"}),
@@ -79,7 +84,6 @@ async def test_two_guests_never_see_or_change_each_others_work(
     (trip,) = (await api.get("/api/trips")).json()
     (fact,) = (await api.get("/api/traveler/profile")).json()
 
-    stranger = await api_for(settings)
     own = await start(stranger)
 
     assert [row["id"] for row in (await stranger.get("/api/conversations")).json()] == [own]
@@ -118,15 +122,22 @@ async def test_two_guests_never_see_or_change_each_others_work(
 
 
 async def test_a_guest_a_day_without_use_is_swept_and_one_who_came_back_is_not(
-    api: httpx2.AsyncClient, api_for: ApiFactory, settings: Settings, session: AsyncSession
+    api: httpx2.AsyncClient,
+    api_for: ApiFactory,
+    settings: Settings,
+    browser: Browser,
+    session: AsyncSession,
 ) -> None:
-    """Any request is use, a read included, and a swept Guest's token reads as nobody's."""
+    """Any request is use, a read included, and a swept Guest's token reads as
+    nobody's. An Account is never swept."""
     gone = await start(api)
     await api.put("/api/advisor/instructions", json={"instructions": "Talk like a sailor.\n"})
     returning = await api_for(settings)
     kept = await start(returning)
+    holder = await browser("user_ada")
+    theirs = await start(holder)
 
-    # Both went quiet a day and an hour ago, and then one of them only looked.
+    # All three went quiet a day and an hour ago, and then one Guest only looked.
     await session.execute(
         update(Traveler).values(last_active_at=Traveler.last_active_at - timedelta(hours=25))
     )
@@ -139,6 +150,7 @@ async def test_a_guest_a_day_without_use_is_swept_and_one_who_came_back_is_not(
     page = (await api.get("/api/advisor/instructions")).json()
     assert page["instructions"] == DEFAULT_ADVISOR_INSTRUCTIONS
     assert [row["id"] for row in (await returning.get("/api/conversations")).json()] == [kept]
+    assert [row["id"] for row in (await holder.get("/api/conversations")).json()] == [theirs]
 
     # Coming back after the sweep is a new visit, with a new token.
     swept_token = api.headers[GUEST_TOKEN_HEADER]
