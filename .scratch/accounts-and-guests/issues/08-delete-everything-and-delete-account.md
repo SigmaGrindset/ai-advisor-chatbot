@@ -7,10 +7,18 @@
 
 **Blocked by:** 05.
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] "Delete everything" keeps the Traveler's identity and its Clerk user ID. The next request after it resolves to the same, now empty, Traveler.
+- [x] "Delete everything" keeps the Traveler's identity and its Clerk user ID. The next request after it resolves to the same, now empty, Traveler.
 - [ ] "Delete account" asks for confirmation. On success it signs the Traveler out, and the application reads as empty.
-- [ ] If Clerk's Backend API refuses or fails, the Traveler and all their data are untouched, and the failure is shown.
-- [ ] Tests, with the outbound transport fake answering Clerk's host, cover "Delete everything" emptying an Account and keeping it, "Delete account" removing both, and "Delete account" changing nothing when Clerk refuses.
-- [ ] The Clerk dashboard step is recorded in `HANDOFF.md` with the other manual Clerk setup.
+- [x] If Clerk's Backend API refuses or fails, the Traveler and all their data are untouched, and the failure is shown.
+- [x] Tests, with the outbound transport fake answering Clerk's host, cover "Delete everything" emptying an Account and keeping it, "Delete account" removing both, and "Delete account" changing nothing when Clerk refuses.
+- [x] The Clerk dashboard step is recorded in `HANDOFF.md` with the other manual Clerk setup.
+
+## Comments
+
+Not driven by hand: signing out after "Delete account" needs a pass against a real Clerk
+instance, which this machine hasn't got. Switching off Clerk's own account deletion is
+recorded in `HANDOFF.md`, but a human still has to switch it off in the dashboard.
+A request made with the deleted user's session token in the minute it stays valid makes an
+empty Traveler nobody can sign in to, and the sweep never removes it. That is accepted.

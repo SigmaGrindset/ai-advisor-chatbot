@@ -1,10 +1,11 @@
-"""The Traveler Profile as the traveler reads it, and the two ways it goes away.
+"""The Traveler Profile as the traveler reads it, and the ways it goes away.
 
 Everything the advisor has learned, enumerable and deletable fact by fact,
 which is what ADR-0001 made the profile structured for and what ADR-0004
-promises. And beside it the one control that leaves nothing behind at all —
+promises. And beside it the control that leaves nothing behind at all —
 Conversations, Trips, Trip Plans and the profile together, because "clear my
-data" that left some of it would be a worse answer than none.
+data" that left some of it would be a worse answer than none — and for an
+Account holder, the one that takes the Account with it.
 
 Deleting answers with what is left rather than with nothing, the same way the
 Trip Plan routes answer with the whole plan: the pane is showing the list the
@@ -14,15 +15,19 @@ is a round trip for something the first one already knew.
 
 import uuid
 
+import httpx2
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..advisor.remembering import Fact
+from ..config import Settings, get_settings
 from ..db import traveler as travelers
 from ..db.connection import get_session
 from ..db.tables import Traveler
+from ..privacy.outbound import get_http_client
+from ..services import accounts
 from ..services.profile import read_profile
 from .asking import who_is_asking
 
@@ -75,10 +80,41 @@ async def erase_everything(
     session: AsyncSession = Depends(get_session),
     traveler: Traveler = Depends(who_is_asking),
 ) -> Response:
-    """Leave nothing behind: every Conversation, every Trip and the whole profile.
+    """Leave nothing behind: every Conversation, every Trip, the whole profile
+    and the Advisor Instructions. An Account stays, empty.
 
     Asking the traveler first is the interface's job, because by the time the
     request arrives the decision has been made.
     """
     await travelers.erase_everything(session, traveler)
+    return Response(status_code=204)
+
+
+@router.delete("/traveler/account", status_code=204)
+async def delete_account(
+    session: AsyncSession = Depends(get_session),
+    traveler: Traveler = Depends(who_is_asking),
+    http_client: httpx2.AsyncClient = Depends(get_http_client),
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    """Delete the Account along with everything in it, at Clerk as well as here.
+
+    Both go or neither does. Signing out afterwards is the browser's to do.
+    """
+    clerk_user = traveler.clerk_user_id
+    if clerk_user is None or settings.clerk_secret_key is None:
+        raise HTTPException(status_code=404, detail="There is no Account to delete.")
+    try:
+        await accounts.delete_account(
+            session,
+            traveler,
+            clerk_user,
+            http_client=http_client,
+            secret_key=settings.clerk_secret_key,
+        )
+    except accounts.ClerkRefused:
+        raise HTTPException(
+            status_code=502,
+            detail="Clerk did not delete your account, so nothing was deleted.",
+        ) from None
     return Response(status_code=204)

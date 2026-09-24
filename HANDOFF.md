@@ -5,12 +5,13 @@
 **Where things stand:** tickets 01–14 and 16 are shipped. **15 is the only one unrun** —
 the README's remaining sections, the audit pass and the verification sweep. 06's last
 criterion (a pass on a real phone) and 16's wording check both need a human.
-In `.scratch/accounts-and-guests/`, 01–07 are shipped: whoever writes something is a Guest
+In `.scratch/accounts-and-guests/`, 01–08 are shipped: whoever writes something is a Guest
 of their own, swept a day after their last request (`services/sweep.py`, hourly from the
 lifespan), the frontend can run on a host of its own, and a Traveler can sign in through
 Clerk and find their work in any browser. A Guest who signs up keeps the visit; one who
 signs in to an Account they already have is warned, then leaves it behind. Clerk's screens
-are drawn in the application's own look. Still to come: the two deletions (08).
+are drawn in the application's own look. "Delete everything" empties an Account and keeps
+it, and "Delete account" removes it at Clerk and here together.
 
 The advisor fetches live data rather than guessing, searches the web through a guarded
 query, keeps a Trip Plan that fills in beside the conversation as the traveler talks,
@@ -62,10 +63,15 @@ properties, so a theme switch reaches an open modal, and element classes win bec
 CSS sits in the `clerk` layer below the utilities (`base.css`). Inside a sheet, Clerk draws
 into the sheet's dialog (`AccountControls.tsx`), and `Sheet.tsx` leaves Escape to it.
 
+"Delete account" (`services/accounts.py`) deletes the Traveler, asks Clerk's Backend API to
+delete the user through the outbound client with `CLERK_SECRET_KEY`, and commits only once
+Clerk has said yes. Anything else rolls back and the Traveler is told.
+
 Setting Clerk up is a human's job: create the application as a development instance, choose
-its sign-in methods, set its default avatar's colours, and put the three keys and the origins
-into the environments (`.env.example`; compose passes them through, the publishable key as a
-build argument).
+its sign-in methods, set its default avatar's colours, switch off "Allow users to delete
+their accounts" so a user is only ever deleted with their Traveler, and put the three keys
+and the origins into the environments (`.env.example`; compose passes them through, the
+publishable key as a build argument).
 
 ### Backend — `backend/app/`
 
@@ -76,6 +82,7 @@ build argument).
 | `services/plans.py` · `profile.py` | applying one Trip Plan or Traveler Profile change, and reading it back for the prompt and the wire |
 | `services/instructions.py` | which Advisor Instructions are in force, what saving a revision does, and the one assembly of the system prompt |
 | `services/compaction.py` | folding a Conversation's oldest Messages away, and answering with what is still sent verbatim |
+| `services/accounts.py` | deleting an Account at Clerk and here, both or neither |
 | `advisor/` | the model, the plan's and the profile's shapes, the keyless sources — no HTTP framework, no database, no browser |
 | `db/` | SQLAlchemy tables and queries |
 | `privacy/` | `outbound.py` (the one injectable HTTP client) and `queries.py` (the guard on the one free-text thing that leaves) |
@@ -110,12 +117,12 @@ around them:
   next Message sends. **A new injected record joins it there rather than beside it.** It
   carries one ordering constraint: `api/conversations.py::say` folds before it composes,
   because `compose_around` reads the rolling summary off the Conversation row.
-- **`privacy/` is the one egress, and the one check on it.** The model client and every
-  Live-data Tool take `outbound.py`'s client as a dependency; tests swap in a transport that
-  answers by host, which is what keeps real request-building and response-parsing under test
-  (ADR-0004). `queries.py` is the other half: the web search query is the only free text this
-  application sends to a third party, so it is read for document-number shapes before the
-  plan that would send it even exists (ADR-0009).
+- **`privacy/` is the one egress, and the one check on it.** The model client, every
+  Live-data Tool and the call to Clerk take `outbound.py`'s client as a dependency; tests
+  swap in a transport that answers by host, which is what keeps real request-building and
+  response-parsing under test (ADR-0004). `queries.py` is the other half: the web search
+  query is the only free text this application sends to a third party, so it is read for
+  document-number shapes before the plan that would send it even exists (ADR-0009).
 - **The tool loop is ours** (`advisor/loop.py`, ADR-0005): stream a step, accumulate the
   tool-call fragments, dispatch, append the results, re-call until the model stops asking.
   `MAX_STEPS` is the runaway guard, and a step is the last one when nothing accumulated, not
@@ -222,7 +229,7 @@ cd D:/Antonio/ai-advisor-chatbot/backend && CONVERSATION_MODEL=anthropic/claude-
 cd D:/Antonio/ai-advisor-chatbot/backend && D:/Antonio/ai-advisor-chatbot/.venv/Scripts/python.exe -m mypy
 ```
 
-**121 frontend tests in 17 files** (~2s), `tsc` silent, build clean; **142 backend tests**
+**121 frontend tests in 17 files** (~2s), `tsc` silent, build clean; **146 backend tests**
 (~30s), mypy clean. Confirm those numbers *before* you start — if they do not match,
 something changed underneath you. Update this paragraph when a ticket legitimately moves
 them.

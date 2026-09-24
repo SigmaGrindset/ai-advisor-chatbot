@@ -12,7 +12,7 @@ profile enumerable for.
 import hashlib
 import secrets
 import uuid
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import datetime
 
 from sqlalchemy import delete, func, select, update
@@ -226,11 +226,38 @@ async def erase_everything(session: AsyncSession, traveler: Traveler) -> None:
     kept in step by hand would one day leave something behind.
 
     A Guest goes with it, token and all, and their next write starts a new one.
-    An Account holder's next request makes them a new, empty Traveler.
+    An Account holder keeps the Account: the same row is put straight back,
+    empty, under the same Clerk user, in the same transaction, so a request
+    arriving meanwhile waits and finds them rather than making someone new.
     """
-    await session.execute(delete(Traveler).where(Traveler.id == traveler.id))
+    traveler_id, clerk_user_id = traveler.id, traveler.clerk_user_id
+    await session.execute(delete(Traveler).where(Traveler.id == traveler_id))
+    if clerk_user_id is not None:
+        await session.execute(insert(Traveler).values(id=traveler_id, clerk_user_id=clerk_user_id))
     await session.commit()
     # The cascade took those rows underneath the session, which still holds
     # them in its identity map: a later read by identifier would answer with a
     # Conversation that no longer exists.
+    session.expunge_all()
+
+
+async def forget_account(
+    session: AsyncSession, traveler: Traveler, gone_from_clerk: Callable[[], Awaitable[None]]
+) -> None:
+    """Delete an Account's Traveler and everything they own, committed only
+    once `gone_from_clerk` has deleted the Clerk user they sign in as. If it
+    raises, nothing here is deleted either.
+
+    Session tokens are checked offline and stay good for a minute or so after
+    Clerk deletes the user, so a request in that minute, from another tab say,
+    makes them a new, empty Traveler that nobody can sign in to again.
+    """
+    await session.execute(delete(Traveler).where(Traveler.id == traveler.id))
+    try:
+        await gone_from_clerk()
+    except Exception:
+        await session.rollback()
+        raise
+    await session.commit()
+    # Same reason as `erase_everything`.
     session.expunge_all()

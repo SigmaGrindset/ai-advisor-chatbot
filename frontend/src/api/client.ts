@@ -146,7 +146,7 @@ export async function deleteConversation(id: string): Promise<void> {
 }
 
 /**
- * The Traveler Profile, and the two ways it goes away. Deleting one fact
+ * The Traveler Profile, and the ways it goes away. Deleting one fact
  * answers with the whole profile, as a plan change answers with the whole plan.
  */
 
@@ -162,12 +162,20 @@ export async function forgetProfileFact(factId: string): Promise<ProfileFact[]> 
 
 /**
  * Every Conversation, every Trip, the whole profile and the Advisor
- * Instructions, gone. A Guest goes with them, so their token is let go of too
- * and the next write starts a new one.
+ * Instructions, gone. An Account stays, empty. A Guest goes with them, so
+ * their token is let go of too and the next write starts a new one.
  */
 export async function clearEverything(): Promise<void> {
   refused(await request("/api/traveler/everything", { method: "DELETE" }));
   forgetGuest();
+}
+
+/**
+ * The Account and everything in it, gone, at Clerk as well as here. Refused,
+ * nothing is deleted. Signing out afterwards is the caller's to do.
+ */
+export async function deleteAccount(): Promise<void> {
+  refused(await request("/api/traveler/account", { method: "DELETE" }));
 }
 
 /**

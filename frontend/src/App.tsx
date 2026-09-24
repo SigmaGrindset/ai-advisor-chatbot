@@ -6,6 +6,7 @@ import {
   changeItineraryItem,
   changePlan,
   clearEverything,
+  deleteAccount,
   deleteConversation,
   deleteTrip,
   dismissGuestNotice,
@@ -63,7 +64,14 @@ import { useTurn } from "./stream/useTurn";
  * It is drawn for one Traveler. Signing in or out draws it afresh (`main.tsx`),
  * so nothing shown to one survives onto the next one's screen.
  */
-export function App({ accounts }: { accounts: Accounts }) {
+export function App({
+  accounts,
+  signOut,
+}: {
+  accounts: Accounts;
+  /** Clerk's, for leaving once the Account is deleted. Given wherever anyone can sign in. */
+  signOut?: () => Promise<void>;
+}) {
   const signedIn = accounts === "signed-in";
   const accountsAvailable = accounts !== "unavailable";
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -344,6 +352,20 @@ export function App({ accounts }: { accounts: Accounts }) {
   }
 
   /**
+   * Delete the Account and everything in it, then sign out, which draws the
+   * application afresh for nobody. Clerk ends a deleted user's sessions
+   * itself, so a sign-out that still fails is finished by a reload, which
+   * finds none.
+   */
+  function leave() {
+    setFailure(null);
+    void deleteAccount().then(
+      () => signOut?.().catch(() => window.location.reload()),
+      () => setFailure("Your account could not be deleted, and nothing in it was."),
+    );
+  }
+
+  /**
    * A plan that has arrived, filed where the interface reads it from: the
    * Trips list and the row of the Conversation refining it. Both from the one
    * plan, or a row would be marked with a colour nothing explains.
@@ -560,6 +582,7 @@ export function App({ accounts }: { accounts: Accounts }) {
                 guest={!signedIn}
                 onForget={forget}
                 onClear={erase}
+                onDeleteAccount={leave}
               />
             }
           />

@@ -19,11 +19,17 @@ const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY ?? "";
  * reads everything again as the Account.
  */
 function AsWhoeverIsSignedIn() {
-  const { userId, getToken } = useAuth();
+  const { userId, getToken, signOut } = useAuth();
   // A layout effect, so the requests `App` makes as its ordinary effects run
   // already carry the token.
   useLayoutEffect(() => askClerkWith(getToken), [getToken]);
-  return <App key={userId ?? "guest"} accounts={userId ? "signed-in" : "guest"} />;
+  return (
+    <App
+      key={userId ?? "guest"}
+      accounts={userId ? "signed-in" : "guest"}
+      signOut={signOut}
+    />
+  );
 }
 
 const container = document.getElementById("root");
