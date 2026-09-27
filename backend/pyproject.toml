@@ -28,6 +28,10 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
 
+[tool.vercel]
+# Loaded as a module, so the package's relative imports resolve.
+entrypoint = "app.main:app"
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
