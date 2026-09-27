@@ -265,31 +265,16 @@ A long agent session loses its context. This is the file that survives one.
 
 ## 6. Known limitations
 
-**Personal data is stored in plaintext**, and the whole Traveler Profile goes to the
-model on every turn. Encrypting the database would not help much while the key sits in
-the same `.env` file on the same machine, and stripping details before the model would
-break the advisor. Both are still real exposures.
-
 **No migrations.** For a demo application they did not seem worth the weight, so the
 schema is simply created at startup — which adds any missing table but never a missing
 column. A database left over from an earlier commit therefore comes up silently missing
 columns instead of failing outright, and wiping it with `docker compose down -v` is the
 fix. Anything meant to outlive an evaluation would want proper numbered migrations.
 
-**The advisor's instructions page has no authentication**, as the brief specifies, which
-means anyone who can reach the application can change how the advisor behaves. Fine for an
-evaluation, not for anything real.
-
 **Cost is recorded per turn but not enforced.** What a turn cost comes back with the
 reply itself and is stored, so spend is visible without asking the provider for it. But
 nothing stops a turn that is about to be expensive, and there is no rate limiting
 anywhere.
-
-**Compaction summaries are only as good as the model that writes them.** If a summary
-drops something that mattered, the traveler cannot tell: their transcript still shows
-every message, so nothing looks missing — it is the advisor that has forgotten. Titles
-have a smaller version of the same problem, written after the first exchange and never
-revisited, so a thread that wandered keeps a name that stopped fitting long ago.
 
 ## 7. Beyond the spec
 
