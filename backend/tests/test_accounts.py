@@ -21,7 +21,7 @@ from app.db.tables import Traveler
 from .conftest import ApiFactory, Browser
 from .fakes.canned_model import replying
 from .fakes.canned_transport import Responder
-from .fakes.clerk import session_token, signing_key
+from .fakes.clerk import public_pem, session_token, signing_key
 from .fakes.talking import send, start, transcript
 
 
@@ -91,6 +91,24 @@ async def test_a_sign_in_that_proves_nothing_is_refused_rather_than_served_as_a_
     # The Guest is still there, and still theirs.
     del api.headers["Authorization"]
     assert len((await api.get("/api/conversations")).json()) == 1
+
+
+@pytest.mark.parametrize("pasted", ["as shown", "with \\n", "with spaces", "run together"])
+async def test_a_public_key_pasted_onto_one_line_still_lets_a_traveler_sign_in(
+    pasted: str, api_for: ApiFactory, settings: Settings, clerk_key: rsa.RSAPrivateKey
+) -> None:
+    """However the PEM's line breaks came through the paste into `.env`."""
+    lines = public_pem(clerk_key).splitlines()
+    key = {
+        "as shown": public_pem(clerk_key),
+        "with \\n": "\\n".join(lines),
+        "with spaces": " ".join(lines),
+        "run together": "".join(lines),
+    }[pasted]
+    api = await api_for(Settings(**{**settings.model_dump(), "clerk_public_key": key}))
+    api.headers["Authorization"] = f"Bearer {session_token(clerk_key, 'user_ada')}"
+
+    assert (await api.get("/api/trips")).status_code == 200
 
 
 async def test_deleting_everything_empties_an_account_and_keeps_it(

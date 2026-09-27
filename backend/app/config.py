@@ -1,5 +1,7 @@
 """Application configuration, read from the environment."""
 
+import re
+import textwrap
 from pathlib import Path
 from typing import Annotated
 
@@ -46,11 +48,15 @@ class Settings(BaseSettings):
 
     @field_validator("clerk_public_key", mode="before")
     @classmethod
-    def _unescaped(cls, value: object) -> object:
-        # A PEM spans lines, which a one-line environment field often holds as
-        # a literal "\n".
-        if isinstance(value, str):
-            return value.replace("\\n", "\n")
+    def _as_pem(cls, value: object) -> object:
+        # A PEM spans lines, and a one-line environment field holds whatever its
+        # breaks became when pasted: a literal "\n", spaces, or nothing. Only
+        # the base64 between the markers matters, so the PEM is rebuilt from it.
+        if isinstance(value, str) and value.strip():
+            body = re.sub(r"-----[A-Z ]+-----|\\n|\s", "", value)
+            return "\n".join(
+                ["-----BEGIN PUBLIC KEY-----", *textwrap.wrap(body, 64), "-----END PUBLIC KEY-----"]
+            )
         return value
 
     @field_validator("frontend_origins", mode="before")
