@@ -18,11 +18,17 @@ const LINK = "font-medium text-accent underline decoration-1 underline-offset-2 
 const QUIET = "border border-line-strong bg-surface text-ink hover:bg-canvas";
 
 /**
+ * A panel lifted over the page, as the application's own are. The frame of
+ * the modal and of the account menu, whose insides are cleared to stand on it.
+ */
+const PANEL = "rounded-panel border border-line bg-surface shadow-floating";
+
+/**
  * Signing in and up on a phone, which come up from the foot of the screen as
  * the application's own sheets do: full width, rounded only where they meet
  * the page, scrolling inside themselves rather than running off the top, and
  * clear of the home indicator. Given to those two alone, because `cardBox`
- * is also the frame of the account menu, which stays a menu.
+ * is also the frame of the account screen.
  */
 const SHEET = {
   modalContent: "max-sheet:mt-auto max-sheet:mb-0 max-sheet:w-full max-sheet:animate-sheet",
@@ -99,8 +105,8 @@ export const appearance = {
     modalContent: "animate-panel",
     modalCloseButton: "rounded-control text-ink-subtle hover:bg-canvas hover:text-ink",
     // One panel with hairlines inside it, rather than Clerk's card stacked on
-    // a shaded footer. `cardBox` is also the frame of the account menu.
-    cardBox: "rounded-panel border border-line bg-surface shadow-floating",
+    // a shaded footer.
+    cardBox: PANEL,
     card: "m-0 rounded-none border-0 bg-transparent shadow-none",
     footer: "mt-0 border-t border-line bg-transparent pt-0",
     footerItem: "border-line",
@@ -158,6 +164,10 @@ export const appearance = {
     alertIcon__danger: "text-error",
 
     // ---- The account menu -----------------------------------------------
+    // Framed by an element of its own, not by `cardBox`: without this, the
+    // cleared insides below leave the menu with no background at all.
+    // Narrower than Clerk's, which stands well out past the rail.
+    userButtonPopoverCard: `${PANEL} w-72`,
     userButtonTrigger: "rounded-control",
     userButtonOuterIdentifier: "text-meta font-medium text-ink",
     userButtonPopoverMain: "m-0 rounded-none border-0 bg-transparent shadow-none",
