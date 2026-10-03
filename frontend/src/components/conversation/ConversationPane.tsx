@@ -3,6 +3,7 @@ import {
   ArrowDown,
   ArrowDownLeft,
   Check,
+  Coins,
   Copy,
   Hourglass,
   MapPinned,
@@ -420,6 +421,9 @@ const KEPT = 8;
  *
  * The label above the sentence says whether a key is missing, credit ran out
  * or this is a bug — "something went wrong" tells none of the three.
+ *
+ * Spent credit is drawn as a notice rather than an error: nothing is broken,
+ * and red with a warning triangle would say otherwise before a word was read.
  */
 function NotAnswered({
   failure,
@@ -429,13 +433,17 @@ function NotAnswered({
   /** Null on a turn that is not the one to run. */
   onRetry: (() => void) | null;
 }) {
+  const spent = failure.kind === "credit";
+  const Glyph = spent ? Coins : TriangleAlert;
   return (
     <div
       role="alert"
-      className="flex flex-col items-start gap-3 rounded-panel bg-error-tint px-4 py-3"
+      className={`flex flex-col items-start gap-3 rounded-panel px-4 py-3 ${
+        spent ? "bg-sunken" : "bg-error-tint"
+      }`}
     >
-      <p className="flex items-start gap-2 text-meta text-error">
-        <TriangleAlert {...smallIcon} className="mt-0.5 shrink-0" aria-hidden="true" />
+      <p className={`flex items-start gap-2 text-meta ${spent ? "text-ink-muted" : "text-error"}`}>
+        <Glyph {...smallIcon} className="mt-0.5 shrink-0" aria-hidden="true" />
         <span className="flex flex-col gap-1">
           <span className="font-mono text-micro uppercase">{failureLabel(failure.kind)}</span>
           {failure.detail}

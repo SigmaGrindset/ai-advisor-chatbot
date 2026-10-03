@@ -1,6 +1,6 @@
 """Why a turn did not answer, in words that say whose problem it is.
 
-A key never set is the traveler's to fix, an exhausted balance theirs to top
+A key never set is the operator's to fix, an exhausted balance theirs to top
 up, a provider having a bad afternoon nobody's, and a request the provider
 refused ours. All four arrive as the same `APIError`, so the kind is read off
 the provider's status or error code once, here, and carried whole afterwards:
@@ -72,10 +72,14 @@ def of(failure: APIError) -> Failure:
             "a current key with access to the configured models.",
         )
     if status == 402:
+        # OpenRouter's answer both to an empty balance and to a key that has
+        # reached its own spending limit. Told to the traveler, who cannot top
+        # either up, so it says what it is and that the app itself is fine.
         return Failure(
             FailureKind.CREDIT,
-            "The OpenRouter account is out of credit. Nothing here is broken: add "
-            "credit to the account and ask again.",
+            "The OpenRouter credit that pays for the advisor's answers has run out, "
+            "so it cannot reply right now. Nothing in the app is broken: your "
+            "question is kept, and Ask again will work once the credit is topped up.",
         )
     if status == 429:
         return Failure(
